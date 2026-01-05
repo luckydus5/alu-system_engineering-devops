@@ -1,475 +1,315 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { MainLayout } from "@/components/layout/MainLayout";
-import { useAuth } from "@/hooks/useAuth";
-import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { Users, Building2, Shield, Plus, Search, Loader2 } from "lucide-react";
-import type { Tables } from "@/integrations/supabase/types";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useUserRole, AppRole } from '@/hooks/useUserRole';
+import { useDepartments } from '@/hooks/useDepartments';
+import { supabase } from '@/integrations/supabase/client';
+import { UserPlus, Users, Shield } from 'lucide-react';
+import { UserList } from '@/components/admin/UserList';
+import { z } from 'zod';
 
-type ProfileWithRole = Tables<"profiles"> & {
-  user_roles?: Tables<"user_roles">[];
-};
+const emailSchema = z.string().email('Please enter a valid email address');
+const passwordSchema = z.string().min(6, 'Password must be at least 6 characters');
 
-const Admin = () => {
-  const { role } = useAuth();
-  const navigate = useNavigate();
+export default function Admin() {
+  const { session } = useAuth();
+  const { highestRole, loading: roleLoading } = useUserRole();
+  const { departments } = useDepartments();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const [users, setUsers] = useState<ProfileWithRole[]>([]);
-  const [departments, setDepartments] = useState<Tables<"departments">[]>([]);
-  const [userRoles, setUserRoles] = useState<Tables<"user_roles">[]>([]);
-  const [departmentAccess, setDepartmentAccess] = useState<Tables<"user_department_access">[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    fullName: '',
+    role: 'staff' as AppRole,
+    departmentId: '',
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Edit role dialog
-  const [selectedUser, setSelectedUser] = useState<ProfileWithRole | null>(null);
-  const [newRole, setNewRole] = useState<string>("");
-  const [newDepartmentId, setNewDepartmentId] = useState<string>("");
-  const [isRoleDialogOpen, setIsRoleDialogOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Grant access dialog
-  const [accessUserId, setAccessUserId] = useState<string>("");
-  const [accessDepartmentId, setAccessDepartmentId] = useState<string>("");
-  const [isAccessDialogOpen, setIsAccessDialogOpen] = useState(false);
-
-  const isAdmin = role === "admin" || role === "director";
-
-  useEffect(() => {
-    if (!isAdmin) {
-      navigate("/");
-      return;
-    }
-    fetchData();
-  }, [isAdmin, navigate]);
-
-  const fetchData = async () => {
-    setIsLoading(true);
-
-    // Fetch profiles
-    const { data: profilesData } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("full_name");
-
-    // Fetch user roles
-    const { data: rolesData } = await supabase
-      .from("user_roles")
-      .select("*");
-
-    // Fetch departments
-    const { data: deptsData } = await supabase
-      .from("departments")
-      .select("*")
-      .order("name");
-
-    // Fetch department access
-    const { data: accessData } = await supabase
-      .from("user_department_access")
-      .select("*");
-
-    setUsers(profilesData || []);
-    setUserRoles(rolesData || []);
-    setDepartments(deptsData || []);
-    setDepartmentAccess(accessData || []);
-    setIsLoading(false);
-  };
-
-  const getUserRole = (userId: string) => {
-    const userRole = userRoles.find(r => r.user_id === userId);
-    return userRole?.role || "staff";
-  };
-
-  const getUserDepartment = (userId: string) => {
-    const userRole = userRoles.find(r => r.user_id === userId);
-    if (!userRole?.department_id) return null;
-    return departments.find(d => d.id === userRole.department_id);
-  };
-
-  const handleUpdateRole = async () => {
-    if (!selectedUser || !newRole) return;
-
-    setIsSubmitting(true);
-
-    // Find existing role
-    const existingRole = userRoles.find(r => r.user_id === selectedUser.id);
-
-    if (existingRole) {
-      const { error } = await supabase
-        .from("user_roles")
-        .update({ 
-          role: newRole as any,
-          department_id: newDepartmentId || null 
-        })
-        .eq("id", existingRole.id);
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Success", description: "Role updated successfully" });
-        fetchData();
-      }
-    } else {
-      const { error } = await supabase
-        .from("user_roles")
-        .insert({
-          user_id: selectedUser.id,
-          role: newRole as any,
-          department_id: newDepartmentId || null
-        });
-
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
-      } else {
-        toast({ title: "Success", description: "Role assigned successfully" });
-        fetchData();
-      }
-    }
-
-    setIsSubmitting(false);
-    setIsRoleDialogOpen(false);
-    setSelectedUser(null);
-  };
-
-  const handleGrantAccess = async () => {
-    if (!accessUserId || !accessDepartmentId) return;
-
-    setIsSubmitting(true);
-    
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const { error } = await supabase
-      .from("user_department_access")
-      .insert({
-        user_id: accessUserId,
-        department_id: accessDepartmentId,
-        granted_by: user?.id || ""
-      });
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Success", description: "Department access granted" });
-      fetchData();
-    }
-
-    setIsSubmitting(false);
-    setIsAccessDialogOpen(false);
-    setAccessUserId("");
-    setAccessDepartmentId("");
-  };
-
-  const handleRevokeAccess = async (accessId: string) => {
-    const { error } = await supabase
-      .from("user_department_access")
-      .delete()
-      .eq("id", accessId);
-
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Success", description: "Access revoked" });
-      fetchData();
-    }
-  };
-
-  const filteredUsers = users.filter(user =>
-    (user.full_name?.toLowerCase() || "").includes(searchQuery.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const getRoleBadge = (role: string) => {
-    const colors: Record<string, string> = {
-      admin: "bg-destructive text-destructive-foreground",
-      director: "bg-primary text-primary-foreground",
-      manager: "bg-primary/80 text-primary-foreground",
-      supervisor: "bg-secondary text-secondary-foreground",
-      staff: "bg-muted text-muted-foreground",
-    };
-    return <Badge className={colors[role] || ""}>{role}</Badge>;
-  };
-
-  if (isLoading) {
+  // Check if user is admin
+  if (!roleLoading && highestRole !== 'admin') {
     return (
-      <MainLayout>
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-[60vh]">
+          <Card className="max-w-md">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-destructive">
+                <Shield className="w-5 h-5" />
+                Access Denied
+              </CardTitle>
+              <CardDescription>
+                You do not have permission to access this page. Only administrators can manage users.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => navigate('/')} variant="outline" className="w-full">
+                Return to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
         </div>
-      </MainLayout>
+      </DashboardLayout>
     );
   }
 
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    try {
+      emailSchema.parse(formData.email);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        newErrors.email = err.errors[0].message;
+      }
+    }
+
+    try {
+      passwordSchema.parse(formData.password);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        newErrors.password = err.errors[0].message;
+      }
+    }
+
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = 'Full name is required';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!validateForm()) return;
+
+    setIsCreating(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('create-user', {
+        body: {
+          email: formData.email,
+          password: formData.password,
+          fullName: formData.fullName,
+          role: formData.role,
+          departmentId: formData.departmentId || null,
+        },
+      });
+
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      toast({
+        title: "User created successfully",
+        description: `${formData.fullName} has been added as ${formData.role}.`,
+      });
+
+      // Reset form
+      setFormData({
+        email: '',
+        password: '',
+        fullName: '',
+        role: 'staff',
+        departmentId: '',
+      });
+      setErrors({});
+
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      toast({
+        title: "Failed to create user",
+        description: error.message || 'An error occurred while creating the user.',
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const roles: { value: AppRole; label: string }[] = [
+    { value: 'staff', label: 'Staff' },
+    { value: 'supervisor', label: 'Supervisor' },
+    { value: 'manager', label: 'Manager' },
+    { value: 'director', label: 'Director' },
+    { value: 'admin', label: 'Admin' },
+  ];
+
   return (
-    <MainLayout>
+    <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Admin Panel</h1>
-          <p className="text-muted-foreground">Manage users, roles, and department access</p>
+          <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+            <Users className="w-6 h-6 text-primary" />
+            User Management
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Create and manage user accounts
+          </p>
         </div>
 
-        {/* Stats */}
-        <div className="grid gap-4 md:grid-cols-3">
+        {/* User List */}
+        <UserList />
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Create User Form */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <UserPlus className="w-5 h-5" />
+                Create New User
+              </CardTitle>
+              <CardDescription>
+                Add a new user to the system with role and department assignment
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{users.length}</div>
+              <form onSubmit={handleCreateUser} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="fullName">Full Name</Label>
+                  <Input
+                    id="fullName"
+                    placeholder="John Doe"
+                    value={formData.fullName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
+                    disabled={isCreating}
+                  />
+                  {errors.fullName && (
+                    <p className="text-sm text-destructive">{errors.fullName}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="user@company.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    disabled={isCreating}
+                  />
+                  {errors.email && (
+                    <p className="text-sm text-destructive">{errors.email}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={formData.password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    disabled={isCreating}
+                  />
+                  {errors.password && (
+                    <p className="text-sm text-destructive">{errors.password}</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select
+                    value={formData.role}
+                    onValueChange={(value: AppRole) => setFormData(prev => ({ ...prev, role: value }))}
+                    disabled={isCreating}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((role) => (
+                        <SelectItem key={role.value} value={role.value}>
+                          {role.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department</Label>
+                  <Select
+                    value={formData.departmentId}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, departmentId: value }))}
+                    disabled={isCreating}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select department (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept.id} value={dept.id}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button type="submit" className="w-full" disabled={isCreating}>
+                  {isCreating ? 'Creating User...' : 'Create User'}
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
+          {/* Info Card */}
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Departments</CardTitle>
-              <Building2 className="h-4 w-4 text-muted-foreground" />
+            <CardHeader>
+              <CardTitle>Role Hierarchy</CardTitle>
+              <CardDescription>
+                Understanding user roles and permissions
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{departments.length}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Access Grants</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{departmentAccess.length}</div>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg bg-secondary/50">
+                  <p className="font-medium text-foreground">Admin</p>
+                  <p className="text-sm text-muted-foreground">
+                    Full system access. Can manage users, roles, and all departments.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50">
+                  <p className="font-medium text-foreground">Director</p>
+                  <p className="text-sm text-muted-foreground">
+                    Cross-department access. Can view all reports and analytics.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50">
+                  <p className="font-medium text-foreground">Manager</p>
+                  <p className="text-sm text-muted-foreground">
+                    Final approval authority. Department-level analytics access.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50">
+                  <p className="font-medium text-foreground">Supervisor</p>
+                  <p className="text-sm text-muted-foreground">
+                    Reviews and approves/rejects staff reports.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-secondary/50">
+                  <p className="font-medium text-foreground">Staff</p>
+                  <p className="text-sm text-muted-foreground">
+                    Creates and submits reports for review.
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Tabs */}
-        <Tabs defaultValue="users" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="users">Users & Roles</TabsTrigger>
-            <TabsTrigger value="access">Department Access</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="users" className="space-y-4">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder="Search users..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>Manage user roles and department assignments</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredUsers.map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.full_name || "Unnamed"}</TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>{getRoleBadge(getUserRole(user.id))}</TableCell>
-                        <TableCell>{getUserDepartment(user.id)?.name || "-"}</TableCell>
-                        <TableCell>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setNewRole(getUserRole(user.id));
-                              setNewDepartmentId(getUserDepartment(user.id)?.id || "");
-                              setIsRoleDialogOpen(true);
-                            }}
-                          >
-                            Edit Role
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="access" className="space-y-4">
-            <div className="flex justify-end">
-              <Dialog open={isAccessDialogOpen} onOpenChange={setIsAccessDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Grant Access
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Grant Department Access</DialogTitle>
-                    <DialogDescription>Allow a user to access another department</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>User</Label>
-                      <Select value={accessUserId} onValueChange={setAccessUserId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select user" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {users.map((user) => (
-                            <SelectItem key={user.id} value={user.id}>
-                              {user.full_name || user.email}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Department</Label>
-                      <Select value={accessDepartmentId} onValueChange={setAccessDepartmentId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select department" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {departments.map((dept) => (
-                            <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsAccessDialogOpen(false)}>Cancel</Button>
-                    <Button onClick={handleGrantAccess} disabled={isSubmitting}>
-                      {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      Grant Access
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Department Access</CardTitle>
-                <CardDescription>Users with cross-department access permissions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {departmentAccess.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-8">No cross-department access grants</p>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Department</TableHead>
-                        <TableHead>Granted At</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {departmentAccess.map((access) => {
-                        const user = users.find(u => u.id === access.user_id);
-                        const dept = departments.find(d => d.id === access.department_id);
-                        return (
-                          <TableRow key={access.id}>
-                            <TableCell>{user?.full_name || user?.email || "Unknown"}</TableCell>
-                            <TableCell>{dept?.name || "Unknown"}</TableCell>
-                            <TableCell>{new Date(access.granted_at).toLocaleDateString()}</TableCell>
-                            <TableCell>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => handleRevokeAccess(access.id)}
-                              >
-                                Revoke
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
-
-        {/* Edit Role Dialog */}
-        <Dialog open={isRoleDialogOpen} onOpenChange={setIsRoleDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit User Role</DialogTitle>
-              <DialogDescription>
-                Update role and department for {selectedUser?.full_name || selectedUser?.email}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select value={newRole} onValueChange={setNewRole}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="staff">Staff</SelectItem>
-                    <SelectItem value="supervisor">Supervisor</SelectItem>
-                    <SelectItem value="manager">Manager</SelectItem>
-                    <SelectItem value="director">Director</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Primary Department</Label>
-                <Select value={newDepartmentId} onValueChange={setNewDepartmentId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map((dept) => (
-                      <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsRoleDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleUpdateRole} disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
-    </MainLayout>
+    </DashboardLayout>
   );
-};
-
-export default Admin;
+}
