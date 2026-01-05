@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -47,47 +47,6 @@ export type Database = {
         }
         Relationships: []
       }
-      fleet_audit_log: {
-        Row: {
-          action: string
-          created_at: string
-          field_name: string | null
-          fleet_id: string
-          id: string
-          new_value: string | null
-          old_value: string | null
-          user_id: string
-        }
-        Insert: {
-          action: string
-          created_at?: string
-          field_name?: string | null
-          fleet_id: string
-          id?: string
-          new_value?: string | null
-          old_value?: string | null
-          user_id: string
-        }
-        Update: {
-          action?: string
-          created_at?: string
-          field_name?: string | null
-          fleet_id?: string
-          id?: string
-          new_value?: string | null
-          old_value?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fleet_audit_log_fleet_id_fkey"
-            columns: ["fleet_id"]
-            isOneToOne: false
-            referencedRelation: "fleets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       fleet_issues: {
         Row: {
           created_at: string
@@ -96,7 +55,6 @@ export type Database = {
           is_resolved: boolean | null
           issue_description: string
           resolved_at: string | null
-          resolved_by: string | null
           updated_at: string
         }
         Insert: {
@@ -106,7 +64,6 @@ export type Database = {
           is_resolved?: boolean | null
           issue_description: string
           resolved_at?: string | null
-          resolved_by?: string | null
           updated_at?: string
         }
         Update: {
@@ -116,7 +73,6 @@ export type Database = {
           is_resolved?: boolean | null
           issue_description?: string
           resolved_at?: string | null
-          resolved_by?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -189,6 +145,13 @@ export type Database = {
             referencedRelation: "departments"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fleets_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       maintenance_records: {
@@ -254,6 +217,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "maintenance_records_checked_by_fkey"
+            columns: ["checked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "maintenance_records_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
@@ -265,6 +235,13 @@ export type Database = {
             columns: ["fleet_id"]
             isOneToOne: false
             referencedRelation: "fleets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "maintenance_records_operator_id_fkey"
+            columns: ["operator_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -537,14 +514,13 @@ export type Database = {
         | "decommissioned"
       fleet_status: "operational" | "under_maintenance" | "out_of_service"
       report_priority: "low" | "medium" | "high" | "critical"
-      report_status:
-        | "draft"
-        | "pending"
-        | "in_review"
-        | "approved"
-        | "rejected"
-        | "escalated"
-      report_type: "incident" | "financial" | "performance" | "general"
+      report_status: "draft" | "submitted" | "in_review" | "resolved" | "closed"
+      report_type:
+        | "general"
+        | "incident"
+        | "maintenance"
+        | "safety"
+        | "compliance"
       service_type: "preventive" | "corrective" | "breakdown"
     }
     CompositeTypes: {
@@ -685,15 +661,14 @@ export const Constants = {
       ],
       fleet_status: ["operational", "under_maintenance", "out_of_service"],
       report_priority: ["low", "medium", "high", "critical"],
-      report_status: [
-        "draft",
-        "pending",
-        "in_review",
-        "approved",
-        "rejected",
-        "escalated",
+      report_status: ["draft", "submitted", "in_review", "resolved", "closed"],
+      report_type: [
+        "general",
+        "incident",
+        "maintenance",
+        "safety",
+        "compliance",
       ],
-      report_type: ["incident", "financial", "performance", "general"],
       service_type: ["preventive", "corrective", "breakdown"],
     },
   },

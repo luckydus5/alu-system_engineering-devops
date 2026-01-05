@@ -9,12 +9,15 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('[Index] Auth state:', { user: user?.email, loading });
     if (!loading && !user) {
+      console.log('[Index] No user, redirecting to /auth');
       navigate('/auth');
     }
   }, [user, loading, navigate]);
 
   if (loading) {
+    console.log('[Index] Showing loading state');
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -26,9 +29,11 @@ const Index = () => {
   }
 
   if (!user) {
+    console.log('[Index] No user, returning null (redirect pending)');
     return null;
   }
 
+  console.log('[Index] User authenticated, showing Dashboard');
   return <Dashboard />;
 };
 

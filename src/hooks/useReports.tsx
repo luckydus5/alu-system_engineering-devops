@@ -137,7 +137,7 @@ export function useReports(departmentId?: string) {
 
   const submitReport = async (id: string) => {
     await updateReport(id, { 
-      status: 'pending',
+      status: 'submitted',
       submitted_at: new Date().toISOString()
     });
   };

@@ -42,7 +42,7 @@ export function useReportActions() {
     try {
       const updates: Record<string, unknown> = { status };
       
-      if (status === 'approved') {
+      if (status === 'resolved') {
         updates.resolved_at = new Date().toISOString();
       }
 
@@ -58,7 +58,15 @@ export function useReportActions() {
         await addComment(reportId, comment, status);
       }
 
-      toast.success(`Report ${status === 'approved' ? 'approved' : status === 'rejected' ? 'rejected' : 'updated'} successfully`);
+      const statusMessages: Record<ReportStatus, string> = {
+        draft: 'sent back for changes',
+        submitted: 'submitted',
+        in_review: 'forwarded for review',
+        resolved: 'resolved',
+        closed: 'closed',
+      };
+
+      toast.success(`Report ${statusMessages[status] || 'updated'} successfully`);
       return true;
     } catch (error) {
       console.error('Error updating report status:', error);
@@ -72,9 +80,9 @@ export function useReportActions() {
     return updateReportStatus(reportId, 'in_review', comment || 'Approved by supervisor, forwarded to manager for final review');
   };
 
-  // Supervisor rejects
+  // Supervisor rejects -> closed
   const supervisorReject = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'rejected', comment);
+    return updateReportStatus(reportId, 'closed', comment);
   };
 
   // Supervisor requests changes -> back to draft
@@ -82,19 +90,19 @@ export function useReportActions() {
     return updateReportStatus(reportId, 'draft', comment);
   };
 
-  // Manager gives final approval
+  // Manager gives final approval -> resolved
   const managerApprove = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'approved', comment || 'Final approval granted');
+    return updateReportStatus(reportId, 'resolved', comment || 'Final approval granted');
   };
 
-  // Manager rejects
+  // Manager rejects -> closed
   const managerReject = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'rejected', comment);
+    return updateReportStatus(reportId, 'closed', comment);
   };
 
-  // Manager sends back to supervisor
+  // Manager sends back to supervisor -> submitted
   const managerEscalate = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'pending', comment || 'Sent back for supervisor review');
+    return updateReportStatus(reportId, 'submitted', comment || 'Sent back for supervisor review');
   };
 
   // Get comments for a report

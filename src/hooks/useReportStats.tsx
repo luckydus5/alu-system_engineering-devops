@@ -5,11 +5,10 @@ import { useUserRole } from './useUserRole';
 
 interface ReportStats {
   total: number;
-  approved: number;
-  pending: number;
-  escalated: number;
+  resolved: number;
+  submitted: number;
   inReview: number;
-  rejected: number;
+  closed: number;
   draft: number;
 }
 
@@ -18,21 +17,20 @@ interface DepartmentStats {
   departmentName: string;
   departmentCode: string;
   total: number;
-  approved: number;
+  resolved: number;
   pending: number;
   completion: number;
 }
 
 export function useReportStats() {
   const { user } = useAuth();
-  const { roles, hasRole } = useUserRole();
+  const { roles } = useUserRole();
   const [stats, setStats] = useState<ReportStats>({
     total: 0,
-    approved: 0,
-    pending: 0,
-    escalated: 0,
+    resolved: 0,
+    submitted: 0,
     inReview: 0,
-    rejected: 0,
+    closed: 0,
     draft: 0,
   });
   const [departmentStats, setDepartmentStats] = useState<DepartmentStats[]>([]);
@@ -57,11 +55,10 @@ export function useReportStats() {
         // Calculate overall stats
         const reportStats: ReportStats = {
           total: reports?.length || 0,
-          approved: reports?.filter(r => r.status === 'approved').length || 0,
-          pending: reports?.filter(r => r.status === 'pending').length || 0,
-          escalated: reports?.filter(r => r.status === 'escalated').length || 0,
+          resolved: reports?.filter(r => r.status === 'resolved').length || 0,
+          submitted: reports?.filter(r => r.status === 'submitted').length || 0,
           inReview: reports?.filter(r => r.status === 'in_review').length || 0,
-          rejected: reports?.filter(r => r.status === 'rejected').length || 0,
+          closed: reports?.filter(r => r.status === 'closed').length || 0,
           draft: reports?.filter(r => r.status === 'draft').length || 0,
         };
         setStats(reportStats);
@@ -78,7 +75,7 @@ export function useReportStats() {
               departmentName: dept?.name || 'Unknown',
               departmentCode: dept?.code || 'UNK',
               total: 0,
-              approved: 0,
+              resolved: 0,
               pending: 0,
               completion: 0,
             });
@@ -86,14 +83,14 @@ export function useReportStats() {
           
           const deptStats = deptMap.get(deptId)!;
           deptStats.total += 1;
-          if (report.status === 'approved') deptStats.approved += 1;
-          if (report.status === 'pending' || report.status === 'in_review') deptStats.pending += 1;
+          if (report.status === 'resolved') deptStats.resolved += 1;
+          if (report.status === 'submitted' || report.status === 'in_review') deptStats.pending += 1;
         });
 
         // Calculate completion percentage
         deptMap.forEach(dept => {
           dept.completion = dept.total > 0 
-            ? Math.round((dept.approved / dept.total) * 100) 
+            ? Math.round((dept.resolved / dept.total) * 100) 
             : 0;
         });
 

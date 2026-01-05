@@ -29,10 +29,10 @@ export default function Department() {
   const canManage = hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager');
   const hasAccess = isAdmin || (department && isInDepartment(department.id));
 
-  // Calculate stats from real data
+  // Calculate stats from real data - using correct status values
   const totalReports = reports.length;
-  const approvedReports = reports.filter(r => r.status === 'approved').length;
-  const pendingReports = reports.filter(r => ['pending', 'in_review'].includes(r.status)).length;
+  const resolvedReports = reports.filter(r => r.status === 'resolved').length;
+  const pendingReports = reports.filter(r => ['submitted', 'in_review'].includes(r.status)).length;
 
   // Check if this is the PEAT department
   const isPeatDepartment = department?.code?.toUpperCase() === 'PEAT';
@@ -122,8 +122,8 @@ export default function Department() {
             icon={<Users className="h-5 w-5" />}
           />
           <KPICard
-            title="Approved"
-            value={approvedReports.toString()}
+            title="Resolved"
+            value={resolvedReports.toString()}
             icon={<CheckCircle className="h-5 w-5" />}
           />
           <KPICard
