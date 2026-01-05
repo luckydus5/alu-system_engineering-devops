@@ -1,30 +1,24 @@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-interface AuditLogEntry {
-  fleet_id: string;
-  action: string;
-  field_name?: string;
-  old_value?: string;
-  new_value?: string;
-}
-
 export function useFleetAudit() {
   const { user } = useAuth();
 
-  const logChange = async (entry: AuditLogEntry) => {
+  // Log changes directly to console for now (audit table doesn't exist)
+  const logChange = async (entry: {
+    fleet_id: string;
+    action: string;
+    field_name?: string;
+    old_value?: string;
+    new_value?: string;
+  }) => {
     if (!user?.id) return;
-
-    const { error } = await supabase
-      .from('fleet_audit_log')
-      .insert({
-        ...entry,
-        user_id: user.id
-      });
-
-    if (error) {
-      console.error('Failed to log audit entry:', error);
-    }
+    
+    console.log('[Fleet Audit]', {
+      ...entry,
+      user_id: user.id,
+      timestamp: new Date().toISOString()
+    });
   };
 
   const updateFleetWithAudit = async (
@@ -57,7 +51,6 @@ export function useFleetAudit() {
       .update({
         is_resolved: true,
         resolved_at: new Date().toISOString(),
-        resolved_by: user.id
       })
       .eq('id', issueId);
 

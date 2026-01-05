@@ -16,7 +16,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useReportActions } from '@/hooks/useReportActions';
 import { toast } from 'sonner';
-import type { Tables } from '@/integrations/supabase/types';
+import type { Tables, Database } from '@/integrations/supabase/types';
+
+type ReportStatus = Database['public']['Enums']['report_status'];
 
 type Report = Tables<'reports'> & {
   departments?: {
@@ -44,13 +46,12 @@ interface ReportDetailDialogProps {
   onUpdate: () => void;
 }
 
-const statusConfig = {
+const statusConfig: Record<ReportStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'bg-muted text-muted-foreground' },
-  pending: { label: 'Pending Review', className: 'bg-warning/10 text-warning border-warning/20' },
+  submitted: { label: 'Pending Review', className: 'bg-warning/10 text-warning border-warning/20' },
   in_review: { label: 'Manager Review', className: 'bg-info/10 text-info border-info/20' },
-  approved: { label: 'Approved', className: 'bg-success/10 text-success border-success/20' },
-  rejected: { label: 'Rejected', className: 'bg-destructive/10 text-destructive border-destructive/20' },
-  escalated: { label: 'Escalated', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+  resolved: { label: 'Resolved', className: 'bg-success/10 text-success border-success/20' },
+  closed: { label: 'Closed', className: 'bg-destructive/10 text-destructive border-destructive/20' },
 };
 
 const priorityConfig = {
@@ -60,15 +61,16 @@ const priorityConfig = {
   critical: { label: 'Critical', className: 'bg-destructive/10 text-destructive' },
 };
 
-const typeLabels = {
+const typeLabels: Record<string, string> = {
   incident: 'Incident Report',
-  financial: 'Financial Report',
-  performance: 'Performance Report',
   general: 'General Report',
+  maintenance: 'Maintenance Report',
+  safety: 'Safety Report',
+  compliance: 'Compliance Report',
 };
 
 export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: ReportDetailDialogProps) {
-  const { highestRole, hasMinRole, profile } = useUserRole();
+  const { hasMinRole } = useUserRole();
   const { 
     supervisorApprove, supervisorReject, requestChanges,
     managerApprove, managerReject, managerEscalate,
@@ -156,9 +158,9 @@ export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: Rep
     return '📎';
   };
 
-  const canSupervisorAct = hasMinRole('supervisor') && report?.status === 'pending';
+  const canSupervisorAct = hasMinRole('supervisor') && report?.status === 'submitted';
   const canManagerAct = hasMinRole('manager') && report?.status === 'in_review';
-  const canComment = hasMinRole('staff') && report?.status !== 'approved' && report?.status !== 'rejected';
+  const canComment = hasMinRole('staff') && report?.status !== 'resolved' && report?.status !== 'closed';
 
   if (!report) return null;
 
@@ -170,7 +172,7 @@ export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: Rep
             <div>
               <DialogTitle className="text-xl">{report.title}</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                {typeLabels[report.report_type]}
+                {typeLabels[report.report_type] || report.report_type}
               </p>
             </div>
             <Badge 
@@ -279,11 +281,11 @@ export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: Rep
                   {comments.map((comment) => (
                     <Card key={comment.id} className={cn(
                       comment.action && 'border-l-4',
-                      comment.action === 'approved' && 'border-l-success',
-                      comment.action === 'rejected' && 'border-l-destructive',
+                      comment.action === 'resolved' && 'border-l-success',
+                      comment.action === 'closed' && 'border-l-destructive',
                       comment.action === 'in_review' && 'border-l-info',
                       comment.action === 'draft' && 'border-l-warning',
-                      comment.action === 'pending' && 'border-l-warning',
+                      comment.action === 'submitted' && 'border-l-warning',
                     )}>
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between mb-1">
@@ -296,6 +298,8 @@ export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: Rep
                               <Badge variant="outline" className="text-xs">
                                 {comment.action === 'in_review' ? 'Forwarded to Manager' : 
                                  comment.action === 'draft' ? 'Requested Changes' :
+                                 comment.action === 'resolved' ? 'Resolved' :
+                                 comment.action === 'closed' ? 'Closed' :
                                  comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
                               </Badge>
                             )}

@@ -11,6 +11,11 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { Loader2, Upload, X, FileText, FileSpreadsheet, File } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import type { Database } from '@/integrations/supabase/types';
+
+type ReportType = Database['public']['Enums']['report_type'];
+type ReportPriority = Database['public']['Enums']['report_priority'];
+type ReportStatus = Database['public']['Enums']['report_status'];
 
 interface CreateReportDialogProps {
   open: boolean;
@@ -18,14 +23,15 @@ interface CreateReportDialogProps {
   defaultDepartmentId?: string;
 }
 
-const reportTypes = [
+const reportTypes: { value: ReportType; label: string }[] = [
   { value: 'incident', label: 'Incident Report' },
-  { value: 'financial', label: 'Financial Report' },
-  { value: 'performance', label: 'Performance Report' },
   { value: 'general', label: 'General Report' },
+  { value: 'maintenance', label: 'Maintenance Report' },
+  { value: 'safety', label: 'Safety Report' },
+  { value: 'compliance', label: 'Compliance Report' },
 ];
 
-const priorities = [
+const priorities: { value: ReportPriority; label: string }[] = [
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
@@ -63,8 +69,8 @@ export function CreateReportDialog({ open, onOpenChange, defaultDepartmentId }: 
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    report_type: 'general' as 'incident' | 'financial' | 'performance' | 'general',
-    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical',
+    report_type: 'general' as ReportType,
+    priority: 'medium' as ReportPriority,
     department_id: userDepartmentId,
   });
 
@@ -143,10 +149,12 @@ export function CreateReportDialog({ open, onOpenChange, defaultDepartmentId }: 
         }
       }
 
+      const status: ReportStatus = asDraft ? 'draft' : 'submitted';
+
       const report = await createReport({
         ...formData,
         attachments: attachments.length > 0 ? attachments : null,
-        status: asDraft ? 'draft' : 'pending',
+        status,
         submitted_at: asDraft ? null : new Date().toISOString(),
       });
 
@@ -221,7 +229,7 @@ export function CreateReportDialog({ open, onOpenChange, defaultDepartmentId }: 
               <Label htmlFor="type">Report Type</Label>
               <Select
                 value={formData.report_type}
-                onValueChange={(value) => setFormData({ ...formData, report_type: value as typeof formData.report_type })}
+                onValueChange={(value) => setFormData({ ...formData, report_type: value as ReportType })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -241,7 +249,7 @@ export function CreateReportDialog({ open, onOpenChange, defaultDepartmentId }: 
             <Label htmlFor="priority">Priority</Label>
             <Select
               value={formData.priority}
-              onValueChange={(value) => setFormData({ ...formData, priority: value as typeof formData.priority })}
+              onValueChange={(value) => setFormData({ ...formData, priority: value as ReportPriority })}
             >
               <SelectTrigger>
                 <SelectValue />

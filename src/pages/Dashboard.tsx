@@ -96,9 +96,9 @@ export default function Dashboard() {
                       <CheckCircle className="h-5 w-5 text-green-600" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium">Approval Rate</p>
+                      <p className="text-sm font-medium">Resolution Rate</p>
                       <p className="text-xs text-muted-foreground">
-                        {stats.total > 0 ? Math.round((stats.approved / stats.total) * 100) : 0}% of reports
+                        {stats.total > 0 ? Math.round((stats.resolved / stats.total) * 100) : 0}% of reports
                       </p>
                     </div>
                   </div>
@@ -112,7 +112,7 @@ export default function Dashboard() {
                     <div>
                       <p className="text-sm font-medium">Pending Actions</p>
                       <p className="text-xs text-muted-foreground">
-                        {stats.pending + stats.inReview} reports awaiting review
+                        {stats.submitted + stats.inReview} reports awaiting review
                       </p>
                     </div>
                   </div>
