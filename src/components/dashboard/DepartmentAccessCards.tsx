@@ -22,40 +22,48 @@ const departmentIcons: Record<string, React.ReactNode> = {
   'FIN': <DollarSign className="h-8 w-8" />,
   'SAF': <Shield className="h-8 w-8" />,
   'PEAT': <Wrench className="h-8 w-8" />,
+  'FLEET': <Truck className="h-8 w-8" />,
   'LOG': <Truck className="h-8 w-8" />,
   'HR': <Users className="h-8 w-8" />,
   'OPS': <Settings className="h-8 w-8" />,
   'IT': <Briefcase className="h-8 w-8" />,
+  'WAREHOUSE': <Building2 className="h-8 w-8" />,
 };
 
 const departmentGradients: Record<string, string> = {
   'FIN': 'from-emerald-500 to-teal-600',
   'SAF': 'from-amber-500 to-orange-600',
   'PEAT': 'from-blue-500 to-indigo-600',
+  'FLEET': 'from-violet-500 to-purple-600',
   'LOG': 'from-violet-500 to-purple-600',
   'HR': 'from-pink-500 to-rose-600',
   'OPS': 'from-cyan-500 to-blue-600',
   'IT': 'from-primary to-primary/80',
+  'WAREHOUSE': 'from-indigo-500 to-blue-600',
 };
 
 const departmentBgColors: Record<string, string> = {
   'FIN': 'bg-emerald-500/10 border-emerald-500/20',
   'SAF': 'bg-amber-500/10 border-amber-500/20',
   'PEAT': 'bg-blue-500/10 border-blue-500/20',
+  'FLEET': 'bg-violet-500/10 border-violet-500/20',
   'LOG': 'bg-violet-500/10 border-violet-500/20',
   'HR': 'bg-pink-500/10 border-pink-500/20',
   'OPS': 'bg-cyan-500/10 border-cyan-500/20',
   'IT': 'bg-primary/10 border-primary/20',
+  'WAREHOUSE': 'bg-indigo-500/10 border-indigo-500/20',
 };
 
 const departmentIconColors: Record<string, string> = {
   'FIN': 'text-emerald-600 dark:text-emerald-400',
   'SAF': 'text-amber-600 dark:text-amber-400',
   'PEAT': 'text-blue-600 dark:text-blue-400',
+  'FLEET': 'text-violet-600 dark:text-violet-400',
   'LOG': 'text-violet-600 dark:text-violet-400',
   'HR': 'text-pink-600 dark:text-pink-400',
   'OPS': 'text-cyan-600 dark:text-cyan-400',
   'IT': 'text-primary',
+  'WAREHOUSE': 'text-indigo-600 dark:text-indigo-400',
 };
 
 export function DepartmentAccessCards() {
