@@ -5,32 +5,25 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { Link } from 'react-router-dom';
 import { 
   Building2, 
-  DollarSign, 
-  ShieldCheck, 
-  HardHat, 
-  Car, 
-  Users, 
-  Cog, 
-  Monitor,
   ChevronRight,
   Star,
   Crown,
-  Warehouse,
-  Package
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const departmentIcons: Record<string, React.ReactNode> = {
-  'FIN': <DollarSign className="h-8 w-8" />,
-  'SAF': <ShieldCheck className="h-8 w-8" />,
-  'PEAT': <HardHat className="h-8 w-8" />,
-  'FLEET': <Car className="h-8 w-8" />,
-  'LOG': <Car className="h-8 w-8" />,
-  'HR': <Users className="h-8 w-8" />,
-  'OPS': <Cog className="h-8 w-8" />,
-  'IT': <Monitor className="h-8 w-8" />,
-  'WAREHOUSE': <Warehouse className="h-8 w-8" />,
-  'WH': <Package className="h-8 w-8" />,
+// Icons8 3D/Fluency style icon URLs (requires subscription or attribution)
+const departmentIconUrls: Record<string, string> = {
+  'FIN': 'https://img.icons8.com/3d-fluency/94/money-bag.png',
+  'SAF': 'https://img.icons8.com/3d-fluency/94/policeman-male.png',
+  'PEAT': 'https://img.icons8.com/3d-fluency/94/tractor.png',
+  'FLEET': 'https://img.icons8.com/3d-fluency/94/car.png',
+  'LOG': 'https://img.icons8.com/3d-fluency/94/delivery-truck.png',
+  'HR': 'https://img.icons8.com/3d-fluency/94/conference-call.png',
+  'OPS': 'https://img.icons8.com/3d-fluency/94/gears.png',
+  'IT': 'https://img.icons8.com/3d-fluency/94/monitor.png',
+  'WAREHOUSE': 'https://img.icons8.com/3d-fluency/94/warehouse.png',
+  'WH': 'https://img.icons8.com/3d-fluency/94/warehouse.png',
+  'ENG': 'https://img.icons8.com/3d-fluency/94/maintenance.png',
 };
 
 const departmentGradients: Record<string, string> = {
@@ -154,8 +147,7 @@ export function DepartmentAccessCards() {
           const isPrimary = dept.id === primaryDeptId;
           const gradient = departmentGradients[dept.code] || 'from-primary to-primary/80';
           const bgColor = departmentBgColors[dept.code] || 'bg-primary/10 border-primary/20';
-          const iconColor = departmentIconColors[dept.code] || 'text-primary';
-          const Icon = departmentIcons[dept.code] || <Building2 className="h-8 w-8" />;
+          const iconUrl = departmentIconUrls[dept.code];
 
           return (
             <Link 
@@ -190,9 +182,15 @@ export function DepartmentAccessCards() {
                       flex items-center justify-center mb-4 shadow-lg
                       group-hover:scale-110 transition-transform duration-300
                     `}>
-                      <div className="text-white">
-                        {Icon}
-                      </div>
+                      {iconUrl ? (
+                        <img 
+                          src={iconUrl} 
+                          alt={dept.name} 
+                          className="w-10 h-10 object-contain"
+                        />
+                      ) : (
+                        <Building2 className="h-8 w-8 text-white" />
+                      )}
                     </div>
 
                     {/* Department info */}
