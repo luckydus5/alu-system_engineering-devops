@@ -135,9 +135,10 @@ export function useReports(departmentId?: string) {
     }
   };
 
+  // Use correct status value: 'pending' instead of 'submitted'
   const submitReport = async (id: string) => {
     await updateReport(id, { 
-      status: 'submitted',
+      status: 'pending',
       submitted_at: new Date().toISOString()
     });
   };

@@ -46,12 +46,14 @@ interface ReportDetailDialogProps {
   onUpdate: () => void;
 }
 
+// Using correct status values: draft, pending, in_review, approved, rejected, escalated
 const statusConfig: Record<ReportStatus, { label: string; className: string }> = {
   draft: { label: 'Draft', className: 'bg-muted text-muted-foreground' },
-  submitted: { label: 'Pending Review', className: 'bg-warning/10 text-warning border-warning/20' },
+  pending: { label: 'Pending Review', className: 'bg-warning/10 text-warning border-warning/20' },
   in_review: { label: 'Manager Review', className: 'bg-info/10 text-info border-info/20' },
-  resolved: { label: 'Resolved', className: 'bg-success/10 text-success border-success/20' },
-  closed: { label: 'Closed', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+  approved: { label: 'Approved', className: 'bg-success/10 text-success border-success/20' },
+  rejected: { label: 'Rejected', className: 'bg-destructive/10 text-destructive border-destructive/20' },
+  escalated: { label: 'Escalated', className: 'bg-warning/10 text-warning border-warning/20' },
 };
 
 const priorityConfig = {
@@ -64,9 +66,8 @@ const priorityConfig = {
 const typeLabels: Record<string, string> = {
   incident: 'Incident Report',
   general: 'General Report',
-  maintenance: 'Maintenance Report',
-  safety: 'Safety Report',
-  compliance: 'Compliance Report',
+  financial: 'Financial Report',
+  performance: 'Performance Report',
 };
 
 export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: ReportDetailDialogProps) {
@@ -158,9 +159,10 @@ export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: Rep
     return '📎';
   };
 
-  const canSupervisorAct = hasMinRole('supervisor') && report?.status === 'submitted';
+  // Using correct status values
+  const canSupervisorAct = hasMinRole('supervisor') && report?.status === 'pending';
   const canManagerAct = hasMinRole('manager') && report?.status === 'in_review';
-  const canComment = hasMinRole('staff') && report?.status !== 'resolved' && report?.status !== 'closed';
+  const canComment = hasMinRole('staff') && report?.status !== 'approved' && report?.status !== 'rejected';
 
   if (!report) return null;
 
@@ -281,11 +283,12 @@ export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: Rep
                   {comments.map((comment) => (
                     <Card key={comment.id} className={cn(
                       comment.action && 'border-l-4',
-                      comment.action === 'resolved' && 'border-l-success',
-                      comment.action === 'closed' && 'border-l-destructive',
+                      comment.action === 'approved' && 'border-l-success',
+                      comment.action === 'rejected' && 'border-l-destructive',
                       comment.action === 'in_review' && 'border-l-info',
                       comment.action === 'draft' && 'border-l-warning',
-                      comment.action === 'submitted' && 'border-l-warning',
+                      comment.action === 'pending' && 'border-l-warning',
+                      comment.action === 'escalated' && 'border-l-warning',
                     )}>
                       <CardContent className="p-3">
                         <div className="flex items-start justify-between mb-1">
@@ -298,8 +301,10 @@ export function ReportDetailDialog({ report, open, onOpenChange, onUpdate }: Rep
                               <Badge variant="outline" className="text-xs">
                                 {comment.action === 'in_review' ? 'Forwarded to Manager' : 
                                  comment.action === 'draft' ? 'Requested Changes' :
-                                 comment.action === 'resolved' ? 'Resolved' :
-                                 comment.action === 'closed' ? 'Closed' :
+                                 comment.action === 'approved' ? 'Approved' :
+                                 comment.action === 'rejected' ? 'Rejected' :
+                                 comment.action === 'escalated' ? 'Escalated' :
+                                 comment.action === 'pending' ? 'Submitted' :
                                  comment.action.charAt(0).toUpperCase() + comment.action.slice(1)}
                               </Badge>
                             )}

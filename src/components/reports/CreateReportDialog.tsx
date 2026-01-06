@@ -26,9 +26,8 @@ interface CreateReportDialogProps {
 const reportTypes: { value: ReportType; label: string }[] = [
   { value: 'incident', label: 'Incident Report' },
   { value: 'general', label: 'General Report' },
-  { value: 'maintenance', label: 'Maintenance Report' },
-  { value: 'safety', label: 'Safety Report' },
-  { value: 'compliance', label: 'Compliance Report' },
+  { value: 'financial', label: 'Financial Report' },
+  { value: 'performance', label: 'Performance Report' },
 ];
 
 const priorities: { value: ReportPriority; label: string }[] = [
@@ -149,7 +148,8 @@ export function CreateReportDialog({ open, onOpenChange, defaultDepartmentId }: 
         }
       }
 
-      const status: ReportStatus = asDraft ? 'draft' : 'submitted';
+      // Use correct status values from the enum: draft, pending, in_review, approved, rejected, escalated
+      const status: ReportStatus = asDraft ? 'draft' : 'pending';
 
       const report = await createReport({
         ...formData,

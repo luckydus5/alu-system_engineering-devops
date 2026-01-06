@@ -47,6 +47,47 @@ export type Database = {
         }
         Relationships: []
       }
+      fleet_audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          field_name: string | null
+          fleet_id: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          user_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          field_name?: string | null
+          fleet_id: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          user_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          field_name?: string | null
+          fleet_id?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fleet_audit_log_fleet_id_fkey"
+            columns: ["fleet_id"]
+            isOneToOne: false
+            referencedRelation: "fleets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fleet_issues: {
         Row: {
           created_at: string
@@ -55,6 +96,7 @@ export type Database = {
           is_resolved: boolean | null
           issue_description: string
           resolved_at: string | null
+          resolved_by: string | null
           updated_at: string
         }
         Insert: {
@@ -64,6 +106,7 @@ export type Database = {
           is_resolved?: boolean | null
           issue_description: string
           resolved_at?: string | null
+          resolved_by?: string | null
           updated_at?: string
         }
         Update: {
@@ -73,6 +116,7 @@ export type Database = {
           is_resolved?: boolean | null
           issue_description?: string
           resolved_at?: string | null
+          resolved_by?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -514,13 +558,14 @@ export type Database = {
         | "decommissioned"
       fleet_status: "operational" | "under_maintenance" | "out_of_service"
       report_priority: "low" | "medium" | "high" | "critical"
-      report_status: "draft" | "submitted" | "in_review" | "resolved" | "closed"
-      report_type:
-        | "general"
-        | "incident"
-        | "maintenance"
-        | "safety"
-        | "compliance"
+      report_status:
+        | "draft"
+        | "pending"
+        | "in_review"
+        | "approved"
+        | "rejected"
+        | "escalated"
+      report_type: "incident" | "financial" | "performance" | "general"
       service_type: "preventive" | "corrective" | "breakdown"
     }
     CompositeTypes: {
@@ -661,14 +706,15 @@ export const Constants = {
       ],
       fleet_status: ["operational", "under_maintenance", "out_of_service"],
       report_priority: ["low", "medium", "high", "critical"],
-      report_status: ["draft", "submitted", "in_review", "resolved", "closed"],
-      report_type: [
-        "general",
-        "incident",
-        "maintenance",
-        "safety",
-        "compliance",
+      report_status: [
+        "draft",
+        "pending",
+        "in_review",
+        "approved",
+        "rejected",
+        "escalated",
       ],
+      report_type: ["incident", "financial", "performance", "general"],
       service_type: ["preventive", "corrective", "breakdown"],
     },
   },
