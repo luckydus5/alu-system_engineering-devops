@@ -12,6 +12,7 @@ import { ReportsList } from '@/components/reports/ReportsList';
 import { CreateReportDialog } from '@/components/reports/CreateReportDialog';
 import { TeamMembersList } from '@/components/department/TeamMembersList';
 import { FleetMaintenanceDashboard } from '@/components/fleet/FleetMaintenanceDashboard';
+import { WarehouseDashboard } from '@/components/warehouse/WarehouseDashboard';
 import { Plus, FileText, Users, CheckCircle, Clock, ShieldAlert } from 'lucide-react';
 
 export default function Department() {
@@ -34,8 +35,9 @@ export default function Department() {
   const approvedReports = reports.filter(r => r.status === 'approved').length;
   const pendingReports = reports.filter(r => ['pending', 'in_review'].includes(r.status)).length;
 
-  // Check if this is the Fleet Management department
+  // Check if this is a special department
   const isFleetDepartment = department?.code?.toUpperCase() === 'FLEET';
+  const isWarehouseDepartment = department?.code?.toUpperCase() === 'WAREHOUSE';
 
   if (deptLoading || roleLoading) {
     return (
@@ -89,6 +91,15 @@ export default function Department() {
     return (
       <DashboardLayout title={department.name}>
         <FleetMaintenanceDashboard department={department} canManage={canManage} />
+      </DashboardLayout>
+    );
+  }
+
+  // Render Warehouse Dashboard for Warehouse department
+  if (isWarehouseDepartment) {
+    return (
+      <DashboardLayout title={department.name}>
+        <WarehouseDashboard department={department} canManage={canManage} />
       </DashboardLayout>
     );
   }
