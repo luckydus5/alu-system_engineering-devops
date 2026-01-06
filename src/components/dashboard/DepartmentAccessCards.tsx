@@ -6,28 +6,31 @@ import { Link } from 'react-router-dom';
 import { 
   Building2, 
   DollarSign, 
-  Shield, 
-  Wrench, 
-  Truck, 
+  ShieldCheck, 
+  HardHat, 
+  Car, 
   Users, 
-  Settings, 
-  Briefcase,
+  Cog, 
+  Monitor,
   ChevronRight,
   Star,
-  Crown
+  Crown,
+  Warehouse,
+  Package
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
 const departmentIcons: Record<string, React.ReactNode> = {
   'FIN': <DollarSign className="h-8 w-8" />,
-  'SAF': <Shield className="h-8 w-8" />,
-  'PEAT': <Wrench className="h-8 w-8" />,
-  'FLEET': <Truck className="h-8 w-8" />,
-  'LOG': <Truck className="h-8 w-8" />,
+  'SAF': <ShieldCheck className="h-8 w-8" />,
+  'PEAT': <HardHat className="h-8 w-8" />,
+  'FLEET': <Car className="h-8 w-8" />,
+  'LOG': <Car className="h-8 w-8" />,
   'HR': <Users className="h-8 w-8" />,
-  'OPS': <Settings className="h-8 w-8" />,
-  'IT': <Briefcase className="h-8 w-8" />,
-  'WAREHOUSE': <Building2 className="h-8 w-8" />,
+  'OPS': <Cog className="h-8 w-8" />,
+  'IT': <Monitor className="h-8 w-8" />,
+  'WAREHOUSE': <Warehouse className="h-8 w-8" />,
+  'WH': <Package className="h-8 w-8" />,
 };
 
 const departmentGradients: Record<string, string> = {
@@ -38,8 +41,9 @@ const departmentGradients: Record<string, string> = {
   'LOG': 'from-violet-500 to-purple-600',
   'HR': 'from-pink-500 to-rose-600',
   'OPS': 'from-cyan-500 to-blue-600',
-  'IT': 'from-primary to-primary/80',
+  'IT': 'from-blue-500 to-blue-600',
   'WAREHOUSE': 'from-indigo-500 to-blue-600',
+  'WH': 'from-indigo-500 to-blue-600',
 };
 
 const departmentBgColors: Record<string, string> = {
@@ -50,8 +54,9 @@ const departmentBgColors: Record<string, string> = {
   'LOG': 'bg-violet-500/10 border-violet-500/20',
   'HR': 'bg-pink-500/10 border-pink-500/20',
   'OPS': 'bg-cyan-500/10 border-cyan-500/20',
-  'IT': 'bg-primary/10 border-primary/20',
+  'IT': 'bg-blue-500/10 border-blue-500/20',
   'WAREHOUSE': 'bg-indigo-500/10 border-indigo-500/20',
+  'WH': 'bg-indigo-500/10 border-indigo-500/20',
 };
 
 const departmentIconColors: Record<string, string> = {
@@ -62,8 +67,9 @@ const departmentIconColors: Record<string, string> = {
   'LOG': 'text-violet-600 dark:text-violet-400',
   'HR': 'text-pink-600 dark:text-pink-400',
   'OPS': 'text-cyan-600 dark:text-cyan-400',
-  'IT': 'text-primary',
+  'IT': 'text-blue-600 dark:text-blue-400',
   'WAREHOUSE': 'text-indigo-600 dark:text-indigo-400',
+  'WH': 'text-indigo-600 dark:text-indigo-400',
 };
 
 export function DepartmentAccessCards() {

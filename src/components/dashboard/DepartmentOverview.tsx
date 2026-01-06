@@ -3,25 +3,31 @@ import { Progress } from '@/components/ui/progress';
 import { useReportStats } from '@/hooks/useReportStats';
 import { 
   DollarSign, 
-  Shield, 
+  ShieldCheck, 
   ShoppingCart, 
-  Settings, 
+  Cog, 
   Users, 
   Monitor, 
   Headphones, 
-  Wrench,
-  Building2
+  HardHat,
+  Building2,
+  Car,
+  Package,
+  Warehouse
 } from 'lucide-react';
 
 const departmentIcons: Record<string, typeof DollarSign> = {
   'FIN': DollarSign,
-  'SAF': Shield,
+  'SAF': ShieldCheck,
   'PRO': ShoppingCart,
-  'OPS': Settings,
+  'OPS': Cog,
   'HR': Users,
   'IT': Monitor,
   'CS': Headphones,
-  'ENG': Wrench,
+  'ENG': HardHat,
+  'FLEET': Car,
+  'WH': Package,
+  'WAREHOUSE': Warehouse,
 };
 
 const departmentColors: Record<string, string> = {
