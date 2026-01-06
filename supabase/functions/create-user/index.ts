@@ -43,20 +43,29 @@ Deno.serve(async (req) => {
     const requestingUserId = claimsData.claims.sub;
     console.log('Requesting user ID:', requestingUserId);
 
-    // Create admin client for privileged operations
+    // Create admin client for privileged operations (bypasses RLS)
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // Check if requesting user is admin
+    // Check if requesting user is admin using admin client (bypasses RLS)
     const { data: roleData, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
       .eq('user_id', requestingUserId)
-      .eq('role', 'admin')
       .maybeSingle();
+
+    console.log('Role data:', roleData, 'Role error:', roleError);
+
+    if (roleError || !roleData || roleData.role !== 'admin') {
+      console.log('Not admin - role is:', roleData?.role);
+      return new Response(JSON.stringify({ error: 'Unauthorized - Admin access required' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     if (roleError || !roleData) {
       console.log('Role check failed:', roleError, roleData);
