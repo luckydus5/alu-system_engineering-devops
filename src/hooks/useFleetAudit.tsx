@@ -4,7 +4,7 @@ import { useAuth } from './useAuth';
 export function useFleetAudit() {
   const { user } = useAuth();
 
-  // Log changes directly to console for now (audit table doesn't exist)
+  // Log changes to the fleet_audit_log table
   const logChange = async (entry: {
     fleet_id: string;
     action: string;
@@ -14,11 +14,20 @@ export function useFleetAudit() {
   }) => {
     if (!user?.id) return;
     
-    console.log('[Fleet Audit]', {
-      ...entry,
-      user_id: user.id,
-      timestamp: new Date().toISOString()
-    });
+    try {
+      await supabase
+        .from('fleet_audit_log')
+        .insert({
+          fleet_id: entry.fleet_id,
+          user_id: user.id,
+          action: entry.action,
+          field_name: entry.field_name,
+          old_value: entry.old_value,
+          new_value: entry.new_value,
+        });
+    } catch (error) {
+      console.error('[Fleet Audit] Error logging change:', error);
+    }
   };
 
   const updateFleetWithAudit = async (
@@ -51,6 +60,7 @@ export function useFleetAudit() {
       .update({
         is_resolved: true,
         resolved_at: new Date().toISOString(),
+        resolved_by: user.id,
       })
       .eq('id', issueId);
 

@@ -3,6 +3,7 @@ import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 
+// Using correct status values: draft, pending, in_review, approved, rejected, escalated
 type ReportStatus = Database['public']['Enums']['report_status'];
 
 export function useReportActions() {
@@ -42,7 +43,7 @@ export function useReportActions() {
     try {
       const updates: Record<string, unknown> = { status };
       
-      if (status === 'resolved') {
+      if (status === 'approved') {
         updates.resolved_at = new Date().toISOString();
       }
 
@@ -60,10 +61,11 @@ export function useReportActions() {
 
       const statusMessages: Record<ReportStatus, string> = {
         draft: 'sent back for changes',
-        submitted: 'submitted',
-        in_review: 'forwarded for review',
-        resolved: 'resolved',
-        closed: 'closed',
+        pending: 'submitted for review',
+        in_review: 'forwarded for manager review',
+        approved: 'approved',
+        rejected: 'rejected',
+        escalated: 'escalated',
       };
 
       toast.success(`Report ${statusMessages[status] || 'updated'} successfully`);
@@ -80,9 +82,9 @@ export function useReportActions() {
     return updateReportStatus(reportId, 'in_review', comment || 'Approved by supervisor, forwarded to manager for final review');
   };
 
-  // Supervisor rejects -> closed
+  // Supervisor rejects -> rejected
   const supervisorReject = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'closed', comment);
+    return updateReportStatus(reportId, 'rejected', comment);
   };
 
   // Supervisor requests changes -> back to draft
@@ -90,19 +92,19 @@ export function useReportActions() {
     return updateReportStatus(reportId, 'draft', comment);
   };
 
-  // Manager gives final approval -> resolved
+  // Manager gives final approval -> approved
   const managerApprove = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'resolved', comment || 'Final approval granted');
+    return updateReportStatus(reportId, 'approved', comment || 'Final approval granted');
   };
 
-  // Manager rejects -> closed
+  // Manager rejects -> rejected
   const managerReject = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'closed', comment);
+    return updateReportStatus(reportId, 'rejected', comment);
   };
 
-  // Manager sends back to supervisor -> submitted
+  // Manager sends back to supervisor -> escalated (or pending)
   const managerEscalate = async (reportId: string, comment: string) => {
-    return updateReportStatus(reportId, 'submitted', comment || 'Sent back for supervisor review');
+    return updateReportStatus(reportId, 'pending', comment || 'Sent back for supervisor review');
   };
 
   // Get comments for a report
