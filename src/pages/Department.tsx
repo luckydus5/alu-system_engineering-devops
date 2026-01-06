@@ -1,51 +1,39 @@
-import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useReports } from '@/hooks/useReports';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useDepartmentMembers } from '@/hooks/useDepartmentMembers';
-import { KPICard } from '@/components/dashboard/KPICard';
-import { ReportsList } from '@/components/reports/ReportsList';
-import { CreateReportDialog } from '@/components/reports/CreateReportDialog';
-import { TeamMembersList } from '@/components/department/TeamMembersList';
 import { FleetMaintenanceDashboard } from '@/components/fleet/FleetMaintenanceDashboard';
 import { WarehouseDashboard } from '@/components/warehouse/WarehouseDashboard';
-import { Plus, FileText, Users, CheckCircle, Clock, ShieldAlert } from 'lucide-react';
+import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
+import { OfficeDashboard } from '@/components/office/OfficeDashboard';
+import { ShieldAlert } from 'lucide-react';
 
 export default function Department() {
   const { code } = useParams<{ code: string }>();
   const { departments, loading: deptLoading } = useDepartments();
   const { hasRole, isInDepartment, loading: roleLoading } = useUserRole();
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   const department = departments.find(d => d.code.toLowerCase() === code?.toLowerCase());
-  const { reports, loading: reportsLoading, refetch } = useReports(department?.id);
-  const { members, loading: membersLoading, count: teamCount } = useDepartmentMembers(department?.id);
 
   // Check access: user must be admin, director, or in the department
   const isAdmin = hasRole('admin') || hasRole('director');
   const canManage = hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager');
   const hasAccess = isAdmin || (department && isInDepartment(department.id));
 
-  // Calculate stats using correct status values
-  const totalReports = reports.length;
-  const approvedReports = reports.filter(r => r.status === 'approved').length;
-  const pendingReports = reports.filter(r => ['pending', 'in_review'].includes(r.status)).length;
-
-  // Check if this is a special department
-  const isFleetDepartment = department?.code?.toUpperCase() === 'FLEET';
-  const isWarehouseDepartment = department?.code?.toUpperCase() === 'WAREHOUSE';
+  // Check department types
+  const deptCode = department?.code?.toUpperCase();
+  const isFleetDepartment = deptCode === 'FLEET';
+  const isWarehouseDepartment = deptCode === 'WAREHOUSE';
+  const isOperationsDepartment = deptCode === 'OPS' || deptCode === 'PEAT' || deptCode === 'OPERATIONS';
 
   if (deptLoading || roleLoading) {
     return (
       <DashboardLayout title="Loading...">
         <div className="space-y-6">
           <div className="h-8 w-48 bg-muted animate-pulse rounded" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {[1, 2, 3, 4, 5].map((i) => (
               <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
             ))}
           </div>
@@ -104,77 +92,20 @@ export default function Department() {
     );
   }
 
-  // Default department view for other departments
+  // Render Operations Dashboard for field operations (OPS, PEAT) - with photo uploads from field
+  if (isOperationsDepartment) {
+    return (
+      <DashboardLayout title={department.name}>
+        <OperationsDashboard department={department} canManage={canManage} />
+      </DashboardLayout>
+    );
+  }
+
+  // Default: Office Dashboard for office-based departments (HR, FIN, SAF, IT, ENG, etc.)
+  // These departments track meetings, tasks, announcements, and office activities
   return (
     <DashboardLayout title={department.name}>
-      <div className="space-y-6 animate-fade-in">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold text-foreground">{department.name}</h2>
-            <p className="text-muted-foreground">{department.description}</p>
-          </div>
-          <Button onClick={() => setCreateDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Report
-          </Button>
-        </div>
-
-        {/* Department KPIs */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KPICard
-            title="Total Reports"
-            value={totalReports.toString()}
-            icon={<FileText className="h-5 w-5" />}
-          />
-          <KPICard
-            title="Team Members"
-            value={membersLoading ? '...' : teamCount.toString()}
-            icon={<Users className="h-5 w-5" />}
-          />
-          <KPICard
-            title="Approved"
-            value={approvedReports.toString()}
-            icon={<CheckCircle className="h-5 w-5" />}
-          />
-          <KPICard
-            title="Pending"
-            value={pendingReports.toString()}
-            icon={<Clock className="h-5 w-5" />}
-          />
-        </div>
-
-        {/* Main Content Grid */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Department Reports - Takes more space */}
-          <div className="lg:col-span-2">
-            <Card className="shadow-corporate">
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Department Reports</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ReportsList 
-                  reports={reports} 
-                  loading={reportsLoading}
-                  onCreateClick={() => setCreateDialogOpen(true)}
-                  onRefresh={refetch}
-                />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Team Members List */}
-          <div className="lg:col-span-1">
-            <TeamMembersList members={members} loading={membersLoading} />
-          </div>
-        </div>
-      </div>
-
-      <CreateReportDialog 
-        open={createDialogOpen} 
-        onOpenChange={setCreateDialogOpen}
-        defaultDepartmentId={department.id}
-      />
+      <OfficeDashboard department={department} canManage={canManage} />
     </DashboardLayout>
   );
 }

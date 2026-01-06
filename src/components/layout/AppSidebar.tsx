@@ -1,26 +1,16 @@
 import { 
   LayoutDashboard, 
-  FileText, 
-  DollarSign, 
-  Shield, 
-  ShoppingCart, 
-  Settings as SettingsIcon, 
-  Users, 
-  Monitor, 
-  Headphones, 
-  Wrench,
-  Bell,
   LogOut,
   ChevronDown,
   Building2,
   UserCog,
-  Truck
 } from 'lucide-react';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useDepartments } from '@/hooks/useDepartments';
+import { getDepartmentIcon } from '@/lib/departmentIcons';
 import {
   Sidebar,
   SidebarContent,
@@ -43,18 +33,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const departmentIcons: Record<string, typeof DollarSign> = {
-  'FIN': DollarSign,
-  'SAF': Shield,
-  'PRO': ShoppingCart,
-  'OPS': SettingsIcon,
-  'HR': Users,
-  'IT': Monitor,
-  'CS': Headphones,
-  'ENG': Wrench,
-  'PEAT': Truck,
-};
-
 export function AppSidebar() {
   const location = useLocation();
   const { state } = useSidebar();
@@ -64,9 +42,7 @@ export function AppSidebar() {
   const { departments } = useDepartments();
 
   const mainNavItems = [
-    { title: 'Home', url: '/', icon: LayoutDashboard },
-    { title: 'My Reports', url: '/reports', icon: FileText },
-    { title: 'Notifications', url: '/notifications', icon: Bell },
+    { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -139,7 +115,7 @@ export function AppSidebar() {
               <SidebarGroupContent className="mt-2">
                 <SidebarMenu>
                   {departments.map((dept) => {
-                    const Icon = departmentIcons[dept.code] || FileText;
+                    const Icon = getDepartmentIcon(dept.code);
                     const url = `/department/${dept.code.toLowerCase()}`;
                     return (
                       <SidebarMenuItem key={dept.id}>

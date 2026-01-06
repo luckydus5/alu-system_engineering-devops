@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { 
   LayoutDashboard, 
-  FileText, 
-  Bell,
   LogOut,
   ChevronDown,
   UserCog,
@@ -35,9 +33,7 @@ export function TopNavbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const mainNavItems = [
-    { title: 'Home', url: '/', icon: LayoutDashboard },
-    { title: 'My Reports', url: '/reports', icon: FileText },
-    { title: 'Notifications', url: '/notifications', icon: Bell },
+    { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -111,21 +107,8 @@ export function TopNavbar() {
 
         </nav>
 
-        {/* Right side - Notifications & Profile */}
+        {/* Right side - Profile */}
         <div className="flex items-center gap-3 ml-auto">
-          {/* Notification Bell */}
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => navigate('/notifications')}
-            className="relative rounded-lg hover:bg-muted"
-          >
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-destructive-foreground text-[10px] flex items-center justify-center font-medium">
-              3
-            </span>
-          </Button>
-
           {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
