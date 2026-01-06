@@ -14,41 +14,51 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    // Create admin client for user management
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
-    // Get the authorization header to verify the requesting user
+    // Get the authorization header
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
         JSON.stringify({ error: 'No authorization header' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Verify the requesting user is an admin
-    const supabaseClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    // Create a client with the user's token to validate JWT
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user: requestingUser }, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !requestingUser) {
+    // Validate the JWT and get claims
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      console.error('JWT validation failed:', claimsError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const requestingUserId = claimsData.claims.sub as string;
+    console.log('Requesting user ID:', requestingUserId);
+
+    // Create admin client for privileged operations
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { autoRefreshToken: false, persistSession: false }
+    });
 
     // Check if requesting user is admin
     const { data: roleData, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
-      .eq('user_id', requestingUser.id)
+      .eq('user_id', requestingUserId)
       .single();
 
     if (roleError || roleData?.role !== 'admin') {
-      console.log('Access denied for user:', requestingUser.id, 'Role:', roleData?.role);
+      console.log('Access denied for user:', requestingUserId, 'Role:', roleData?.role);
       return new Response(
         JSON.stringify({ error: 'Only administrators can manage users' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -100,7 +110,7 @@ Deno.serve(async (req) => {
 
     if (action === 'delete') {
       // Prevent self-deletion
-      if (userId === requestingUser.id) {
+      if (userId === requestingUserId) {
         return new Response(
           JSON.stringify({ error: 'You cannot delete your own account' }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -129,7 +139,7 @@ Deno.serve(async (req) => {
         .insert({
           user_id: userId,
           department_id: departmentId,
-          granted_by: requestingUser.id,
+          granted_by: requestingUserId,
         });
 
       if (grantError) {
@@ -189,7 +199,7 @@ Deno.serve(async (req) => {
         const accessRecords = departmentIds.map((deptId: string) => ({
           user_id: userId,
           department_id: deptId,
-          granted_by: requestingUser.id,
+          granted_by: requestingUserId,
         }));
 
         const { error: insertError } = await supabaseAdmin
