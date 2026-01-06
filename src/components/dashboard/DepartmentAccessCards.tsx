@@ -11,19 +11,19 @@ import {
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Icons8 3D/Fluency style icon URLs (requires subscription or attribution)
+// Icons8 Fluency style icon URLs
 const departmentIconUrls: Record<string, string> = {
-  'FIN': 'https://img.icons8.com/3d-fluency/94/money-bag.png',
-  'SAF': 'https://img.icons8.com/3d-fluency/94/policeman-male.png',
-  'PEAT': 'https://img.icons8.com/3d-fluency/94/tractor.png',
-  'FLEET': 'https://img.icons8.com/3d-fluency/94/car.png',
-  'LOG': 'https://img.icons8.com/3d-fluency/94/delivery-truck.png',
-  'HR': 'https://img.icons8.com/3d-fluency/94/conference-call.png',
-  'OPS': 'https://img.icons8.com/3d-fluency/94/gears.png',
-  'IT': 'https://img.icons8.com/3d-fluency/94/monitor.png',
-  'WAREHOUSE': 'https://img.icons8.com/3d-fluency/94/warehouse.png',
-  'WH': 'https://img.icons8.com/3d-fluency/94/warehouse.png',
-  'ENG': 'https://img.icons8.com/3d-fluency/94/maintenance.png',
+  'FIN': 'https://img.icons8.com/fluency/96/money-bag.png',
+  'SAF': 'https://img.icons8.com/fluency/96/policeman-male.png',
+  'PEAT': 'https://img.icons8.com/fluency/96/tractor.png',
+  'FLEET': 'https://img.icons8.com/fluency/96/car.png',
+  'LOG': 'https://img.icons8.com/fluency/96/delivery.png',
+  'HR': 'https://img.icons8.com/fluency/96/conference-call.png',
+  'OPS': 'https://img.icons8.com/fluency/96/services.png',
+  'IT': 'https://img.icons8.com/fluency/96/monitor.png',
+  'WAREHOUSE': 'https://img.icons8.com/fluency/96/warehouse-1.png',
+  'WH': 'https://img.icons8.com/fluency/96/warehouse-1.png',
+  'ENG': 'https://img.icons8.com/fluency/96/maintenance.png',
 };
 
 const departmentGradients: Record<string, string> = {
