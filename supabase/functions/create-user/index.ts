@@ -43,35 +43,42 @@ Deno.serve(async (req) => {
     const requestingUserId = claimsData.claims.sub;
     console.log('Requesting user ID:', requestingUserId);
 
-    // Create admin client for privileged operations (bypasses RLS)
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    
-    console.log('Service role key exists:', !!serviceRoleKey);
-    console.log('Supabase URL:', supabaseUrl);
-    
-    const supabaseAdmin = createClient(
-      supabaseUrl ?? '',
-      serviceRoleKey ?? '',
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
+    // Check admin permission using SECURITY DEFINER function (avoids RLS recursion/denials)
+    const { data: isAdmin, error: isAdminError } = await supabaseClient.rpc('has_role', {
+      _user_id: requestingUserId,
+      _role: 'admin',
+    });
 
-    // Check if requesting user is admin using admin client (bypasses RLS)
-    const { data: roleData, error: roleError } = await supabaseAdmin
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', requestingUserId)
-      .maybeSingle();
+    if (isAdminError) {
+      console.error('Admin check failed:', isAdminError);
+      return new Response(JSON.stringify({ error: 'Failed to verify admin privileges' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    console.log('Role data:', roleData, 'Role error:', roleError);
-
-    if (roleError || !roleData || roleData.role !== 'admin') {
-      console.log('Not admin - role is:', roleData?.role);
+    if (!isAdmin) {
       return new Response(JSON.stringify({ error: 'Unauthorized - Admin access required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    // Create admin client for privileged operations (Auth admin API, bypasses RLS)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+      return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    });
 
     // Get request body
     const { email, password, fullName, role, departmentId } = await req.json();
