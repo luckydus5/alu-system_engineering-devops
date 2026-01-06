@@ -44,9 +44,15 @@ Deno.serve(async (req) => {
     console.log('Requesting user ID:', requestingUserId);
 
     // Create admin client for privileged operations (bypasses RLS)
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    
+    console.log('Service role key exists:', !!serviceRoleKey);
+    console.log('Supabase URL:', supabaseUrl);
+    
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl ?? '',
+      serviceRoleKey ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
@@ -61,14 +67,6 @@ Deno.serve(async (req) => {
 
     if (roleError || !roleData || roleData.role !== 'admin') {
       console.log('Not admin - role is:', roleData?.role);
-      return new Response(JSON.stringify({ error: 'Unauthorized - Admin access required' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (roleError || !roleData) {
-      console.log('Role check failed:', roleError, roleData);
       return new Response(JSON.stringify({ error: 'Unauthorized - Admin access required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
