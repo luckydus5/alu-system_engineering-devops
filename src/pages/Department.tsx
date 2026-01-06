@@ -34,8 +34,8 @@ export default function Department() {
   const approvedReports = reports.filter(r => r.status === 'approved').length;
   const pendingReports = reports.filter(r => ['pending', 'in_review'].includes(r.status)).length;
 
-  // Check if this is the PEAT department
-  const isPeatDepartment = department?.code?.toUpperCase() === 'PEAT';
+  // Check if this is the Fleet Management department
+  const isFleetDepartment = department?.code?.toUpperCase() === 'FLEET';
 
   if (deptLoading || roleLoading) {
     return (
@@ -84,8 +84,8 @@ export default function Department() {
     );
   }
 
-  // Render Fleet Maintenance Dashboard for PEAT department
-  if (isPeatDepartment) {
+  // Render Fleet Maintenance Dashboard for Fleet Management department
+  if (isFleetDepartment) {
     return (
       <DashboardLayout title={department.name}>
         <FleetMaintenanceDashboard department={department} canManage={canManage} />
