@@ -47,6 +47,97 @@ export type Database = {
         }
         Relationships: []
       }
+      field_update_comments: {
+        Row: {
+          content: string
+          created_at: string | null
+          field_update_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          field_update_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          field_update_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_update_comments_field_update_id_fkey"
+            columns: ["field_update_id"]
+            isOneToOne: false
+            referencedRelation: "field_updates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      field_updates: {
+        Row: {
+          created_at: string | null
+          created_by: string
+          department_id: string
+          description: string | null
+          id: string
+          is_pinned: boolean | null
+          location: string | null
+          metadata: Json | null
+          photos: string[] | null
+          priority: string | null
+          status: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by: string
+          department_id: string
+          description?: string | null
+          id?: string
+          is_pinned?: boolean | null
+          location?: string | null
+          metadata?: Json | null
+          photos?: string[] | null
+          priority?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string
+          department_id?: string
+          description?: string | null
+          id?: string
+          is_pinned?: boolean | null
+          location?: string | null
+          metadata?: Json | null
+          photos?: string[] | null
+          priority?: string | null
+          status?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "field_updates_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fleet_audit_log: {
         Row: {
           action: string
@@ -204,6 +295,7 @@ export type Database = {
           created_by: string | null
           department_id: string
           id: string
+          image_url: string | null
           item_name: string
           item_number: string
           location: string
@@ -215,6 +307,7 @@ export type Database = {
           created_by?: string | null
           department_id: string
           id?: string
+          image_url?: string | null
           item_name: string
           item_number: string
           location: string
@@ -226,6 +319,7 @@ export type Database = {
           created_by?: string | null
           department_id?: string
           id?: string
+          image_url?: string | null
           item_name?: string
           item_number?: string
           location?: string

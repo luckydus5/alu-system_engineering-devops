@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -11,6 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Pencil,
   Trash2,
@@ -27,6 +34,11 @@ import {
   ChevronRight,
   PackagePlus,
   PackageMinus,
+  Image as ImageIcon,
+  Eye,
+  Camera,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 import { InventoryItem } from '@/hooks/useInventory';
 import {
@@ -85,7 +97,61 @@ export function ExcelInventoryTable({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [stockDialogItem, setStockDialogItem] = useState<InventoryItem | null>(null);
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [editImageFile, setEditImageFile] = useState<File | null>(null);
+  const [editImagePreview, setEditImagePreview] = useState<string | null>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const editImageInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
   const itemsPerPage = 15;
+
+  const openImagePreview = (imageUrl: string) => {
+    setPreviewImage(imageUrl);
+    setImagePreviewOpen(true);
+  };
+
+  // Upload image to Supabase Storage
+  const uploadImage = async (file: File): Promise<string | null> => {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      const filePath = `inventory/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('inventory-images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('inventory-images')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: 'Upload Error',
+        description: 'Failed to upload image',
+        variant: 'destructive',
+      });
+      return null;
+    }
+  };
+
+  // Handle image selection for edit
+  const handleEditImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setEditImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const startEdit = (item: InventoryItem) => {
     setEditingId(item.id);
@@ -95,19 +161,38 @@ export function ExcelInventoryTable({
       quantity: item.quantity,
       location: item.location,
     });
+    setEditImageFile(null);
+    setEditImagePreview(item.image_url || null);
   };
 
   const cancelEdit = () => {
     setEditingId(null);
     setEditData({});
+    setEditImageFile(null);
+    setEditImagePreview(null);
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
-    const success = await onUpdate(editingId, editData);
+    
+    let updateData = { ...editData };
+    
+    // Upload new image if selected
+    if (editImageFile) {
+      setUploadingImage(true);
+      const imageUrl = await uploadImage(editImageFile);
+      setUploadingImage(false);
+      if (imageUrl) {
+        updateData.image_url = imageUrl;
+      }
+    }
+    
+    const success = await onUpdate(editingId, updateData);
     if (success) {
       setEditingId(null);
       setEditData({});
+      setEditImageFile(null);
+      setEditImagePreview(null);
     }
   };
 
@@ -188,20 +273,20 @@ export function ExcelInventoryTable({
     const status = getStockStatus(quantity);
     if (status === 'out') {
       return (
-        <Badge className="bg-red-500 text-white border-0 font-semibold">
-          OUT OF STOCK
+        <Badge className="bg-red-500 text-white border-0 font-semibold text-[10px] px-1.5 py-0.5 whitespace-nowrap">
+          OUT
         </Badge>
       );
     }
     if (status === 'low') {
       return (
-        <Badge className="bg-amber-500 text-white border-0 font-semibold">
-          LOW STOCK
+        <Badge className="bg-amber-500 text-white border-0 font-semibold text-[10px] px-1.5 py-0.5 whitespace-nowrap">
+          LOW
         </Badge>
       );
     }
     return (
-      <Badge className="bg-emerald-500 text-white border-0 font-semibold">
+      <Badge className="bg-emerald-500 text-white border-0 font-semibold text-[10px] px-1.5 py-0.5 whitespace-nowrap">
         IN STOCK
       </Badge>
     );
@@ -290,57 +375,60 @@ export function ExcelInventoryTable({
           </div>
         ) : (
           <>
-            {/* Excel-like Table */}
-            <ScrollArea className="w-full">
-              <div className="min-w-[900px]">
+            {/* Excel-like Table - Full Width */}
+            <div className="w-full overflow-x-auto">
+              <div className="min-w-full">
                 {/* Table Header */}
                 <div className={cn(
                   "bg-slate-100 dark:bg-slate-800 border-b-2 border-slate-900 dark:border-slate-600 grid",
                   canManage && onStockTransaction 
-                    ? "grid-cols-[60px_120px_1fr_100px_140px_110px_100px_100px]"
-                    : "grid-cols-[60px_120px_1fr_100px_140px_110px_100px]"
+                    ? "grid-cols-[40px_50px_80px_minmax(120px,2fr)_60px_minmax(80px,1fr)_90px_140px_80px]"
+                    : "grid-cols-[40px_50px_80px_minmax(120px,2fr)_60px_minmax(80px,1fr)_90px_80px]"
                 )}>
-                  <div className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center">
+                  <div className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center">
                     #
+                  </div>
+                  <div className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center">
+                    PHOTO
                   </div>
                   <button
                     onClick={() => handleSort('item_number')}
-                    className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-left flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-left flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   >
-                    ITEM NO.
+                    NO.
                     <SortIcon field="item_number" />
                   </button>
                   <button
                     onClick={() => handleSort('item_name')}
-                    className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-left flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-left flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   >
                     ITEM NAME
                     <SortIcon field="item_name" />
                   </button>
                   <button
                     onClick={() => handleSort('quantity')}
-                    className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center flex items-center justify-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center flex items-center justify-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   >
                     QTY
                     <SortIcon field="quantity" />
                   </button>
                   <button
                     onClick={() => handleSort('location')}
-                    className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-left flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-left flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                   >
                     LOCATION
                     <SortIcon field="location" />
                   </button>
-                  <div className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center">
+                  <div className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center">
                     STATUS
                   </div>
                   {canManage && onStockTransaction && (
-                    <div className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center">
+                    <div className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 border-r border-slate-300 dark:border-slate-600 text-center">
                       STOCK
                     </div>
                   )}
                   {canManage && (
-                    <div className="p-3 font-bold text-sm text-slate-700 dark:text-slate-300 text-center">
+                    <div className="p-2 font-bold text-xs text-slate-700 dark:text-slate-300 text-center">
                       ACTIONS
                     </div>
                   )}
@@ -359,53 +447,86 @@ export function ExcelInventoryTable({
                         className={cn(
                           'grid transition-colors',
                           canManage && onStockTransaction 
-                            ? "grid-cols-[60px_120px_1fr_100px_140px_110px_100px_100px]"
-                            : "grid-cols-[60px_120px_1fr_100px_140px_110px_100px]",
+                            ? "grid-cols-[40px_50px_80px_minmax(120px,2fr)_60px_minmax(80px,1fr)_90px_140px_80px]"
+                            : "grid-cols-[40px_50px_80px_minmax(120px,2fr)_60px_minmax(80px,1fr)_90px_80px]",
                           rowColor,
                           isEditing && 'bg-blue-100 dark:bg-blue-900/50'
                         )}
                       >
                         {/* Row Number */}
-                        <div className="p-3 text-center font-mono text-sm border-r border-slate-900 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
+                        <div className="p-2 text-center font-mono text-xs border-r border-slate-900 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50">
                           {globalIndex + 1}
                         </div>
 
+                        {/* Photo */}
+                        <div className="p-1 border-r border-slate-900 dark:border-slate-600 flex items-center justify-center">
+                          {isEditing ? (
+                            <div 
+                              className="w-8 h-8 rounded bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors relative overflow-hidden"
+                              onClick={() => editImageInputRef.current?.click()}
+                            >
+                              {uploadingImage ? (
+                                <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+                              ) : editImagePreview ? (
+                                <img
+                                  src={editImagePreview}
+                                  alt="Preview"
+                                  className="w-8 h-8 rounded object-cover"
+                                />
+                              ) : (
+                                <Camera className="h-4 w-4 text-blue-600" />
+                              )}
+                            </div>
+                          ) : item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.item_name}
+                              className="w-8 h-8 rounded object-cover cursor-pointer hover:opacity-80 transition-opacity"
+                              onClick={() => openImagePreview(item.image_url!)}
+                            />
+                          ) : (
+                            <div className="w-8 h-8 rounded bg-slate-200 dark:bg-slate-700 flex items-center justify-center">
+                              <ImageIcon className="h-3 w-3 text-slate-400" />
+                            </div>
+                          )}
+                        </div>
+
                         {/* Item Number */}
-                        <div className="p-3 border-r border-slate-900 dark:border-slate-600">
+                        <div className="p-2 border-r border-slate-900 dark:border-slate-600">
                           {isEditing ? (
                             <Input
                               value={editData.item_number || ''}
                               onChange={(e) =>
                                 setEditData({ ...editData, item_number: e.target.value })
                               }
-                              className="h-8 text-sm font-mono"
+                              className="h-6 text-xs font-mono"
                             />
                           ) : (
-                            <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                            <span className="font-mono font-semibold text-xs text-slate-800 dark:text-slate-200">
                               {item.item_number}
                             </span>
                           )}
                         </div>
 
                         {/* Item Name */}
-                        <div className="p-3 border-r border-slate-900 dark:border-slate-600">
+                        <div className="p-2 border-r border-slate-900 dark:border-slate-600">
                           {isEditing ? (
                             <Input
                               value={editData.item_name || ''}
                               onChange={(e) =>
                                 setEditData({ ...editData, item_name: e.target.value })
                               }
-                              className="h-8 text-sm"
+                              className="h-6 text-xs"
                             />
                           ) : (
-                            <span className="text-slate-800 dark:text-slate-200">
+                            <span className="text-sm text-slate-800 dark:text-slate-200">
                               {item.item_name}
                             </span>
                           )}
                         </div>
 
                         {/* Quantity */}
-                        <div className="p-3 border-r border-slate-900 dark:border-slate-600 text-center">
+                        <div className="p-2 border-r border-slate-900 dark:border-slate-600 text-center">
                           {isEditing ? (
                             <Input
                               type="number"
@@ -416,12 +537,12 @@ export function ExcelInventoryTable({
                                   quantity: parseInt(e.target.value) || 0,
                                 })
                               }
-                              className="h-8 text-sm text-center w-20 mx-auto"
+                              className="h-6 text-xs text-center w-12 mx-auto"
                             />
                           ) : (
                             <span
                               className={cn(
-                                'font-bold text-lg',
+                                'font-bold text-sm',
                                 item.quantity === 0 && 'text-red-600',
                                 item.quantity > 0 && item.quantity < 10 && 'text-amber-600',
                                 item.quantity >= 10 && 'text-emerald-600'
@@ -433,72 +554,74 @@ export function ExcelInventoryTable({
                         </div>
 
                         {/* Location */}
-                        <div className="p-3 border-r border-slate-900 dark:border-slate-600">
+                        <div className="p-2 border-r border-slate-900 dark:border-slate-600">
                           {isEditing ? (
                             <Input
                               value={editData.location || ''}
                               onChange={(e) =>
                                 setEditData({ ...editData, location: e.target.value })
                               }
-                              className="h-8 text-sm"
+                              className="h-6 text-xs"
                             />
                           ) : (
-                            <span className="text-slate-600 dark:text-slate-400">
+                            <span className="text-xs text-slate-600 dark:text-slate-400">
                               {item.location}
                             </span>
                           )}
                         </div>
 
                         {/* Status */}
-                        <div className="p-3 border-r border-slate-900 dark:border-slate-600 flex items-center justify-center">
+                        <div className="p-2 border-r border-slate-900 dark:border-slate-600 flex items-center justify-center">
                           {getStatusBadge(item.quantity)}
                         </div>
 
                         {/* Stock In/Out Actions */}
                         {canManage && onStockTransaction && (
-                          <div className="p-3 border-r border-slate-900 dark:border-slate-600 flex items-center justify-center gap-1">
+                          <div className="p-1 border-r border-slate-900 dark:border-slate-600 flex items-center justify-center gap-0.5">
                             <Button
                               variant="ghost"
-                              size="icon"
+                              size="sm"
                               onClick={() => setStockDialogItem(item)}
-                              className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100"
+                              className="h-7 px-1.5 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100"
                               title="Stock In"
                             >
-                              <PackagePlus className="h-4 w-4" />
+                              <PackagePlus className="h-3 w-3 mr-0.5" />
+                              In
                             </Button>
                             <Button
                               variant="ghost"
-                              size="icon"
+                              size="sm"
                               onClick={() => setStockDialogItem(item)}
-                              className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100"
+                              className="h-7 px-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-100"
                               title="Stock Out"
                               disabled={item.quantity === 0}
                             >
-                              <PackageMinus className="h-4 w-4" />
+                              <PackageMinus className="h-3 w-3 mr-0.5" />
+                              Out
                             </Button>
                           </div>
                         )}
 
                         {/* Actions */}
                         {canManage && (
-                          <div className="p-3 flex items-center justify-center gap-1">
+                          <div className="p-1 flex items-center justify-center gap-0.5">
                             {isEditing ? (
                               <>
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   onClick={saveEdit}
-                                  className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100"
+                                  className="h-6 w-6 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-100"
                                 >
-                                  <Check className="h-4 w-4" />
+                                  <Check className="h-3 w-3" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   onClick={cancelEdit}
-                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100"
+                                  className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-100"
                                 >
-                                  <X className="h-4 w-4" />
+                                  <X className="h-3 w-3" />
                                 </Button>
                               </>
                             ) : (
@@ -507,17 +630,17 @@ export function ExcelInventoryTable({
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => startEdit(item)}
-                                  className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                                  className="h-6 w-6 text-blue-600 hover:text-blue-700 hover:bg-blue-100"
                                 >
-                                  <Pencil className="h-4 w-4" />
+                                  <Pencil className="h-3 w-3" />
                                 </Button>
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => setDeleteId(item.id)}
-                                  className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-100"
+                                  className="h-6 w-6 text-red-600 hover:text-red-700 hover:bg-red-100"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3 w-3" />
                                 </Button>
                               </>
                             )}
@@ -528,8 +651,7 @@ export function ExcelInventoryTable({
                   })}
                 </div>
               </div>
-              <ScrollBar orientation="horizontal" />
-            </ScrollArea>
+            </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
@@ -620,6 +742,34 @@ export function ExcelInventoryTable({
           onSubmit={onStockTransaction}
         />
       )}
+
+      {/* Image Preview Dialog */}
+      <Dialog open={imagePreviewOpen} onOpenChange={setImagePreviewOpen}>
+        <DialogContent className="sm:max-w-2xl p-0">
+          <DialogHeader className="p-4 pb-0">
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              Item Photo
+            </DialogTitle>
+          </DialogHeader>
+          {previewImage && (
+            <img
+              src={previewImage}
+              alt="Item"
+              className="w-full max-h-[70vh] object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Hidden file input for image upload */}
+      <input
+        type="file"
+        ref={editImageInputRef}
+        onChange={handleEditImageSelect}
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        className="hidden"
+      />
     </Card>
   );
 }

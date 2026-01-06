@@ -4,7 +4,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useUserRole } from '@/hooks/useUserRole';
 import { FleetMaintenanceDashboard } from '@/components/fleet/FleetMaintenanceDashboard';
-import { WarehouseDashboard } from '@/components/warehouse/WarehouseDashboard';
+import { WarehouseLayout } from '@/components/warehouse/WarehouseLayout';
 import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
 import { OfficeDashboard } from '@/components/office/OfficeDashboard';
 import { ShieldAlert } from 'lucide-react';
@@ -24,7 +24,7 @@ export default function Department() {
   // Check department types
   const deptCode = department?.code?.toUpperCase();
   const isFleetDepartment = deptCode === 'FLEET';
-  const isWarehouseDepartment = deptCode === 'WAREHOUSE';
+  const isWarehouseDepartment = deptCode === 'WAREHOUSE' || deptCode === 'WH';
   const isOperationsDepartment = deptCode === 'OPS' || deptCode === 'PEAT' || deptCode === 'OPERATIONS';
 
   if (deptLoading || roleLoading) {
@@ -85,11 +85,7 @@ export default function Department() {
 
   // Render Warehouse Dashboard for Warehouse department
   if (isWarehouseDepartment) {
-    return (
-      <DashboardLayout title={department.name}>
-        <WarehouseDashboard department={department} canManage={canManage} />
-      </DashboardLayout>
-    );
+    return <WarehouseLayout department={department} canManage={canManage} />;
   }
 
   // Render Operations Dashboard for field operations (OPS, PEAT) - with photo uploads from field

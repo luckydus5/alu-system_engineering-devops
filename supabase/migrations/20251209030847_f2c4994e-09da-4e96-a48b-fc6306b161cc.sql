@@ -6,7 +6,8 @@ VALUES (
   false,
   52428800, -- 50MB limit
   ARRAY['application/pdf', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-);
+)
+ON CONFLICT (id) DO NOTHING;
 
 -- Storage policies for report attachments
 CREATE POLICY "Users can upload attachments to their department folder"

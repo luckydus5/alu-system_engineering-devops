@@ -9,6 +9,7 @@ export interface InventoryItem {
   item_name: string;
   quantity: number;
   location: string;
+  image_url: string | null;
   created_at: string;
   updated_at: string;
   created_by: string | null;
