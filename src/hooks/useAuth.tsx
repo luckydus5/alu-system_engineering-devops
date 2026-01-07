@@ -74,11 +74,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    toast({
-      title: "Signed out",
-      description: "You have been signed out successfully.",
-    });
+    try {
+      // Clear local state first
+      setUser(null);
+      setSession(null);
+      
+      // Sign out from Supabase (use global scope to clear all sessions)
+      await supabase.auth.signOut({ scope: 'global' });
+      
+      toast({
+        title: "Signed out",
+        description: "You have been signed out successfully.",
+      });
+      
+      // Force redirect to auth page
+      window.location.href = '/auth';
+    } catch (error) {
+      console.error('Sign out error:', error);
+      // Even if there's an error, clear local storage and redirect
+      localStorage.removeItem('sb-' + import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
+      window.location.href = '/auth';
+    }
   };
 
   return (
