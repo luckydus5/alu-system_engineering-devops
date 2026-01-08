@@ -128,6 +128,37 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     refetch: refetchItems,
   } = useInventory(department.id);
 
+  // Compute accurate counts locally from the full inventory list (avoids 1000-row API caps)
+  const locationStatsById = useMemo(() => {
+    const map = new Map<string, { itemCount: number; totalQuantity: number; lowStockCount: number }>();
+
+    for (const item of items) {
+      if (!item.location_id) continue;
+      const current = map.get(item.location_id) || { itemCount: 0, totalQuantity: 0, lowStockCount: 0 };
+      current.itemCount += 1;
+      current.totalQuantity += item.quantity || 0;
+      if (item.quantity <= (item.min_quantity || 0)) current.lowStockCount += 1;
+      map.set(item.location_id, current);
+    }
+
+    return map;
+  }, [items]);
+
+  const classificationStatsById = useMemo(() => {
+    const map = new Map<string, { itemCount: number; totalQuantity: number; lowStockCount: number }>();
+
+    for (const item of items) {
+      if (!item.classification_id) continue;
+      const current = map.get(item.classification_id) || { itemCount: 0, totalQuantity: 0, lowStockCount: 0 };
+      current.itemCount += 1;
+      current.totalQuantity += item.quantity || 0;
+      if (item.quantity <= (item.min_quantity || 0)) current.lowStockCount += 1;
+      map.set(item.classification_id, current);
+    }
+
+    return map;
+  }, [items]);
+
   // Filter items by current location (folder)
   const locationItems = useMemo(() => {
     if (navState.level !== 'locations' || !navState.currentLocation) return [];
@@ -597,31 +628,35 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
               </Card>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {classifications.map((classification) => (
-                  <FolderCard
-                    key={classification.id}
-                    name={classification.name}
-                    itemCount={classification.item_count}
-                    totalQuantity={classification.total_quantity}
-                    lowStockCount={classification.low_stock_count}
-                    color={classification.color}
-                    variant="classification"
-                    canManage={canManage}
-                    onClick={() => goToLocations(classification)}
-                    onEdit={() => {
-                      setEditingClassification(classification);
-                      setClassificationDialogOpen(true);
-                    }}
-                    onDelete={() => {
-                      setItemToDelete({
-                        type: 'classification',
-                        id: classification.id,
-                        name: classification.name,
-                      });
-                      setDeleteConfirmOpen(true);
-                    }}
-                  />
-                ))}
+                {classifications.map((classification) => {
+                  const cStats = classificationStatsById.get(classification.id);
+
+                  return (
+                    <FolderCard
+                      key={classification.id}
+                      name={classification.name}
+                      itemCount={cStats?.itemCount ?? classification.item_count}
+                      totalQuantity={cStats?.totalQuantity ?? classification.total_quantity}
+                      lowStockCount={cStats?.lowStockCount ?? classification.low_stock_count}
+                      color={classification.color}
+                      variant="classification"
+                      canManage={canManage}
+                      onClick={() => goToLocations(classification)}
+                      onEdit={() => {
+                        setEditingClassification(classification);
+                        setClassificationDialogOpen(true);
+                      }}
+                      onDelete={() => {
+                        setItemToDelete({
+                          type: 'classification',
+                          id: classification.id,
+                          name: classification.name,
+                        });
+                        setDeleteConfirmOpen(true);
+                      }}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -769,33 +804,37 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                       Folders ({locations.length})
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                      {locations.map((location) => (
-                        <FolderCard
-                          key={location.id}
-                          name={location.name}
-                          itemCount={location.item_count}
-                          totalQuantity={location.total_quantity}
-                          lowStockCount={location.low_stock_count}
-                          minItems={location.min_items}
-                          subFolderCount={location.sub_folder_count}
-                          color={navState.classification?.color}
-                          variant="location"
-                          canManage={canManage && !selectionMode}
-                          onClick={() => goIntoFolder(location)}
-                          onEdit={() => {
-                            setEditingLocation(location);
-                            setLocationDialogOpen(true);
-                          }}
-                          onDelete={() => {
-                            setItemToDelete({
-                              type: 'location',
-                              id: location.id,
-                              name: location.name,
-                            });
-                            setDeleteConfirmOpen(true);
-                          }}
-                        />
-                      ))}
+                      {locations.map((location) => {
+                        const lStats = locationStatsById.get(location.id);
+
+                        return (
+                          <FolderCard
+                            key={location.id}
+                            name={location.name}
+                            itemCount={lStats?.itemCount ?? location.item_count}
+                            totalQuantity={lStats?.totalQuantity ?? location.total_quantity}
+                            lowStockCount={lStats?.lowStockCount ?? location.low_stock_count}
+                            minItems={location.min_items}
+                            subFolderCount={location.sub_folder_count}
+                            color={navState.classification?.color}
+                            variant="location"
+                            canManage={canManage && !selectionMode}
+                            onClick={() => goIntoFolder(location)}
+                            onEdit={() => {
+                              setEditingLocation(location);
+                              setLocationDialogOpen(true);
+                            }}
+                            onDelete={() => {
+                              setItemToDelete({
+                                type: 'location',
+                                id: location.id,
+                                name: location.name,
+                              });
+                              setDeleteConfirmOpen(true);
+                            }}
+                          />
+                        );
+                      })}
                     </div>
                   </div>
                 )}
