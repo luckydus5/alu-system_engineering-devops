@@ -25,6 +25,7 @@ import {
   List,
   Sparkles,
   Calendar,
+  Megaphone,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useOfficeActivities, OfficeActivity, CreateActivityData, ActivityType } from '@/hooks/useOfficeActivities';
