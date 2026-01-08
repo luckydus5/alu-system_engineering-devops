@@ -159,11 +159,22 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     return map;
   }, [items]);
 
-  // Filter items by current location (folder)
+  // Filter items by current location (folder) or unassigned items at classification root
   const locationItems = useMemo(() => {
-    if (navState.level !== 'locations' || !navState.currentLocation) return [];
-    return items.filter(item => item.location_id === navState.currentLocation?.id);
-  }, [items, navState.level, navState.currentLocation]);
+    if (navState.level !== 'locations') return [];
+    
+    if (navState.currentLocation) {
+      // Inside a folder - show items in that folder
+      return items.filter(item => item.location_id === navState.currentLocation?.id);
+    } else if (navState.classification) {
+      // At classification root - show items with no location_id (unassigned)
+      return items.filter(item => 
+        item.classification_id === navState.classification?.id && 
+        !item.location_id
+      );
+    }
+    return [];
+  }, [items, navState.level, navState.currentLocation, navState.classification]);
 
   // Global search results
   const searchResults = useMemo(() => {
@@ -354,13 +365,13 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   };
 
   const handleAddItem = async (data: any) => {
-    if (!navState.classification || !navState.currentLocation) return false;
+    if (!navState.classification) return false;
     
     return await createItem({
       ...data,
       department_id: department.id,
       classification_id: navState.classification.id,
-      location_id: navState.currentLocation.id,
+      location_id: navState.currentLocation?.id || null,
     });
   };
 
@@ -676,15 +687,15 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 {locations.length > 0 && (
                   <Badge variant="outline">{locations.length} folder{locations.length > 1 ? 's' : ''}</Badge>
                 )}
-                {navState.currentLocation && locationItems.length > 0 && (
+                {locationItems.length > 0 && (
                   <Badge variant="outline">{locationItems.length} item{locationItems.length > 1 ? 's' : ''}</Badge>
                 )}
               </div>
               
               {canManage && (
                 <div className="flex items-center gap-2">
-                  {/* Selection Mode Controls - Only show when inside a folder with items */}
-                  {navState.currentLocation && locationItems.length > 0 && (
+                  {/* Selection Mode Controls - Show when there are items (in folder or unassigned at root) */}
+                  {locationItems.length > 0 && (
                     <>
                       {selectionMode ? (
                         <>
@@ -738,7 +749,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                         <FolderPlus className="h-4 w-4 mr-2" />
                         Add Folder
                       </Button>
-                      {navState.currentLocation && (
+                      {(navState.currentLocation || locationItems.length > 0) && (
                         <Button onClick={() => setItemDialogOpen(true)} size="sm">
                           <Plus className="h-4 w-4 mr-2" />
                           Add Item
@@ -839,12 +850,12 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                   </div>
                 )}
 
-                {/* Items Section - Only show when inside a folder */}
-                {navState.currentLocation && locationItems.length > 0 && (
+                {/* Items Section - Show when inside a folder OR at root with unassigned items */}
+                {locationItems.length > 0 && (
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
                       <Package className="h-4 w-4" />
-                      Items ({locationItems.length})
+                      {navState.currentLocation ? 'Items' : 'Unassigned Items'} ({locationItems.length})
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                       {locationItems.map((item) => (
