@@ -5,10 +5,15 @@ import { useToast } from '@/hooks/use-toast';
 export interface InventoryItem {
   id: string;
   department_id: string;
+  classification_id: string | null;
+  location_id: string | null;
   item_number: string;
   item_name: string;
   quantity: number;
+  min_quantity: number;
   location: string;
+  description: string | null;
+  unit: string;
   image_url: string | null;
   created_at: string;
   updated_at: string;
@@ -56,7 +61,7 @@ export function useInventory(departmentId: string | undefined) {
       // Calculate stats
       const uniqueLocations = new Set(inventoryItems.map(item => item.location)).size;
       const totalQuantity = inventoryItems.reduce((sum, item) => sum + item.quantity, 0);
-      const lowStockItems = inventoryItems.filter(item => item.quantity < 10).length;
+      const lowStockItems = inventoryItems.filter(item => item.quantity <= (item.min_quantity || 0)).length;
 
       setStats({
         totalItems: inventoryItems.length,

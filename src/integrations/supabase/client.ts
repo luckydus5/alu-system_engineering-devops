@@ -13,7 +13,17 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true,
+    detectSessionInUrl: false, // Disable URL detection to prevent refresh on tab switch
     flowType: 'pkce',
-  }
+  },
+  global: {
+    headers: {
+      'x-client-info': 'powerhouse-sync',
+    },
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 2, // Limit realtime events to prevent excessive updates
+    },
+  },
 });

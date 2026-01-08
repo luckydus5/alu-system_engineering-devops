@@ -1,5 +1,5 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { User, Session } from '@supabase/supabase-js';
+import { useState, useEffect, createContext, useContext, ReactNode, useCallback, useRef } from 'react';
+import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -19,21 +19,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const lastEventRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+      (event: AuthChangeEvent, newSession) => {
+        // Skip TOKEN_REFRESHED events to prevent unnecessary re-renders
+        if (event === 'TOKEN_REFRESHED') {
+          // Only update if user actually changed
+          if (newSession?.user?.id !== user?.id) {
+            setSession(newSession);
+            setUser(newSession?.user ?? null);
+          }
+          return;
+        }
+
+        // Prevent duplicate events
+        const eventKey = `${event}-${newSession?.user?.id || 'null'}`;
+        if (lastEventRef.current === eventKey) {
+          return;
+        }
+        lastEventRef.current = eventKey;
+
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
         setLoading(false);
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      setSession(existingSession);
+      setUser(existingSession?.user ?? null);
       setLoading(false);
     });
 

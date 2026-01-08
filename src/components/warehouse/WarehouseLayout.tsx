@@ -50,6 +50,7 @@ import {
   ArrowLeft,
   Grid3X3,
   List,
+  FolderOpen,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/hooks/useInventory';
 import { useStockTransactions } from '@/hooks/useStockTransactions';
@@ -59,6 +60,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { ExcelInventoryTable } from './ExcelInventoryTable';
 import { StockTransaction } from './StockTransactionDialog';
+import { WarehouseDashboardView } from './WarehouseDashboardView';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
 interface WarehouseLayoutProps {
@@ -66,12 +68,12 @@ interface WarehouseLayoutProps {
   canManage: boolean;
 }
 
-type TabType = 'dashboard' | 'inventory' | 'stock-in' | 'stock-out' | 'low-stock';
+type TabType = 'stores' | 'dashboard' | 'inventory' | 'stock-in' | 'stock-out' | 'low-stock';
 type ViewMode = 'table' | 'grid' | 'list';
 
 export function WarehouseLayout({ department, canManage }: WarehouseLayoutProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [activeTab, setActiveTab] = useState<TabType>('stores');
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [searchQuery, setSearchQuery] = useState('');
   const [addItemOpen, setAddItemOpen] = useState(false);
@@ -94,6 +96,11 @@ export function WarehouseLayout({ department, canManage }: WarehouseLayoutProps)
 
   const { items, loading, stats, createItem, updateItem, deleteItem, refetch } = useInventory(department.id);
   const { stockOutHistory, stockInHistory, loading: transactionsLoading, createTransaction, refetch: refetchTransactions } = useStockTransactions(department.id);
+
+  // If stores tab is active, render the new folder-based view
+  if (activeTab === 'stores') {
+    return <WarehouseDashboardView department={department} canManage={canManage} />;
+  }
 
   // Handle stock transaction from ExcelInventoryTable
   const handleStockTransaction = async (transaction: StockTransaction): Promise<boolean> => {
@@ -333,6 +340,7 @@ export function WarehouseLayout({ department, canManage }: WarehouseLayoutProps)
 
   // Navigation items
   const navItems = [
+    { id: 'stores' as TabType, label: 'All Stores', icon: FolderOpen, color: 'text-amber-600' },
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard, color: 'text-blue-600' },
     { id: 'inventory' as TabType, label: 'All Items', icon: ClipboardList, color: 'text-emerald-600' },
     { id: 'stock-in' as TabType, label: 'Stock In', icon: ArrowDownToLine, color: 'text-green-600' },
