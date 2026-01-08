@@ -48,6 +48,7 @@ import { ClassificationDialog } from './ClassificationDialog';
 import { LocationDialog } from './LocationDialog';
 import { ItemCard } from './ItemCard';
 import { AddItemDialog } from './AddItemDialog';
+import { EditItemDialog } from './EditItemDialog';
 import { MoveItemsDialog } from './MoveItemsDialog';
 import { cn } from '@/lib/utils';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
@@ -88,6 +89,8 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [singleItemToMove, setSingleItemToMove] = useState<InventoryItem | null>(null);
+  const [editItemDialogOpen, setEditItemDialogOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
 
   // Data hooks
   const { 
@@ -515,7 +518,10 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                     key={item.id}
                     item={item}
                     canManage={canManage}
-                    onEdit={() => {}}
+                    onEdit={() => {
+                      setEditingItem(item);
+                      setEditItemDialogOpen(true);
+                    }}
                     onDelete={() => deleteItem(item.id)}
                     onStockIn={() => {}}
                     onStockOut={() => {}}
@@ -810,7 +816,10 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                           selectionMode={selectionMode}
                           isSelected={selectedItemIds.has(item.id)}
                           onSelect={(selected) => toggleItemSelection(item.id, selected)}
-                          onEdit={() => {}}
+                          onEdit={() => {
+                            setEditingItem(item);
+                            setEditItemDialogOpen(true);
+                          }}
                           onDelete={() => deleteItem(item.id)}
                           onStockIn={() => {}}
                           onStockOut={() => {}}
@@ -870,6 +879,18 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
         open={itemDialogOpen}
         onOpenChange={setItemDialogOpen}
         onSubmit={handleAddItem}
+        departmentId={department.id}
+      />
+
+      {/* Edit Item Dialog */}
+      <EditItemDialog
+        open={editItemDialogOpen}
+        onOpenChange={(open) => {
+          setEditItemDialogOpen(open);
+          if (!open) setEditingItem(null);
+        }}
+        item={editingItem}
+        onSubmit={updateItem}
         departmentId={department.id}
       />
 
