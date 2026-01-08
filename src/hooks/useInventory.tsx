@@ -47,24 +47,39 @@ export function useInventory(departmentId: string | undefined) {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('inventory_items')
-        .select('*')
-        .eq('department_id', departmentId)
-        .order('item_number', { ascending: true });
 
-      if (error) throw error;
+      // Supabase/PostgREST enforces a max rows per request (often 1000).
+      // We must paginate to ensure large folders don’t appear empty.
+      const pageSize = 1000;
+      let from = 0;
+      const all: InventoryItem[] = [];
 
-      const inventoryItems = data as InventoryItem[];
-      setItems(inventoryItems);
+      while (true) {
+        const { data, error } = await supabase
+          .from('inventory_items')
+          .select('*')
+          .eq('department_id', departmentId)
+          .order('item_number', { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (error) throw error;
+
+        const page = (data as InventoryItem[]) || [];
+        all.push(...page);
+
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+
+      setItems(all);
 
       // Calculate stats
-      const uniqueLocations = new Set(inventoryItems.map(item => item.location)).size;
-      const totalQuantity = inventoryItems.reduce((sum, item) => sum + item.quantity, 0);
-      const lowStockItems = inventoryItems.filter(item => item.quantity <= (item.min_quantity || 0)).length;
+      const uniqueLocations = new Set(all.map(item => item.location_id || item.location)).size;
+      const totalQuantity = all.reduce((sum, item) => sum + item.quantity, 0);
+      const lowStockItems = all.filter(item => item.quantity <= (item.min_quantity || 0)).length;
 
       setStats({
-        totalItems: inventoryItems.length,
+        totalItems: all.length,
         totalQuantity,
         uniqueLocations,
         lowStockItems,
