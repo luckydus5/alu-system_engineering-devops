@@ -170,6 +170,40 @@ export function useInventory(departmentId: string | undefined) {
     }
   };
 
+  const moveItems = async (
+    itemIds: string[],
+    targetClassificationId: string,
+    targetLocationId: string
+  ) => {
+    try {
+      const { error } = await supabase
+        .from('inventory_items')
+        .update({
+          classification_id: targetClassificationId,
+          location_id: targetLocationId,
+        })
+        .in('id', itemIds);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: `${itemIds.length} item(s) moved successfully`,
+      });
+
+      await fetchItems();
+      return true;
+    } catch (error: any) {
+      console.error('Error moving inventory items:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to move inventory items',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
   return {
     items,
     loading,
@@ -177,6 +211,7 @@ export function useInventory(departmentId: string | undefined) {
     createItem,
     updateItem,
     deleteItem,
+    moveItems,
     refetch: fetchItems,
   };
 }

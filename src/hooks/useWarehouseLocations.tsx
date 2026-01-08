@@ -6,6 +6,7 @@ export interface WarehouseLocation {
   id: string;
   classification_id: string;
   department_id: string;
+  parent_id: string | null;
   name: string;
   description: string | null;
   min_items: number;
@@ -17,9 +18,14 @@ export interface WarehouseLocation {
   item_count?: number;
   total_quantity?: number;
   low_stock_count?: number;
+  sub_folder_count?: number;
 }
 
-export function useWarehouseLocations(classificationId: string | undefined, departmentId?: string) {
+export function useWarehouseLocations(
+  classificationId: string | undefined, 
+  departmentId?: string,
+  parentId?: string | null
+) {
   const [locations, setLocations] = useState<WarehouseLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -45,6 +51,18 @@ export function useWarehouseLocations(classificationId: string | undefined, depa
         query = query.eq('department_id', departmentId);
       }
 
+      // Filter by parent_id (null for root level, specific id for sub-folders)
+      if (parentId === undefined) {
+        // Default: get root level locations (no parent)
+        query = query.is('parent_id', null);
+      } else if (parentId === null) {
+        // Explicitly requesting root level
+        query = query.is('parent_id', null);
+      } else {
+        // Get children of specific parent
+        query = query.eq('parent_id', parentId);
+      }
+
       const { data, error } = await query;
 
       if (error) {
@@ -60,10 +78,17 @@ export function useWarehouseLocations(classificationId: string | undefined, depa
       // Fetch item stats for each location
       const locationsWithStats = await Promise.all(
         (data || []).map(async (location: WarehouseLocation) => {
+          // Get items in this location
           const { data: items } = await (supabase as any)
             .from('inventory_items')
             .select('quantity, min_quantity')
             .eq('location_id', location.id);
+
+          // Get sub-folder count
+          const { count: subFolderCount } = await (supabase as any)
+            .from('warehouse_locations')
+            .select('*', { count: 'exact', head: true })
+            .eq('parent_id', location.id);
 
           const itemCount = items?.length || 0;
           const totalQuantity = items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
@@ -76,6 +101,7 @@ export function useWarehouseLocations(classificationId: string | undefined, depa
             item_count: itemCount,
             total_quantity: totalQuantity,
             low_stock_count: lowStockCount,
+            sub_folder_count: subFolderCount || 0,
           };
         })
       );
@@ -91,7 +117,7 @@ export function useWarehouseLocations(classificationId: string | undefined, depa
     } finally {
       setLoading(false);
     }
-  }, [classificationId, departmentId, toast]);
+  }, [classificationId, departmentId, parentId, toast]);
 
   useEffect(() => {
     fetchLocations();
@@ -103,6 +129,7 @@ export function useWarehouseLocations(classificationId: string | undefined, depa
     name: string;
     description?: string;
     min_items?: number;
+    parent_id?: string | null;
   }) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -118,6 +145,7 @@ export function useWarehouseLocations(classificationId: string | undefined, depa
           name: data.name,
           description: data.description || null,
           min_items: data.min_items || 0,
+          parent_id: data.parent_id || null,
           sort_order: maxOrder + 1,
           created_by: userData.user?.id,
         });

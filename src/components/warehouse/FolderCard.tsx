@@ -1,10 +1,11 @@
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, MoreVertical, Edit, Trash2 } from 'lucide-react';
+import { AlertTriangle, MoreVertical, Edit, Trash2, FolderOpen, Package } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -15,10 +16,13 @@ interface FolderCardProps {
   totalQuantity?: number;
   lowStockCount?: number;
   minItems?: number;
+  subFolderCount?: number;
   color?: string;
   onClick?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onOpenFolder?: () => void;
+  onViewItems?: () => void;
   canManage?: boolean;
   className?: string;
   variant?: 'classification' | 'location';
@@ -30,16 +34,20 @@ export function FolderCard({
   totalQuantity = 0,
   lowStockCount = 0,
   minItems = 0,
+  subFolderCount = 0,
   color = '#6366F1',
   onClick,
   onEdit,
   onDelete,
+  onOpenFolder,
+  onViewItems,
   canManage = false,
   className,
   variant = 'classification',
 }: FolderCardProps) {
   const hasLowStock = lowStockCount > 0;
   const isBelowMinimum = variant === 'location' && itemCount < minItems;
+  const hasSubFolders = subFolderCount > 0;
 
   return (
     <div
@@ -85,6 +93,19 @@ export function FolderCard({
 
         {/* Content inside folder */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pt-8 px-2">
+          {/* Sub-folder indicator */}
+          {hasSubFolders && (
+            <div className="absolute top-[25%] left-[15%]">
+              <div 
+                className="bg-white/90 backdrop-blur-sm rounded-lg px-1.5 py-0.5 shadow-sm border border-white/50"
+              >
+                <span className="text-[10px] font-medium text-slate-600">
+                  📁 {subFolderCount}
+                </span>
+              </div>
+            </div>
+          )}
+          
           {/* Item count badge */}
           {itemCount > 0 && (
             <div className="absolute top-[30%] right-[15%]">
@@ -123,7 +144,7 @@ export function FolderCard({
         )}
 
         {/* Edit/Delete menu */}
-        {canManage && (onEdit || onDelete) && (
+        {canManage && (onEdit || onDelete || onOpenFolder || onViewItems) && (
           <div 
             className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
@@ -139,6 +160,21 @@ export function FolderCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
+                {onOpenFolder && (
+                  <DropdownMenuItem onClick={onOpenFolder}>
+                    <FolderOpen className="h-4 w-4 mr-2 text-amber-600" />
+                    Open Folder
+                  </DropdownMenuItem>
+                )}
+                {onViewItems && (
+                  <DropdownMenuItem onClick={onViewItems}>
+                    <Package className="h-4 w-4 mr-2 text-blue-600" />
+                    View Items
+                  </DropdownMenuItem>
+                )}
+                {(onOpenFolder || onViewItems) && (onEdit || onDelete) && (
+                  <DropdownMenuSeparator />
+                )}
                 {onEdit && (
                   <DropdownMenuItem onClick={onEdit}>
                     <Edit className="h-4 w-4 mr-2" />
@@ -163,9 +199,17 @@ export function FolderCard({
       {/* Folder label */}
       <div className="mt-2 text-center px-1">
         <p className="font-medium text-sm truncate text-foreground">{name}</p>
-        <div className="flex items-center justify-center gap-2 mt-1">
+        <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
+          {hasSubFolders && (
+            <span className="text-xs text-muted-foreground">
+              {subFolderCount} folder{subFolderCount > 1 ? 's' : ''}
+            </span>
+          )}
+          {hasSubFolders && (itemCount > 0 || totalQuantity > 0) && (
+            <span className="text-xs text-muted-foreground">•</span>
+          )}
           <span className="text-xs text-muted-foreground">
-            {totalQuantity.toLocaleString()}
+            {totalQuantity.toLocaleString()} item{totalQuantity !== 1 ? 's' : ''}
           </span>
           {variant === 'location' && minItems > 0 && (
             <>

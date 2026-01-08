@@ -35,6 +35,9 @@ import {
   MapPin,
   Loader2,
   X,
+  CheckSquare,
+  FolderInput,
+  Square,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useWarehouseClassifications, WarehouseClassification } from '@/hooks/useWarehouseClassifications';
@@ -45,6 +48,7 @@ import { ClassificationDialog } from './ClassificationDialog';
 import { LocationDialog } from './LocationDialog';
 import { ItemCard } from './ItemCard';
 import { AddItemDialog } from './AddItemDialog';
+import { MoveItemsDialog } from './MoveItemsDialog';
 import { cn } from '@/lib/utils';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
@@ -53,12 +57,13 @@ interface WarehouseDashboardViewProps {
   canManage: boolean;
 }
 
-type ViewLevel = 'classifications' | 'locations' | 'items';
+type ViewLevel = 'classifications' | 'locations';
 
 interface NavigationState {
   level: ViewLevel;
   classification?: WarehouseClassification;
-  location?: WarehouseLocation;
+  currentLocation?: WarehouseLocation; // The folder we're currently inside
+  parentLocations?: WarehouseLocation[]; // Stack of parent locations for nested navigation
 }
 
 export function WarehouseDashboardView({ department, canManage }: WarehouseDashboardViewProps) {
@@ -77,6 +82,12 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   const [editingLocation, setEditingLocation] = useState<WarehouseLocation | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<{ type: 'classification' | 'location'; id: string; name: string } | null>(null);
+  
+  // Selection and move states
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const [singleItemToMove, setSingleItemToMove] = useState<InventoryItem | null>(null);
 
   // Data hooks
   const { 
@@ -88,6 +99,12 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     deleteClassification,
   } = useWarehouseClassifications(department.id);
 
+  // Get the current parent location for nested folder fetching
+  // If we have a currentLocation, fetch its children. Otherwise fetch root level.
+  const currentParentId = navState.level === 'locations' 
+    ? (navState.currentLocation?.id || null)
+    : null;
+
   const { 
     locations, 
     loading: locationsLoading, 
@@ -95,7 +112,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     createLocation,
     updateLocation,
     deleteLocation,
-  } = useWarehouseLocations(navState.classification?.id, department.id);
+  } = useWarehouseLocations(navState.classification?.id, department.id, currentParentId);
 
   const { 
     items, 
@@ -104,14 +121,15 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     createItem,
     updateItem,
     deleteItem,
+    moveItems,
     refetch: refetchItems,
   } = useInventory(department.id);
 
-  // Filter items by location
+  // Filter items by current location (folder)
   const locationItems = useMemo(() => {
-    if (navState.level !== 'items' || !navState.location) return [];
-    return items.filter(item => item.location_id === navState.location?.id);
-  }, [items, navState.level, navState.location]);
+    if (navState.level !== 'locations' || !navState.currentLocation) return [];
+    return items.filter(item => item.location_id === navState.currentLocation?.id);
+  }, [items, navState.level, navState.currentLocation]);
 
   // Global search results
   const searchResults = useMemo(() => {
@@ -133,33 +151,130 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     return items.filter(item => item.quantity <= (item.min_quantity || 0) && item.quantity >= 0);
   }, [items]);
 
+  // Get selected items objects
+  const selectedItems = useMemo(() => {
+    return items.filter(item => selectedItemIds.has(item.id));
+  }, [items, selectedItemIds]);
+
+  // Selection handlers
+  const toggleItemSelection = (itemId: string, selected: boolean) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(itemId);
+      } else {
+        next.delete(itemId);
+      }
+      return next;
+    });
+  };
+
+  const selectAllInLocation = () => {
+    const allIds = locationItems.map(item => item.id);
+    setSelectedItemIds(new Set(allIds));
+  };
+
+  const clearSelection = () => {
+    setSelectedItemIds(new Set());
+    setSelectionMode(false);
+  };
+
+  const toggleSelectionMode = () => {
+    if (selectionMode) {
+      clearSelection();
+    } else {
+      setSelectionMode(true);
+    }
+  };
+
+  // Move handlers
+  const handleMoveItems = async (classificationId: string, locationId: string) => {
+    const itemIds = singleItemToMove ? [singleItemToMove.id] : Array.from(selectedItemIds);
+    const success = await moveItems(itemIds, classificationId, locationId);
+    
+    if (success) {
+      clearSelection();
+      setSingleItemToMove(null);
+      refetchClassifications();
+      refetchLocations();
+    }
+    
+    return success;
+  };
+
+  const openMoveDialogForSingleItem = (item: InventoryItem) => {
+    setSingleItemToMove(item);
+    setMoveDialogOpen(true);
+  };
+
+  const openMoveDialogForSelection = () => {
+    setSingleItemToMove(null);
+    setMoveDialogOpen(true);
+  };
+
   // Navigation handlers
   const goToClassifications = () => {
     setNavState({ level: 'classifications' });
     setSearchQuery('');
     setIsSearching(false);
+    clearSelection();
   };
 
   const goToLocations = (classification: WarehouseClassification) => {
-    setNavState({ level: 'locations', classification });
+    setNavState({ level: 'locations', classification, parentLocations: [], currentLocation: undefined });
     setSearchQuery('');
     setIsSearching(false);
+    clearSelection();
   };
 
-  const goToItems = (location: WarehouseLocation) => {
-    setNavState({ level: 'items', classification: navState.classification, location });
+  const goIntoFolder = (location: WarehouseLocation) => {
+    // Navigate into a folder - add current location to parent stack if exists
+    const newParentStack = navState.currentLocation 
+      ? [...(navState.parentLocations || []), navState.currentLocation]
+      : [...(navState.parentLocations || [])];
+    
+    setNavState({ 
+      level: 'locations', 
+      classification: navState.classification,
+      parentLocations: newParentStack,
+      currentLocation: location
+    });
     setSearchQuery('');
     setIsSearching(false);
+    clearSelection();
   };
 
   const goBack = () => {
-    if (navState.level === 'items') {
-      setNavState({ level: 'locations', classification: navState.classification });
-    } else if (navState.level === 'locations') {
-      setNavState({ level: 'classifications' });
+    if (navState.level === 'locations') {
+      if (navState.currentLocation) {
+        // We're inside a folder, go back to parent
+        if (navState.parentLocations && navState.parentLocations.length > 0) {
+          // Go to the last parent folder
+          const newParentStack = [...navState.parentLocations];
+          const parentFolder = newParentStack.pop();
+          setNavState({ 
+            level: 'locations', 
+            classification: navState.classification,
+            parentLocations: newParentStack,
+            currentLocation: parentFolder
+          });
+        } else {
+          // Go to root of classification (no current location)
+          setNavState({ 
+            level: 'locations', 
+            classification: navState.classification,
+            parentLocations: [],
+            currentLocation: undefined
+          });
+        }
+      } else {
+        // We're at root of classification, go back to classifications
+        setNavState({ level: 'classifications' });
+      }
     }
     setSearchQuery('');
     setIsSearching(false);
+    clearSelection();
   };
 
   // CRUD handlers
@@ -174,10 +289,15 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
 
   const handleCreateLocation = async (data: { name: string; description?: string; min_items?: number }) => {
     if (!navState.classification) return false;
+    
+    // Get the current folder id as parent (if we're inside a folder)
+    const parentId = navState.currentLocation?.id || null;
+    
     return await createLocation({
       ...data,
       classification_id: navState.classification.id,
       department_id: department.id,
+      parent_id: parentId,
     });
   };
 
@@ -200,13 +320,13 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   };
 
   const handleAddItem = async (data: any) => {
-    if (!navState.classification || !navState.location) return false;
+    if (!navState.classification || !navState.currentLocation) return false;
     
     return await createItem({
       ...data,
       department_id: department.id,
       classification_id: navState.classification.id,
-      location_id: navState.location.id,
+      location_id: navState.currentLocation.id,
     });
   };
 
@@ -309,7 +429,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                     <>
                       <BreadcrumbSeparator />
                       <BreadcrumbItem>
-                        {navState.level === 'locations' ? (
+                        {navState.level === 'locations' && !navState.currentLocation && (!navState.parentLocations || navState.parentLocations.length === 0) ? (
                           <BreadcrumbPage>{navState.classification.name}</BreadcrumbPage>
                         ) : (
                           <BreadcrumbLink 
@@ -322,12 +442,37 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                       </BreadcrumbItem>
                     </>
                   )}
+
+                  {/* Parent Locations (nested folders) */}
+                  {navState.parentLocations?.map((parentLoc, index) => (
+                    <span key={parentLoc.id} className="flex items-center">
+                      <BreadcrumbSeparator />
+                      <BreadcrumbItem>
+                        <BreadcrumbLink 
+                          onClick={() => {
+                            // Navigate to this parent level
+                            const newParentStack = navState.parentLocations!.slice(0, index);
+                            setNavState({
+                              level: 'locations',
+                              classification: navState.classification,
+                              parentLocations: newParentStack,
+                              currentLocation: parentLoc
+                            });
+                          }}
+                          className="cursor-pointer"
+                        >
+                          {parentLoc.name}
+                        </BreadcrumbLink>
+                      </BreadcrumbItem>
+                    </span>
+                  ))}
                   
-                  {navState.location && (
+                  {/* Current Location */}
+                  {navState.currentLocation && (
                     <>
                       <BreadcrumbSeparator />
                       <BreadcrumbItem>
-                        <BreadcrumbPage>{navState.location.name}</BreadcrumbPage>
+                        <BreadcrumbPage>{navState.currentLocation.name}</BreadcrumbPage>
                       </BreadcrumbItem>
                     </>
                   )}
@@ -371,9 +516,10 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                     item={item}
                     canManage={canManage}
                     onEdit={() => {}}
-                    onDelete={() => {}}
+                    onDelete={() => deleteItem(item.id)}
                     onStockIn={() => {}}
                     onStockOut={() => {}}
+                    onMove={() => openMoveDialogForSingleItem(item)}
                   />
                 ))}
               </div>
@@ -475,134 +621,226 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
           </div>
         )}
 
-        {/* Locations View */}
+        {/* Locations View - Shows both sub-folders and items */}
         {!isSearching && navState.level === 'locations' && navState.classification && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={goBack}>
+                <Button variant="ghost" size="icon" onClick={goBack} disabled={selectionMode}>
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
-                <h2 className="text-lg font-semibold">{navState.classification.name}</h2>
-                <Badge variant="outline">{locations.length} locations</Badge>
+                <h2 className="text-lg font-semibold">
+                  {navState.currentLocation?.name || navState.classification.name}
+                </h2>
+                {locations.length > 0 && (
+                  <Badge variant="outline">{locations.length} folder{locations.length > 1 ? 's' : ''}</Badge>
+                )}
+                {navState.currentLocation && locationItems.length > 0 && (
+                  <Badge variant="outline">{locationItems.length} item{locationItems.length > 1 ? 's' : ''}</Badge>
+                )}
               </div>
+              
               {canManage && (
-                <Button onClick={() => setLocationDialogOpen(true)} size="sm">
-                  <MapPin className="h-4 w-4 mr-2" />
-                  Add Location
-                </Button>
+                <div className="flex items-center gap-2">
+                  {/* Selection Mode Controls - Only show when inside a folder with items */}
+                  {navState.currentLocation && locationItems.length > 0 && (
+                    <>
+                      {selectionMode ? (
+                        <>
+                          <Badge variant="secondary" className="gap-1">
+                            <CheckSquare className="h-3 w-3" />
+                            {selectedItemIds.size} selected
+                          </Badge>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={selectAllInLocation}
+                            disabled={selectedItemIds.size === locationItems.length}
+                          >
+                            Select All
+                          </Button>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={openMoveDialogForSelection}
+                            disabled={selectedItemIds.size === 0}
+                            className="gap-1 bg-amber-500 hover:bg-amber-600"
+                          >
+                            <FolderInput className="h-4 w-4" />
+                            Move
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={clearSelection}
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={toggleSelectionMode}
+                          className="gap-1"
+                        >
+                          <Square className="h-4 w-4" />
+                          Select Items
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  
+                  {!selectionMode && (
+                    <>
+                      <Button onClick={() => setLocationDialogOpen(true)} size="sm" variant="outline">
+                        <FolderPlus className="h-4 w-4 mr-2" />
+                        Add Folder
+                      </Button>
+                      {navState.currentLocation && (
+                        <Button onClick={() => setItemDialogOpen(true)} size="sm">
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Item
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
             </div>
 
-            {locationsLoading ? (
+            {(locationsLoading || itemsLoading) ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
               </div>
-            ) : locations.length === 0 ? (
+            ) : locations.length === 0 && locationItems.length === 0 ? (
               <Card>
                 <CardContent className="p-12 text-center">
-                  <MapPin className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No Locations Yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Create locations like 1B02, 2A-2 to store items
-                  </p>
-                  {canManage && (
-                    <Button onClick={() => setLocationDialogOpen(true)}>
-                      <MapPin className="h-4 w-4 mr-2" />
-                      Add Location
-                    </Button>
+                  {navState.currentLocation ? (
+                    <>
+                      <Package className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                      <h3 className="text-lg font-medium mb-2">This Folder is Empty</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Add items or create sub-folders to organize your inventory
+                      </p>
+                      {canManage && (
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          <Button onClick={() => setItemDialogOpen(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Item
+                          </Button>
+                          <Button variant="outline" onClick={() => setLocationDialogOpen(true)}>
+                            <FolderPlus className="h-4 w-4 mr-2" />
+                            Add Sub-Folder
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <MapPin className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                      <h3 className="text-lg font-medium mb-2">No Folders Yet</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Create folders like Shelf A, Cabinet 1, etc. to organize items
+                      </p>
+                      {canManage && (
+                        <Button onClick={() => setLocationDialogOpen(true)}>
+                          <FolderPlus className="h-4 w-4 mr-2" />
+                          Add Folder
+                        </Button>
+                      )}
+                    </>
                   )}
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {locations.map((location) => (
-                  <FolderCard
-                    key={location.id}
-                    name={location.name}
-                    itemCount={location.item_count}
-                    totalQuantity={location.total_quantity}
-                    lowStockCount={location.low_stock_count}
-                    minItems={location.min_items}
-                    color={navState.classification?.color}
-                    variant="location"
-                    canManage={canManage}
-                    onClick={() => goToItems(location)}
-                    onEdit={() => {
-                      setEditingLocation(location);
-                      setLocationDialogOpen(true);
-                    }}
-                    onDelete={() => {
-                      setItemToDelete({
-                        type: 'location',
-                        id: location.id,
-                        name: location.name,
-                      });
-                      setDeleteConfirmOpen(true);
-                    }}
-                  />
-                ))}
+              <div className="space-y-6">
+                {/* Sub-folders Section */}
+                {locations.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                      <FolderPlus className="h-4 w-4" />
+                      Folders ({locations.length})
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                      {locations.map((location) => (
+                        <FolderCard
+                          key={location.id}
+                          name={location.name}
+                          itemCount={location.item_count}
+                          totalQuantity={location.total_quantity}
+                          lowStockCount={location.low_stock_count}
+                          minItems={location.min_items}
+                          subFolderCount={location.sub_folder_count}
+                          color={navState.classification?.color}
+                          variant="location"
+                          canManage={canManage && !selectionMode}
+                          onClick={() => goIntoFolder(location)}
+                          onEdit={() => {
+                            setEditingLocation(location);
+                            setLocationDialogOpen(true);
+                          }}
+                          onDelete={() => {
+                            setItemToDelete({
+                              type: 'location',
+                              id: location.id,
+                              name: location.name,
+                            });
+                            setDeleteConfirmOpen(true);
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Items Section - Only show when inside a folder */}
+                {navState.currentLocation && locationItems.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
+                      <Package className="h-4 w-4" />
+                      Items ({locationItems.length})
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                      {locationItems.map((item) => (
+                        <ItemCard
+                          key={item.id}
+                          item={item}
+                          canManage={canManage}
+                          selectionMode={selectionMode}
+                          isSelected={selectedItemIds.has(item.id)}
+                          onSelect={(selected) => toggleItemSelection(item.id, selected)}
+                          onEdit={() => {}}
+                          onDelete={() => deleteItem(item.id)}
+                          onStockIn={() => {}}
+                          onStockOut={() => {}}
+                          onMove={() => openMoveDialogForSingleItem(item)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty items message when inside folder with only sub-folders */}
+                {navState.currentLocation && locationItems.length === 0 && locations.length > 0 && (
+                  <div className="text-center py-6 border-t">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      No items directly in this folder
+                    </p>
+                    {canManage && (
+                      <Button variant="outline" size="sm" onClick={() => setItemDialogOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item Here
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* Items View */}
-        {!isSearching && navState.level === 'items' && navState.location && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" onClick={goBack}>
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-                <h2 className="text-lg font-semibold">{navState.location.name}</h2>
-                <Badge variant="outline">{locationItems.length} items</Badge>
-              </div>
-              {canManage && (
-                <Button onClick={() => setItemDialogOpen(true)} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Item
-                </Button>
-              )}
-            </div>
 
-            {itemsLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-              </div>
-            ) : locationItems.length === 0 ? (
-              <Card>
-                <CardContent className="p-12 text-center">
-                  <Package className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No Items Yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Add items to this location
-                  </p>
-                  {canManage && (
-                    <Button onClick={() => setItemDialogOpen(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Item
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                {locationItems.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    canManage={canManage}
-                    onEdit={() => {}}
-                    onDelete={() => deleteItem(item.id)}
-                    onStockIn={() => {}}
-                    onStockOut={() => {}}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Dialogs */}
@@ -633,6 +871,20 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
         onOpenChange={setItemDialogOpen}
         onSubmit={handleAddItem}
         departmentId={department.id}
+      />
+
+      {/* Move Items Dialog */}
+      <MoveItemsDialog
+        open={moveDialogOpen}
+        onOpenChange={(open) => {
+          setMoveDialogOpen(open);
+          if (!open) setSingleItemToMove(null);
+        }}
+        selectedItems={singleItemToMove ? [singleItemToMove] : selectedItems}
+        departmentId={department.id}
+        currentClassificationId={navState.classification?.id}
+        currentLocationId={navState.currentLocation?.id}
+        onMove={handleMoveItems}
       />
 
       {/* Delete Confirmation Dialog */}

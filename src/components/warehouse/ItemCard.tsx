@@ -1,6 +1,7 @@
 import { InventoryItem } from '@/hooks/useInventory';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Package, MoreVertical, Edit, Trash2, Plus, Minus, Eye } from 'lucide-react';
+import { Package, MoreVertical, Edit, Trash2, Plus, Minus, Eye, FolderInput } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ItemCardProps {
@@ -19,6 +20,10 @@ interface ItemCardProps {
   onStockIn: () => void;
   onStockOut: () => void;
   onViewDetails?: () => void;
+  onMove?: () => void;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onSelect?: (selected: boolean) => void;
 }
 
 export function ItemCard({
@@ -29,6 +34,10 @@ export function ItemCard({
   onStockIn,
   onStockOut,
   onViewDetails,
+  onMove,
+  selectionMode = false,
+  isSelected = false,
+  onSelect,
 }: ItemCardProps) {
   const isLowStock = item.quantity <= (item.min_quantity || 0);
   const isOutOfStock = item.quantity === 0;
@@ -43,8 +52,21 @@ export function ItemCard({
     return <Badge className="bg-emerald-500 text-xs">In Stock</Badge>;
   };
 
+  const handleCardClick = () => {
+    if (selectionMode && onSelect) {
+      onSelect(!isSelected);
+    }
+  };
+
   return (
-    <div className="group relative rounded-xl overflow-hidden bg-white dark:bg-slate-800 border shadow-sm hover:shadow-lg transition-all">
+    <div 
+      className={cn(
+        "group relative rounded-xl overflow-hidden bg-white dark:bg-slate-800 border shadow-sm hover:shadow-lg transition-all",
+        selectionMode && "cursor-pointer",
+        isSelected && "ring-2 ring-amber-500 ring-offset-2"
+      )}
+      onClick={handleCardClick}
+    >
       {/* Image Section */}
       <div className="relative aspect-square bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-800">
         {item.image_url ? (
@@ -59,13 +81,27 @@ export function ItemCard({
           </div>
         )}
 
+        {/* Selection Checkbox */}
+        {selectionMode && (
+          <div 
+            className="absolute top-2 left-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={(checked) => onSelect?.(checked as boolean)}
+              className="h-5 w-5 border-2 border-white bg-white/90 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+            />
+          </div>
+        )}
+
         {/* Stock Status Badge */}
-        <div className="absolute top-2 left-2">
+        <div className={cn("absolute top-2", selectionMode ? "left-9" : "left-2")}>
           {getStockBadge()}
         </div>
 
         {/* Actions Menu */}
-        {canManage && (
+        {canManage && !selectionMode && (
           <div 
             className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={(e) => e.stopPropagation()}
@@ -90,6 +126,12 @@ export function ItemCard({
                   Stock Out
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                {onMove && (
+                  <DropdownMenuItem onClick={onMove}>
+                    <FolderInput className="h-4 w-4 mr-2 text-amber-600" />
+                    Move to...
+                  </DropdownMenuItem>
+                )}
                 {onViewDetails && (
                   <DropdownMenuItem onClick={onViewDetails}>
                     <Eye className="h-4 w-4 mr-2" />
@@ -112,8 +154,8 @@ export function ItemCard({
           </div>
         )}
 
-        {/* Quick Stock Actions (always visible on mobile) */}
-        {canManage && (
+        {/* Quick Stock Actions (always visible on mobile) - hidden in selection mode */}
+        {canManage && !selectionMode && (
           <div className="absolute bottom-2 right-2 flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
             <Button
               variant="secondary"

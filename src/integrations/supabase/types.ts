@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -11,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -46,97 +72,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      field_update_comments: {
-        Row: {
-          content: string
-          created_at: string | null
-          field_update_id: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          content: string
-          created_at?: string | null
-          field_update_id: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          content?: string
-          created_at?: string | null
-          field_update_id?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "field_update_comments_field_update_id_fkey"
-            columns: ["field_update_id"]
-            isOneToOne: false
-            referencedRelation: "field_updates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      field_updates: {
-        Row: {
-          created_at: string | null
-          created_by: string
-          department_id: string
-          description: string | null
-          id: string
-          is_pinned: boolean | null
-          location: string | null
-          metadata: Json | null
-          photos: string[] | null
-          priority: string | null
-          status: string | null
-          tags: string[] | null
-          title: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          created_by: string
-          department_id: string
-          description?: string | null
-          id?: string
-          is_pinned?: boolean | null
-          location?: string | null
-          metadata?: Json | null
-          photos?: string[] | null
-          priority?: string | null
-          status?: string | null
-          tags?: string[] | null
-          title: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          created_by?: string
-          department_id?: string
-          description?: string | null
-          id?: string
-          is_pinned?: boolean | null
-          location?: string | null
-          metadata?: Json | null
-          photos?: string[] | null
-          priority?: string | null
-          status?: string | null
-          tags?: string[] | null
-          title?: string
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "field_updates_department_id_fkey"
-            columns: ["department_id"]
-            isOneToOne: false
-            referencedRelation: "departments"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       fleet_audit_log: {
         Row: {
@@ -280,58 +215,80 @@ export type Database = {
             referencedRelation: "departments"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "fleets_operator_id_fkey"
-            columns: ["operator_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
         ]
       }
       inventory_items: {
         Row: {
+          classification_id: string | null
           created_at: string
           created_by: string | null
           department_id: string
+          description: string | null
           id: string
           image_url: string | null
           item_name: string
           item_number: string
-          location: string
+          location: string | null
+          location_id: string | null
+          min_quantity: number | null
           quantity: number
+          unit: string | null
           updated_at: string
         }
         Insert: {
+          classification_id?: string | null
           created_at?: string
           created_by?: string | null
           department_id: string
+          description?: string | null
           id?: string
           image_url?: string | null
           item_name: string
           item_number: string
-          location: string
+          location?: string | null
+          location_id?: string | null
+          min_quantity?: number | null
           quantity?: number
+          unit?: string | null
           updated_at?: string
         }
         Update: {
+          classification_id?: string | null
           created_at?: string
           created_by?: string | null
           department_id?: string
+          description?: string | null
           id?: string
           image_url?: string | null
           item_name?: string
           item_number?: string
-          location?: string
+          location?: string | null
+          location_id?: string | null
+          min_quantity?: number | null
           quantity?: number
+          unit?: string | null
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "inventory_items_classification_id_fkey"
+            columns: ["classification_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_classifications"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "inventory_items_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_locations"
             referencedColumns: ["id"]
           },
         ]
@@ -399,13 +356,6 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "maintenance_records_checked_by_fkey"
-            columns: ["checked_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "maintenance_records_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
@@ -417,13 +367,6 @@ export type Database = {
             columns: ["fleet_id"]
             isOneToOne: false
             referencedRelation: "fleets"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "maintenance_records_operator_id_fkey"
-            columns: ["operator_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -599,6 +542,60 @@ export type Database = {
           },
         ]
       }
+      stock_transactions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          department_id: string
+          id: string
+          inventory_item_id: string
+          new_quantity: number
+          notes: string | null
+          previous_quantity: number
+          quantity: number
+          transaction_type: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          id?: string
+          inventory_item_id: string
+          new_quantity: number
+          notes?: string | null
+          previous_quantity: number
+          quantity: number
+          transaction_type: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          id?: string
+          inventory_item_id?: string
+          new_quantity?: number
+          notes?: string | null
+          previous_quantity?: number
+          quantity?: number
+          transaction_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_transactions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transactions_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_department_access: {
         Row: {
           department_id: string
@@ -659,6 +656,117 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_classifications: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          department_id: string
+          description: string | null
+          icon: string | null
+          id: string
+          name: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          description?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_classifications_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_locations: {
+        Row: {
+          classification_id: string
+          created_at: string
+          created_by: string | null
+          department_id: string
+          description: string | null
+          id: string
+          min_items: number | null
+          name: string
+          parent_id: string | null
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          classification_id: string
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          description?: string | null
+          id?: string
+          min_items?: number | null
+          name: string
+          parent_id?: string | null
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          classification_id?: string
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          description?: string | null
+          id?: string
+          min_items?: number | null
+          name?: string
+          parent_id?: string | null
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_locations_classification_id_fkey"
+            columns: ["classification_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_classifications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_locations_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_locations_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_locations"
             referencedColumns: ["id"]
           },
         ]
@@ -830,6 +938,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["staff", "supervisor", "manager", "director", "admin"],
