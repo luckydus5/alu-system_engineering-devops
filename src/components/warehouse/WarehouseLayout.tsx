@@ -225,7 +225,12 @@ export function WarehouseLayout({ department, canManage }: WarehouseLayoutProps)
       item_name: newItemData.item_name,
       quantity: newItemData.quantity,
       location: newItemData.location,
-      image_url: imageUrl
+      image_url: imageUrl,
+      classification_id: null,
+      location_id: null,
+      min_quantity: 0,
+      description: null,
+      unit: 'pcs'
     });
     
     if (success) {

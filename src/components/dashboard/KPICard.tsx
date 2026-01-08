@@ -8,9 +8,11 @@ interface KPICardProps {
   icon?: ReactNode;
   variant?: 'default' | 'blue' | 'gold' | 'success' | 'warning';
   className?: string;
+  description?: string;
+  trend?: { value: string; positive: boolean };
 }
 
-export function KPICard({ title, value, icon, variant = 'default', className }: KPICardProps) {
+export function KPICard({ title, value, icon, variant = 'default', className, description, trend }: KPICardProps) {
   const variantStyles = {
     default: 'kpi-blue',
     blue: 'kpi-blue',
@@ -38,6 +40,17 @@ export function KPICard({ title, value, icon, variant = 'default', className }: 
           <div className="space-y-1">
             <p className="text-xs md:text-sm font-medium text-muted-foreground uppercase tracking-wide">{title}</p>
             <p className="text-2xl md:text-3xl font-bold text-foreground tracking-tight">{value}</p>
+            {description && (
+              <p className="text-xs text-muted-foreground">{description}</p>
+            )}
+            {trend && (
+              <p className={cn(
+                "text-xs font-medium",
+                trend.positive ? "text-success" : "text-destructive"
+              )}>
+                {trend.value}
+              </p>
+            )}
           </div>
           {icon && (
             <div className={cn(

@@ -209,8 +209,16 @@ export function FolderCard({
             <span className="text-xs text-muted-foreground">•</span>
           )}
           <span className="text-xs text-muted-foreground">
-            {totalQuantity.toLocaleString()} item{totalQuantity !== 1 ? 's' : ''}
+            {itemCount.toLocaleString()} item{itemCount !== 1 ? 's' : ''}
           </span>
+          {totalQuantity > 0 && totalQuantity !== itemCount && (
+            <>
+              <span className="text-xs text-muted-foreground">•</span>
+              <span className="text-xs text-muted-foreground">
+                {totalQuantity.toLocaleString()} qty
+              </span>
+            </>
+          )}
           {variant === 'location' && minItems > 0 && (
             <>
               <span className="text-xs text-muted-foreground">/</span>
