@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,9 +11,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Upload, X, Image as ImageIcon } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, Upload, X, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+
+interface DuplicateItem {
+  id: string;
+  item_name: string;
+  quantity: number;
+  location: string | null;
+}
 
 interface AddItemDialogProps {
   open: boolean;
@@ -49,6 +57,40 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [duplicates, setDuplicates] = useState<DuplicateItem[]>([]);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+
+  // Check for duplicates when item_name changes
+  useEffect(() => {
+    const checkDuplicates = async () => {
+      const trimmedName = formData.item_name.trim();
+      if (trimmedName.length < 3 || !departmentId) {
+        setDuplicates([]);
+        return;
+      }
+
+      setCheckingDuplicate(true);
+      try {
+        const { data, error } = await supabase
+          .from('inventory_items')
+          .select('id, item_name, quantity, location')
+          .eq('department_id', departmentId)
+          .ilike('item_name', `%${trimmedName}%`)
+          .limit(5);
+
+        if (!error && data) {
+          setDuplicates(data);
+        }
+      } catch (err) {
+        console.error('Error checking duplicates:', err);
+      } finally {
+        setCheckingDuplicate(false);
+      }
+    };
+
+    const debounce = setTimeout(checkDuplicates, 300);
+    return () => clearTimeout(debounce);
+  }, [formData.item_name, departmentId]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -296,6 +338,22 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
                 rows={2}
               />
             </div>
+            {/* Duplicate Warning */}
+            {duplicates.length > 0 && (
+              <Alert variant="destructive" className="border-yellow-500 bg-yellow-50 text-yellow-800">
+                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+                <AlertDescription>
+                  <span className="font-medium">Possible duplicates found:</span>
+                  <ul className="mt-1 text-sm">
+                    {duplicates.map((dup) => (
+                      <li key={dup.id}>
+                        "{dup.item_name}" (Qty: {dup.quantity}{dup.location ? `, Location: ${dup.location}` : ''})
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
 
           <DialogFooter>
@@ -304,7 +362,7 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
             </Button>
             <Button type="submit" disabled={isSubmitting || !formData.item_number.trim() || !formData.item_name.trim()}>
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {uploadingImage ? 'Uploading...' : 'Add Item'}
+              {uploadingImage ? 'Uploading...' : duplicates.length > 0 ? 'Add Anyway' : 'Add Item'}
             </Button>
           </DialogFooter>
         </form>
