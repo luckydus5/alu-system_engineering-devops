@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,8 @@ import {
   CheckSquare,
   FolderInput,
   Square,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useWarehouseClassifications, WarehouseClassification } from '@/hooks/useWarehouseClassifications';
@@ -74,6 +76,10 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   const [navState, setNavState] = useState<NavigationState>({ level: 'classifications' });
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  
+  // Pagination for items (performance fix for large folders)
+  const [itemsPage, setItemsPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
   
   // Dialog states
   const [classificationDialogOpen, setClassificationDialogOpen] = useState(false);
@@ -175,6 +181,19 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     }
     return [];
   }, [items, navState.level, navState.currentLocation, navState.classification]);
+
+  // Paginated items for performance (only render 50 at a time)
+  const totalItemsPages = Math.ceil(locationItems.length / ITEMS_PER_PAGE);
+  const paginatedLocationItems = useMemo(() => {
+    const startIdx = (itemsPage - 1) * ITEMS_PER_PAGE;
+    return locationItems.slice(startIdx, startIdx + ITEMS_PER_PAGE);
+  }, [locationItems, itemsPage, ITEMS_PER_PAGE]);
+
+  // Reset page when location changes
+  const currentLocationId = navState.currentLocation?.id;
+  useEffect(() => {
+    setItemsPage(1);
+  }, [currentLocationId]);
 
   // Global search results
   const searchResults = useMemo(() => {
@@ -853,12 +872,43 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 {/* Items Section - Show when inside a folder OR at root with unassigned items */}
                 {locationItems.length > 0 && (
                   <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-3 flex items-center gap-2">
-                      <Package className="h-4 w-4" />
-                      {navState.currentLocation ? 'Items' : 'Unassigned Items'} ({locationItems.length})
-                    </h3>
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        {navState.currentLocation ? 'Items' : 'Unassigned Items'} ({locationItems.length})
+                        {totalItemsPages > 1 && (
+                          <span className="text-xs text-muted-foreground/70">
+                            (Page {itemsPage} of {totalItemsPages})
+                          </span>
+                        )}
+                      </h3>
+                      {/* Pagination Controls */}
+                      {totalItemsPages > 1 && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setItemsPage(p => Math.max(1, p - 1))}
+                            disabled={itemsPage === 1}
+                          >
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <span className="text-sm text-muted-foreground min-w-[80px] text-center">
+                            {((itemsPage - 1) * ITEMS_PER_PAGE) + 1} - {Math.min(itemsPage * ITEMS_PER_PAGE, locationItems.length)}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setItemsPage(p => Math.min(totalItemsPages, p + 1))}
+                            disabled={itemsPage === totalItemsPages}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                      {locationItems.map((item) => (
+                      {paginatedLocationItems.map((item) => (
                         <ItemCard
                           key={item.id}
                           item={item}
@@ -877,6 +927,48 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                         />
                       ))}
                     </div>
+                    {/* Bottom Pagination for large lists */}
+                    {totalItemsPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-4 pt-4 border-t">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setItemsPage(1)}
+                          disabled={itemsPage === 1}
+                        >
+                          First
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setItemsPage(p => Math.max(1, p - 1))}
+                          disabled={itemsPage === 1}
+                        >
+                          <ChevronLeft className="h-4 w-4 mr-1" />
+                          Previous
+                        </Button>
+                        <span className="text-sm text-muted-foreground px-4">
+                          Page {itemsPage} of {totalItemsPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setItemsPage(p => Math.min(totalItemsPages, p + 1))}
+                          disabled={itemsPage === totalItemsPages}
+                        >
+                          Next
+                          <ChevronRight className="h-4 w-4 ml-1" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setItemsPage(totalItemsPages)}
+                          disabled={itemsPage === totalItemsPages}
+                        >
+                          Last
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 )}
 
