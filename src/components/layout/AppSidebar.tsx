@@ -175,7 +175,7 @@ export function AppSidebar() {
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {(isSuperAdmin || isAdmin) && (
+                {isAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
