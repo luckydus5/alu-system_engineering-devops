@@ -39,6 +39,7 @@ interface StockTransactionDialogProps {
   onOpenChange: (open: boolean) => void;
   item: InventoryItem | null;
   onSubmit: (transaction: StockTransaction) => Promise<boolean>;
+  defaultType?: TransactionType;
 }
 
 const stockOutReasons = [
@@ -67,13 +68,19 @@ export function StockTransactionDialog({
   onOpenChange,
   item,
   onSubmit,
+  defaultType = 'stock_in',
 }: StockTransactionDialogProps) {
-  const [type, setType] = useState<TransactionType>('stock_out');
+  const [type, setType] = useState<TransactionType>(defaultType);
   const [quantity, setQuantity] = useState(0);
   const [reason, setReason] = useState('');
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Update type when defaultType changes (dialog reopens)
+  useState(() => {
+    setType(defaultType);
+  });
 
   const reasons = type === 'stock_in' ? stockInReasons : stockOutReasons;
   const maxQuantity = type === 'stock_out' ? item?.quantity || 0 : 99999;
@@ -115,10 +122,16 @@ export function StockTransactionDialog({
       setReason('');
       setReference('');
       setNotes('');
-      setType('stock_out');
+      // Reset to defaultType when closing
+      setType(defaultType);
     }
     onOpenChange(open);
   };
+
+  // Reset type when dialog opens with a new defaultType
+  if (open && type !== defaultType && quantity === 0 && !reason) {
+    setType(defaultType);
+  }
 
   if (!item) return null;
 

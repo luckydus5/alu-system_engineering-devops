@@ -1231,6 +1231,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
         onOpenChange={setStockTransactionOpen}
         item={stockTransactionItem}
         onSubmit={handleStockTransaction}
+        defaultType={stockTransactionType}
       />
 
       {/* Item Detail Dialog */}
