@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -27,6 +27,18 @@ export interface InventoryStats {
   lowStockItems: number;
 }
 
+// Cache structure for items
+interface ItemsCache {
+  departmentId: string;
+  items: InventoryItem[];
+  stats: InventoryStats;
+  timestamp: number;
+}
+
+// Global cache - persists across hook instances
+let globalCache: ItemsCache | null = null;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+
 export function useInventory(departmentId: string | undefined) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -37,53 +49,98 @@ export function useInventory(departmentId: string | undefined) {
     lowStockItems: 0,
   });
   const { toast } = useToast();
+  
+  // Track if a fetch is already in progress to prevent duplicate calls
+  const fetchInProgress = useRef(false);
+  const lastDepartmentId = useRef<string | undefined>(undefined);
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = useCallback(async (forceRefresh = false) => {
     if (!departmentId) {
       setItems([]);
       setLoading(false);
       return;
     }
 
+    // Check cache first (unless force refresh)
+    if (!forceRefresh && globalCache && 
+        globalCache.departmentId === departmentId && 
+        Date.now() - globalCache.timestamp < CACHE_TTL) {
+      setItems(globalCache.items);
+      setStats(globalCache.stats);
+      setLoading(false);
+      return;
+    }
+
+    // Prevent duplicate fetches
+    if (fetchInProgress.current && !forceRefresh) {
+      return;
+    }
+
     try {
+      fetchInProgress.current = true;
       setLoading(true);
 
       // Supabase/PostgREST enforces a max rows per request (often 1000).
-      // We must paginate to ensure large folders don’t appear empty.
+      // We must paginate to ensure large folders don't appear empty.
+      // Use parallel fetching for speed
       const pageSize = 1000;
-      let from = 0;
-      const all: InventoryItem[] = [];
+      
+      // First, get the count to know how many pages we need
+      const { count, error: countError } = await supabase
+        .from('inventory_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('department_id', departmentId);
 
-      while (true) {
-        const { data, error } = await supabase
-          .from('inventory_items')
-          .select('*')
-          .eq('department_id', departmentId)
-          .order('item_number', { ascending: true })
-          .range(from, from + pageSize - 1);
+      if (countError) throw countError;
 
-        if (error) throw error;
-
-        const page = (data as InventoryItem[]) || [];
-        all.push(...page);
-
-        if (page.length < pageSize) break;
-        from += pageSize;
+      const totalCount = count || 0;
+      const numPages = Math.ceil(totalCount / pageSize);
+      
+      // Fetch all pages in parallel (much faster than sequential)
+      const pagePromises = [];
+      for (let page = 0; page < numPages; page++) {
+        const from = page * pageSize;
+        pagePromises.push(
+          supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('department_id', departmentId)
+            .order('item_number', { ascending: true })
+            .range(from, from + pageSize - 1)
+        );
       }
 
-      setItems(all);
+      const results = await Promise.all(pagePromises);
+      
+      // Combine all results
+      const all: InventoryItem[] = [];
+      for (const result of results) {
+        if (result.error) throw result.error;
+        all.push(...(result.data as InventoryItem[] || []));
+      }
 
       // Calculate stats
       const uniqueLocations = new Set(all.map(item => item.location_id || item.location)).size;
       const totalQuantity = all.reduce((sum, item) => sum + item.quantity, 0);
       const lowStockItems = all.filter(item => item.quantity <= (item.min_quantity || 0)).length;
 
-      setStats({
+      const newStats = {
         totalItems: all.length,
         totalQuantity,
         uniqueLocations,
         lowStockItems,
-      });
+      };
+
+      // Update cache
+      globalCache = {
+        departmentId,
+        items: all,
+        stats: newStats,
+        timestamp: Date.now(),
+      };
+
+      setItems(all);
+      setStats(newStats);
     } catch (error: any) {
       console.error('Error fetching inventory:', error);
       toast({
@@ -93,12 +150,19 @@ export function useInventory(departmentId: string | undefined) {
       });
     } finally {
       setLoading(false);
+      fetchInProgress.current = false;
     }
   }, [departmentId, toast]);
 
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    // Only fetch if department changed or no data
+    if (departmentId !== lastDepartmentId.current) {
+      lastDepartmentId.current = departmentId;
+      fetchItems();
+    } else if (items.length === 0 && departmentId) {
+      fetchItems();
+    }
+  }, [departmentId, fetchItems, items.length]);
 
   const createItem = async (data: Omit<InventoryItem, 'id' | 'created_at' | 'updated_at' | 'created_by'>) => {
     try {
@@ -118,7 +182,9 @@ export function useInventory(departmentId: string | undefined) {
         description: 'Inventory item added successfully',
       });
 
-      await fetchItems();
+      // Invalidate cache and refetch
+      globalCache = null;
+      await fetchItems(true);
       return true;
     } catch (error: any) {
       console.error('Error creating inventory item:', error);
@@ -145,7 +211,9 @@ export function useInventory(departmentId: string | undefined) {
         description: 'Inventory item updated successfully',
       });
 
-      await fetchItems();
+      // Invalidate cache and refetch
+      globalCache = null;
+      await fetchItems(true);
       return true;
     } catch (error: any) {
       console.error('Error updating inventory item:', error);
@@ -172,7 +240,9 @@ export function useInventory(departmentId: string | undefined) {
         description: 'Inventory item deleted successfully',
       });
 
-      await fetchItems();
+      // Invalidate cache and refetch
+      globalCache = null;
+      await fetchItems(true);
       return true;
     } catch (error: any) {
       console.error('Error deleting inventory item:', error);
@@ -206,7 +276,9 @@ export function useInventory(departmentId: string | undefined) {
         description: `${itemIds.length} item(s) moved successfully`,
       });
 
-      await fetchItems();
+      // Invalidate cache and refetch
+      globalCache = null;
+      await fetchItems(true);
       return true;
     } catch (error: any) {
       console.error('Error moving inventory items:', error);
@@ -227,6 +299,6 @@ export function useInventory(departmentId: string | undefined) {
     updateItem,
     deleteItem,
     moveItems,
-    refetch: fetchItems,
+    refetch: () => fetchItems(true),
   };
 }

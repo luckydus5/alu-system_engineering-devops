@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +45,7 @@ import { Department } from '@/hooks/useDepartments';
 import { useWarehouseClassifications, WarehouseClassification } from '@/hooks/useWarehouseClassifications';
 import { useWarehouseLocations, WarehouseLocation } from '@/hooks/useWarehouseLocations';
 import { useInventory, InventoryItem } from '@/hooks/useInventory';
+import { useDebounce } from '@/hooks/useDebounce';
 import { FolderCard } from './FolderCard';
 import { ClassificationDialog } from './ClassificationDialog';
 import { LocationDialog } from './LocationDialog';
@@ -195,20 +196,32 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     setItemsPage(1);
   }, [currentLocationId]);
 
-  // Global search results
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim() || !isSearching) return null;
-    
-    const query = searchQuery.toLowerCase();
-    
-    const matchedItems = items.filter(item =>
-      item.item_name.toLowerCase().includes(query) ||
-      item.item_number.toLowerCase().includes(query) ||
-      item.location?.toLowerCase().includes(query)
-    );
+  // Debounced search query for performance (wait 300ms after typing stops)
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+  
+  // Use transition for non-urgent UI updates during search
+  const [isSearchPending, startSearchTransition] = useTransition();
 
-    return matchedItems;
-  }, [searchQuery, items, isSearching]);
+  // Global search results with debouncing and optimized filtering
+  const searchResults = useMemo(() => {
+    if (!debouncedSearchQuery.trim() || !isSearching) return null;
+    
+    const query = debouncedSearchQuery.toLowerCase();
+    
+    // Pre-compute lowercase values for better performance on large datasets
+    const matchedItems = items.filter(item => {
+      const itemName = item.item_name?.toLowerCase() || '';
+      const itemNumber = item.item_number?.toLowerCase() || '';
+      const location = item.location?.toLowerCase() || '';
+      
+      return itemName.includes(query) ||
+        itemNumber.includes(query) ||
+        location.includes(query);
+    });
+
+    // Limit results to prevent UI freezing on very large result sets
+    return matchedItems.slice(0, 500);
+  }, [debouncedSearchQuery, items, isSearching]);
 
   // Low stock items across all
   const lowStockItems = useMemo(() => {
@@ -401,12 +414,14 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     refetchItems();
   };
 
-  // Search handlers
-  const handleSearch = () => {
+  // Search handlers - use startTransition for smoother UI
+  const handleSearch = useCallback(() => {
     if (searchQuery.trim()) {
-      setIsSearching(true);
+      startSearchTransition(() => {
+        setIsSearching(true);
+      });
     }
-  };
+  }, [searchQuery]);
 
   const clearSearch = () => {
     setSearchQuery('');
@@ -450,7 +465,11 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
           {/* Search Bar */}
           <div className="mt-3 flex gap-2">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              {isSearchPending ? (
+                <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+              ) : (
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              )}
               <Input
                 placeholder="Search items across all locations..."
                 value={searchQuery}
@@ -469,8 +488,8 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 </Button>
               )}
             </div>
-            <Button onClick={handleSearch} disabled={!searchQuery.trim()}>
-              Search
+            <Button onClick={handleSearch} disabled={!searchQuery.trim() || isSearchPending}>
+              {isSearchPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Search'}
             </Button>
           </div>
 
