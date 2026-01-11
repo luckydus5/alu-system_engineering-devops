@@ -11,11 +11,13 @@ import {
   AlertTriangle,
   TrendingUp,
   BarChart3,
+  Headphones,
 } from 'lucide-react';
 import { useInventory } from '@/hooks/useInventory';
 import { ExcelInventoryTable } from './ExcelInventoryTable';
 import { AddInventoryDialog } from './AddInventoryDialog';
 import { StockTransaction } from './StockTransactionDialog';
+import { RequestITSupportDialog } from '@/components/shared/RequestITSupportDialog';
 import { Department } from '@/hooks/useDepartments';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -27,6 +29,7 @@ interface WarehouseDashboardProps {
 
 export function WarehouseDashboard({ department, canManage }: WarehouseDashboardProps) {
   const [addItemOpen, setAddItemOpen] = useState(false);
+  const [itSupportOpen, setItSupportOpen] = useState(false);
   const { toast } = useToast();
 
   const { items, loading, stats, createItem, updateItem, deleteItem, refetch } = useInventory(
@@ -105,6 +108,15 @@ export function WarehouseDashboard({ department, canManage }: WarehouseDashboard
           </div>
 
           <div className="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setItSupportOpen(true)}
+              className="bg-white/20 hover:bg-white/30 text-white border-none"
+            >
+              <Headphones className="h-4 w-4 mr-2" />
+              IT Support
+            </Button>
             <Button
               variant="secondary"
               size="icon"
@@ -226,6 +238,14 @@ export function WarehouseDashboard({ department, canManage }: WarehouseDashboard
 
       {/* Add Item Dialog */}
       <AddInventoryDialog open={addItemOpen} onOpenChange={setAddItemOpen} onSubmit={handleAddItem} />
+
+      {/* IT Support Dialog */}
+      <RequestITSupportDialog
+        open={itSupportOpen}
+        onOpenChange={setItSupportOpen}
+        departmentId={department.id}
+        departmentName={department.name}
+      />
     </div>
   );
 }

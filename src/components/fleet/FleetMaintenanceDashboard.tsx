@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Plus, Wrench, Truck, FileDown } from 'lucide-react';
+import { Plus, Wrench, Truck, FileDown, Headphones } from 'lucide-react';
 import { useFleets } from '@/hooks/useFleets';
 import { useMaintenanceRecords } from '@/hooks/useMaintenanceRecords';
 import { FleetKPICards } from './FleetKPICards';
@@ -10,6 +10,7 @@ import { UpcomingServices } from './UpcomingServices';
 import { RecentActivity } from './RecentActivity';
 import { AddFleetDialog } from './AddFleetDialog';
 import { AddMaintenanceDialog } from './AddMaintenanceDialog';
+import { RequestITSupportDialog } from '@/components/shared/RequestITSupportDialog';
 import { Department } from '@/hooks/useDepartments';
 import { format } from 'date-fns';
 
@@ -21,6 +22,7 @@ interface FleetMaintenanceDashboardProps {
 export function FleetMaintenanceDashboard({ department, canManage }: FleetMaintenanceDashboardProps) {
   const [addFleetOpen, setAddFleetOpen] = useState(false);
   const [addMaintenanceOpen, setAddMaintenanceOpen] = useState(false);
+  const [itSupportOpen, setItSupportOpen] = useState(false);
 
   const { fleets, loading: fleetsLoading, stats, createFleet, refetch: refetchFleets } = useFleets(department.id);
   const { 
@@ -61,6 +63,10 @@ export function FleetMaintenanceDashboard({ department, canManage }: FleetMainte
         </div>
         {canManage && (
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setItSupportOpen(true)}>
+              <Headphones className="h-4 w-4 mr-2" />
+              IT Support
+            </Button>
             <Button variant="outline" onClick={() => setAddFleetOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Fleet
@@ -115,6 +121,12 @@ export function FleetMaintenanceDashboard({ department, canManage }: FleetMainte
         onOpenChange={setAddMaintenanceOpen}
         fleets={fleets}
         onSubmit={handleAddMaintenance}
+      />
+      <RequestITSupportDialog
+        open={itSupportOpen}
+        onOpenChange={setItSupportOpen}
+        departmentId={department.id}
+        departmentName={department.name}
       />
     </div>
   );

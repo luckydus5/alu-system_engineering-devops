@@ -26,11 +26,13 @@ import {
   Sparkles,
   Calendar,
   Megaphone,
+  Headphones,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useOfficeActivities, OfficeActivity, CreateActivityData, ActivityType } from '@/hooks/useOfficeActivities';
 import { ActivityCard } from './ActivityCard';
 import { AddActivityDialog } from './AddActivityDialog';
+import { RequestITSupportDialog } from '@/components/shared/RequestITSupportDialog';
 import { cn } from '@/lib/utils';
 import { getDepartmentIcon, getDepartmentColors } from '@/lib/departmentIcons';
 import { format, isToday } from 'date-fns';
@@ -48,6 +50,7 @@ export function OfficeDashboard({ department, canManage }: OfficeDashboardProps)
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itSupportOpen, setItSupportOpen] = useState(false);
 
   const {
     activities,
@@ -141,6 +144,15 @@ export function OfficeDashboard({ department, canManage }: OfficeDashboardProps)
           </div>
           
           <div className="flex items-center gap-3">
+            <Button 
+              variant="secondary" 
+              size="sm"
+              onClick={() => setItSupportOpen(true)}
+              className="bg-white/20 hover:bg-white/30 text-white border-none"
+            >
+              <Headphones className="h-4 w-4 mr-2" />
+              IT Support
+            </Button>
             <Button 
               variant="secondary" 
               size="icon" 
@@ -418,6 +430,14 @@ export function OfficeDashboard({ department, canManage }: OfficeDashboardProps)
         onSubmit={handleSubmit}
         editActivity={editActivity}
         isSubmitting={isSubmitting}
+      />
+
+      {/* IT Support Dialog */}
+      <RequestITSupportDialog
+        open={itSupportOpen}
+        onOpenChange={setItSupportOpen}
+        departmentId={department.id}
+        departmentName={department.name}
       />
     </div>
   );
