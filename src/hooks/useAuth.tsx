@@ -100,6 +100,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Sign out from Supabase (use global scope to clear all sessions)
       await supabase.auth.signOut({ scope: 'global' });
       
+      // Clear all Supabase-related storage
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith('sb-') || key.includes('supabase')) {
+          localStorage.removeItem(key);
+        }
+      });
+      
       toast({
         title: "Signed out",
         description: "You have been signed out successfully.",
@@ -109,8 +117,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.location.href = '/auth';
     } catch (error) {
       console.error('Sign out error:', error);
-      // Even if there's an error, clear local storage and redirect
-      localStorage.removeItem('sb-' + import.meta.env.VITE_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
+      // Even if there's an error, clear all storage and redirect
+      const keys = Object.keys(localStorage);
+      keys.forEach(key => {
+        if (key.startsWith('sb-') || key.includes('supabase')) {
+          localStorage.removeItem(key);
+        }
+      });
       window.location.href = '/auth';
     }
   };

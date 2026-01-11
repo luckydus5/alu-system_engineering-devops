@@ -175,12 +175,12 @@ export function AppSidebar() {
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {isAdmin && (
+                {isSuperAdmin && (
                   <SidebarMenuItem>
                     <SidebarMenuButton
                       asChild
                       isActive={isActive('/super-admin')}
-                      tooltip={collapsed ? 'Audit Logs' : undefined}
+                      tooltip={collapsed ? 'Super Admin Dashboard' : undefined}
                       className={cn(
                         "rounded-xl transition-all duration-200 mb-1",
                         isActive('/super-admin') 
@@ -190,7 +190,7 @@ export function AppSidebar() {
                     >
                       <NavLink to="/super-admin" className="flex items-center gap-3 py-2.5">
                         <Shield className="h-5 w-5" />
-                        {!collapsed && <span>Audit Logs</span>}
+                        {!collapsed && <span>Super Admin</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

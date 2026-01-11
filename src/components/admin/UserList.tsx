@@ -57,11 +57,21 @@ const roles: { value: AppRole; label: string }[] = [
   { value: 'super_admin', label: 'Super Admin' },
 ];
 
-export function UserList() {
+interface UserListProps {
+  adminDepartmentId?: string | null;
+  isSuperAdmin?: boolean;
+}
+
+export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListProps) {
   const { users, loading, refetch, updateUser, deleteUser } = useUsers();
   const { departments } = useDepartments();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
+
+  // Filter users based on admin's department access
+  const filteredUsers = adminDepartmentId 
+    ? users.filter((u) => u.department_id === adminDepartmentId)
+    : users;
 
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserWithRole | null>(null);
@@ -150,7 +160,7 @@ export function UserList() {
           <div>
             <CardTitle className="flex items-center gap-2">
               <Users className="w-5 h-5" />
-              All Users ({users.length})
+              {adminDepartmentId ? 'Department Users' : 'All Users'} ({filteredUsers.length})
             </CardTitle>
             <CardDescription>
               Manage user accounts, roles, and department assignments
@@ -181,7 +191,7 @@ export function UserList() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
+                  filteredUsers.map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">
                         {user.full_name || '-'}

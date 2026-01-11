@@ -20,7 +20,7 @@ const passwordSchema = z.string().min(6, 'Password must be at least 6 characters
 
 export default function Admin() {
   const { session } = useAuth();
-  const { highestRole, loading: roleLoading } = useUserRole();
+  const { highestRole, roles, loading: roleLoading } = useUserRole();
   const { departments } = useDepartments();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -34,6 +34,15 @@ export default function Admin() {
     departmentId: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Get admin's assigned department (for non-super_admin users)
+  const adminDepartmentId = roles.find((r) => r.role === 'admin')?.department_id;
+  const isSuperAdmin = highestRole === 'super_admin';
+  
+  // Filter departments - admins can only see their assigned department
+  const availableDepartments = isSuperAdmin 
+    ? departments 
+    : departments.filter((d) => d.id === adminDepartmentId);
 
   // Check if user is admin or super_admin
   if (!roleLoading && highestRole !== 'admin' && highestRole !== 'super_admin') {
@@ -136,14 +145,22 @@ export default function Admin() {
     }
   };
 
-  const roles: { value: AppRole; label: string }[] = [
-    { value: 'staff', label: 'Staff' },
-    { value: 'supervisor', label: 'Supervisor' },
-    { value: 'manager', label: 'Manager' },
-    { value: 'director', label: 'Director' },
-    { value: 'admin', label: 'Admin' },
-    { value: 'super_admin', label: 'Super Admin' },
-  ];
+  // Roles that admins can assign - non-super_admins cannot create super_admin or admin
+  const availableRoles: { value: AppRole; label: string }[] = isSuperAdmin
+    ? [
+        { value: 'staff', label: 'Staff' },
+        { value: 'supervisor', label: 'Supervisor' },
+        { value: 'manager', label: 'Manager' },
+        { value: 'director', label: 'Director' },
+        { value: 'admin', label: 'Admin' },
+        { value: 'super_admin', label: 'Super Admin' },
+      ]
+    : [
+        { value: 'staff', label: 'Staff' },
+        { value: 'supervisor', label: 'Supervisor' },
+        { value: 'manager', label: 'Manager' },
+        { value: 'director', label: 'Director' },
+      ];
 
   return (
     <DashboardLayout>
@@ -158,8 +175,8 @@ export default function Admin() {
           </p>
         </div>
 
-        {/* User List */}
-        <UserList />
+        {/* User List - pass the department filter for non-super admins */}
+        <UserList adminDepartmentId={isSuperAdmin ? null : adminDepartmentId} isSuperAdmin={isSuperAdmin} />
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Create User Form */}
@@ -230,7 +247,7 @@ export default function Admin() {
                       <SelectValue placeholder="Select role" />
                     </SelectTrigger>
                     <SelectContent>
-                      {roles.map((role) => (
+                      {availableRoles.map((role) => (
                         <SelectItem key={role.value} value={role.value}>
                           {role.label}
                         </SelectItem>
@@ -240,23 +257,28 @@ export default function Admin() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
+                  <Label htmlFor="department">Department {!isSuperAdmin && "(Your assigned department)"}</Label>
                   <Select
-                    value={formData.departmentId}
+                    value={formData.departmentId || (adminDepartmentId || '')}
                     onValueChange={(value) => setFormData(prev => ({ ...prev, departmentId: value }))}
-                    disabled={isCreating}
+                    disabled={isCreating || (!isSuperAdmin && availableDepartments.length === 1)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select department (optional)" />
+                      <SelectValue placeholder="Select department" />
                     </SelectTrigger>
                     <SelectContent>
-                      {departments.map((dept) => (
+                      {availableDepartments.map((dept) => (
                         <SelectItem key={dept.id} value={dept.id}>
                           {dept.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  {!isSuperAdmin && (
+                    <p className="text-xs text-muted-foreground">
+                      As an admin, you can only create users in your assigned department.
+                    </p>
+                  )}
                 </div>
 
                 <Button type="submit" className="w-full" disabled={isCreating}>
