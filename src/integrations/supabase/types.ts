@@ -626,6 +626,72 @@ export type Database = {
           },
         ]
       }
+      system_events: {
+        Row: {
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          metadata: Json | null
+          resolved: boolean | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: string
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: string
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      system_reports: {
+        Row: {
+          created_at: string
+          id: string
+          issues_detected: number | null
+          report_type: string
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          issues_detected?: number | null
+          report_type?: string
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          issues_detected?: number | null
+          report_type?: string
+          summary?: Json
+        }
+        Relationships: []
+      }
       user_department_access: {
         Row: {
           department_id: string
@@ -689,6 +755,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_sessions: {
+        Row: {
+          current_page: string | null
+          id: string
+          ip_address: string | null
+          is_active: boolean | null
+          last_activity: string
+          session_started: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          current_page?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_activity?: string
+          session_started?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          current_page?: string | null
+          id?: string
+          ip_address?: string | null
+          is_active?: boolean | null
+          last_activity?: string
+          session_started?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       warehouse_classifications: {
         Row: {
@@ -806,6 +905,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_inactive_sessions: { Args: never; Returns: undefined }
       get_user_department: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
