@@ -7,23 +7,14 @@ export function useSessionHeartbeat() {
   const { user } = useAuth();
   const location = useLocation();
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPageRef = useRef<string>('');
 
   const sendHeartbeat = useCallback(async () => {
     if (!user) return;
 
     try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData.session) return;
-
-      await supabase.functions.invoke('system-monitor', {
-        body: {},
-        headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-        },
-      });
-
-      // Also update local session in database
-      await supabase
+      // Update session in database directly
+      const { error } = await supabase
         .from('user_sessions')
         .upsert(
           {
@@ -31,16 +22,39 @@ export function useSessionHeartbeat() {
             last_activity: new Date().toISOString(),
             is_active: true,
             current_page: location.pathname,
-            user_agent: navigator.userAgent,
+            user_agent: navigator.userAgent.substring(0, 200),
           },
           { onConflict: 'user_id', ignoreDuplicates: false }
         );
+
+      if (error) {
+        console.debug('Heartbeat upsert failed, trying insert:', error.message);
+        // Try insert if upsert failed
+        await supabase
+          .from('user_sessions')
+          .insert({
+            user_id: user.id,
+            last_activity: new Date().toISOString(),
+            is_active: true,
+            current_page: location.pathname,
+            user_agent: navigator.userAgent.substring(0, 200),
+          });
+      }
     } catch (error) {
       // Silent fail for heartbeat
       console.debug('Heartbeat failed:', error);
     }
   }, [user, location.pathname]);
 
+  // Send heartbeat on page change
+  useEffect(() => {
+    if (location.pathname !== lastPageRef.current) {
+      lastPageRef.current = location.pathname;
+      sendHeartbeat();
+    }
+  }, [location.pathname, sendHeartbeat]);
+
+  // Set up interval heartbeat
   useEffect(() => {
     if (!user) return;
 
@@ -67,15 +81,36 @@ export function useSessionHeartbeat() {
     };
   }, [user, sendHeartbeat]);
 
-  // Also send heartbeat on visibility change
+  // Handle visibility change
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         sendHeartbeat();
+      } else if (user) {
+        // Mark as inactive when tab is hidden
+        supabase
+          .from('user_sessions')
+          .update({ is_active: false })
+          .eq('user_id', user.id)
+          .then(() => {});
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [sendHeartbeat]);
+  }, [sendHeartbeat, user]);
+
+  // Handle before unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (user) {
+        // Use sendBeacon for reliable delivery on page unload
+        const url = `${import.meta.env.VITE_SUPABASE_URL || 'https://edumcnnilpnbdxcjpchw.supabase.co'}/rest/v1/user_sessions?user_id=eq.${user.id}`;
+        navigator.sendBeacon(url);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [user]);
 }
