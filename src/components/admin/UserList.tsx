@@ -69,9 +69,20 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
   const { toast } = useToast();
 
   // Filter users based on admin's department access
+  // Admins can only see users in their department, and cannot see super_admins
   const filteredUsers = adminDepartmentId 
-    ? users.filter((u) => u.department_id === adminDepartmentId)
+    ? users.filter((u) => u.department_id === adminDepartmentId && u.role !== 'super_admin')
     : users;
+
+  // Helper to check if current user (admin) can manage the target user
+  const canManageUser = (user: UserWithRole): boolean => {
+    if (isSuperAdmin) return true;
+    // Admins cannot manage super_admins or other admins
+    if (user.role === 'super_admin' || user.role === 'admin') return false;
+    // Admins can only manage users in their department
+    if (adminDepartmentId && user.department_id !== adminDepartmentId) return false;
+    return true;
+  };
 
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserWithRole | null>(null);
@@ -215,22 +226,31 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                               <Building2 className="w-4 h-4" />
                             </Button>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditClick(user)}
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeletingUser(user)}
-                            disabled={user.id === currentUser?.id}
-                            className="text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
+                          {canManageUser(user) && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEditClick(user)}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setDeletingUser(user)}
+                                disabled={user.id === currentUser?.id}
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                          {!canManageUser(user) && !isSuperAdmin && (
+                            <span className="text-xs text-muted-foreground px-2">
+                              No access
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
