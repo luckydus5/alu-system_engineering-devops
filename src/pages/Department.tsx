@@ -8,6 +8,7 @@ import { FleetMaintenanceDashboard } from '@/components/fleet/FleetMaintenanceDa
 import { WarehouseLayout } from '@/components/warehouse/WarehouseLayout';
 import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
 import { OfficeDashboard } from '@/components/office/OfficeDashboard';
+import { ITDashboard } from '@/components/it/ITDashboard';
 import { ShieldAlert } from 'lucide-react';
 
 export default function Department() {
@@ -28,6 +29,7 @@ export default function Department() {
   const isFleetDepartment = deptCode === 'FLEET';
   const isWarehouseDepartment = deptCode === 'WAREHOUSE' || deptCode === 'WH';
   const isOperationsDepartment = deptCode === 'OPS' || deptCode === 'PEAT' || deptCode === 'OPERATIONS';
+  const isITDepartment = deptCode === 'IT';
 
   if (deptLoading || roleLoading) {
     return (
@@ -100,7 +102,16 @@ export default function Department() {
     );
   }
 
-  // Default: Office Dashboard for office-based departments (HR, FIN, SAF, IT, ENG, etc.)
+  // Render IT Dashboard for IT department - with tickets, equipment, and projects
+  if (isITDepartment) {
+    return (
+      <DashboardLayout title={department.name}>
+        <ITDashboard department={department} canManage={canManage} />
+      </DashboardLayout>
+    );
+  }
+
+  // Default: Office Dashboard for office-based departments (HR, FIN, SAF, ENG, etc.)
   // These departments track meetings, tasks, announcements, and office activities
   return (
     <DashboardLayout title={department.name}>
