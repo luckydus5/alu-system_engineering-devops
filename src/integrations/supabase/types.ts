@@ -434,6 +434,68 @@ export type Database = {
         }
         Relationships: []
       }
+      office_activities: {
+        Row: {
+          activity_type: string
+          attachments: string[] | null
+          attendees: string[] | null
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          department_id: string
+          description: string | null
+          id: string
+          is_pinned: boolean
+          priority: string
+          scheduled_at: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          activity_type: string
+          attachments?: string[] | null
+          attendees?: string[] | null
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          department_id: string
+          description?: string | null
+          id?: string
+          is_pinned?: boolean
+          priority?: string
+          scheduled_at?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          activity_type?: string
+          attachments?: string[] | null
+          attendees?: string[] | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          department_id?: string
+          description?: string | null
+          id?: string
+          is_pinned?: boolean
+          priority?: string
+          scheduled_at?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "office_activities_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
