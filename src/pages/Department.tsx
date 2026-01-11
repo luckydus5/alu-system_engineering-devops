@@ -8,6 +8,7 @@ import { FleetMaintenanceDashboard } from '@/components/fleet/FleetMaintenanceDa
 import { WarehouseLayout } from '@/components/warehouse/WarehouseLayout';
 import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
 import { OfficeDashboard } from '@/components/office/OfficeDashboard';
+import { ShieldAlert } from 'lucide-react';
 
 export default function Department() {
   const navigate = useNavigate();
