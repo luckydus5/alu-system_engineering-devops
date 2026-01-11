@@ -639,36 +639,48 @@ export type Database = {
           created_at: string
           created_by: string | null
           department_id: string
+          handed_to_department_id: string | null
+          handed_to_user_id: string | null
           id: string
           inventory_item_id: string
           new_quantity: number
           notes: string | null
           previous_quantity: number
           quantity: number
+          requested_by_user_id: string | null
+          support_ticket_id: string | null
           transaction_type: string
         }
         Insert: {
           created_at?: string
           created_by?: string | null
           department_id: string
+          handed_to_department_id?: string | null
+          handed_to_user_id?: string | null
           id?: string
           inventory_item_id: string
           new_quantity: number
           notes?: string | null
           previous_quantity: number
           quantity: number
+          requested_by_user_id?: string | null
+          support_ticket_id?: string | null
           transaction_type: string
         }
         Update: {
           created_at?: string
           created_by?: string | null
           department_id?: string
+          handed_to_department_id?: string | null
+          handed_to_user_id?: string | null
           id?: string
           inventory_item_id?: string
           new_quantity?: number
           notes?: string | null
           previous_quantity?: number
           quantity?: number
+          requested_by_user_id?: string | null
+          support_ticket_id?: string | null
           transaction_type?: string
         }
         Relationships: [
@@ -680,10 +692,83 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "stock_transactions_handed_to_department_id_fkey"
+            columns: ["handed_to_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "stock_transactions_inventory_item_id_fkey"
             columns: ["inventory_item_id"]
             isOneToOne: false
             referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_transactions_support_ticket_id_fkey"
+            columns: ["support_ticket_id"]
+            isOneToOne: false
+            referencedRelation: "support_tickets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_tickets: {
+        Row: {
+          assigned_to: string | null
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          priority: string
+          requested_by: string
+          requesting_department_id: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          ticket_number: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          requested_by: string
+          requesting_department_id: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          ticket_number: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          priority?: string
+          requested_by?: string
+          requesting_department_id?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          ticket_number?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_tickets_requesting_department_id_fkey"
+            columns: ["requesting_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
