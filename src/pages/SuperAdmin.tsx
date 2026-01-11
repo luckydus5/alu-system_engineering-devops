@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +19,6 @@ import {
   Edit,
   Trash2,
   Plus,
-  Calendar,
   User,
   Users,
   Database,
@@ -28,16 +27,18 @@ import {
   ChevronRight,
   FileText,
   Settings,
-  Lock,
   BarChart3,
-  Clock,
-  Globe,
   History,
-  UserCheck,
   AlertTriangle,
   CheckCircle,
-  XCircle,
-  Layers
+  Layers,
+  Wifi,
+  WifiOff,
+  Bell,
+  Timer,
+  TrendingUp,
+  ArrowUpCircle,
+  ArrowDownCircle,
 } from 'lucide-react';
 import {
   Table,
@@ -47,7 +48,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
@@ -58,6 +59,7 @@ import {
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Progress } from '@/components/ui/progress';
 
 interface AuditLog {
   id: string;
@@ -81,6 +83,7 @@ interface SystemStats {
   insertsCount: number;
   updatesCount: number;
   deletesCount: number;
+  activeNow: number;
 }
 
 interface UserWithDepartment {
@@ -90,6 +93,24 @@ interface UserWithDepartment {
   role: string;
   department_name: string | null;
   department_id: string | null;
+}
+
+interface ActiveSession {
+  id: string;
+  user_id: string;
+  is_active: boolean;
+  current_page: string | null;
+  last_activity: string;
+  full_name?: string | null;
+  email?: string;
+}
+
+interface SystemReport {
+  id: string;
+  report_type: string;
+  summary: unknown;
+  issues_detected: number;
+  created_at: string;
 }
 
 const actionIcons: Record<string, React.ReactNode> = {
@@ -104,24 +125,16 @@ const actionColors: Record<string, string> = {
   DELETE: 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30',
 };
 
-// Admin tools sidebar items
 const sidebarTools = [
   { id: 'audit', label: 'Audit Logs', icon: History, description: 'System activity history' },
   { id: 'users', label: 'User Overview', icon: Users, description: 'All system users' },
   { id: 'departments', label: 'Departments', icon: Building2, description: 'Department management' },
-  { id: 'reports', label: 'Reports', icon: FileText, description: 'System reports' },
-  { id: 'permissions', label: 'Permissions', icon: Lock, description: 'Access control' },
+  { id: 'live', label: 'Live Monitor', icon: Activity, description: 'Real-time activity' },
+  { id: 'reports', label: 'System Reports', icon: FileText, description: 'Auto-generated reports' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Usage statistics' },
-  { id: 'settings', label: 'Settings', icon: Settings, description: 'System configuration' },
 ];
 
-// Quick stats items
-const quickStatItems = [
-  { id: 'online', icon: Globe, label: 'Online Now', color: 'text-emerald-500' },
-  { id: 'pending', icon: Clock, label: 'Pending', color: 'text-amber-500' },
-  { id: 'approved', icon: CheckCircle, label: 'Approved', color: 'text-blue-500' },
-  { id: 'flagged', icon: AlertTriangle, label: 'Flagged', color: 'text-red-500' },
-];
+const AUTO_REPORT_INTERVAL = 10 * 60 * 1000; // 10 minutes
 
 export default function SuperAdmin() {
   const { highestRole, loading: roleLoading } = useUserRole();
@@ -130,6 +143,8 @@ export default function SuperAdmin() {
 
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [users, setUsers] = useState<UserWithDepartment[]>([]);
+  const [sessions, setSessions] = useState<ActiveSession[]>([]);
+  const [reports, setReports] = useState<SystemReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [tableFilter, setTableFilter] = useState<string>('all');
@@ -137,7 +152,9 @@ export default function SuperAdmin() {
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [activeTool, setActiveTool] = useState('audit');
-  const [viewMode, setViewMode] = useState<'list' | 'compact'>('list');
+  const [autoReportEnabled, setAutoReportEnabled] = useState(true);
+  const [nextReportIn, setNextReportIn] = useState(AUTO_REPORT_INTERVAL);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [stats, setStats] = useState<SystemStats>({
     totalUsers: 0,
     totalDepartments: 0,
@@ -146,7 +163,11 @@ export default function SuperAdmin() {
     insertsCount: 0,
     updatesCount: 0,
     deletesCount: 0,
+    activeNow: 0,
   });
+
+  const autoReportRef = useRef<NodeJS.Timeout | null>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const tables = [
     'inventory_items',
@@ -157,10 +178,9 @@ export default function SuperAdmin() {
     'departments',
     'stock_transactions',
     'profiles',
-    'user_department_access',
   ];
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       // Fetch audit logs
@@ -170,30 +190,22 @@ export default function SuperAdmin() {
         .order('created_at', { ascending: false })
         .limit(500);
 
-      if (tableFilter !== 'all') {
-        logsQuery = logsQuery.eq('table_name', tableFilter);
-      }
-      if (actionFilter !== 'all') {
-        logsQuery = logsQuery.eq('action', actionFilter);
-      }
-      if (departmentFilter !== 'all') {
-        logsQuery = logsQuery.eq('department_id', departmentFilter);
-      }
+      if (tableFilter !== 'all') logsQuery = logsQuery.eq('table_name', tableFilter);
+      if (actionFilter !== 'all') logsQuery = logsQuery.eq('action', actionFilter);
+      if (departmentFilter !== 'all') logsQuery = logsQuery.eq('department_id', departmentFilter);
 
       const { data: logsData, error: logsError } = await logsQuery;
       if (logsError) throw logsError;
       setLogs(logsData || []);
 
-      // Fetch users with their roles and departments
-      const { data: profiles, error: profilesError } = await supabase
+      // Fetch users with roles
+      const { data: profiles } = await supabase
         .from('profiles')
         .select('id, email, full_name, department_id, departments(name)');
-      if (profilesError) throw profilesError;
 
-      const { data: roles, error: rolesError } = await supabase
+      const { data: roles } = await supabase
         .from('user_roles')
         .select('user_id, role, department_id, departments(name)');
-      if (rolesError) throw rolesError;
 
       const usersData: UserWithDepartment[] = (profiles || []).map((profile) => {
         const userRole = roles?.find((r) => r.user_id === profile.id);
@@ -208,14 +220,41 @@ export default function SuperAdmin() {
       });
       setUsers(usersData);
 
+      // Fetch active sessions
+      const { data: sessionsData } = await supabase
+        .from('user_sessions')
+        .select('*')
+        .order('last_activity', { ascending: false });
+
+      const sessionsList = sessionsData || [];
+      const userIds = sessionsList.map(s => s.user_id);
+      const { data: sessionProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', userIds);
+
+      const profileMap = new Map((sessionProfiles || []).map(p => [p.id, p]));
+      const enrichedSessions: ActiveSession[] = sessionsList.map(s => ({
+        ...s,
+        full_name: profileMap.get(s.user_id)?.full_name,
+        email: profileMap.get(s.user_id)?.email,
+      }));
+      setSessions(enrichedSessions);
+
+      // Fetch system reports
+      const { data: reportsData } = await supabase
+        .from('system_reports')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      setReports(reportsData || []);
+
       // Calculate stats
       const allLogs = logsData || [];
       const now = new Date();
       const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const activeUserIds = new Set(
-        allLogs
-          .filter((log) => new Date(log.created_at) > yesterday)
-          .map((log) => log.user_id)
+        allLogs.filter((log) => new Date(log.created_at) > yesterday).map((log) => log.user_id)
       );
 
       setStats({
@@ -226,21 +265,79 @@ export default function SuperAdmin() {
         insertsCount: allLogs.filter((l) => l.action === 'INSERT').length,
         updatesCount: allLogs.filter((l) => l.action === 'UPDATE').length,
         deletesCount: allLogs.filter((l) => l.action === 'DELETE').length,
+        activeNow: enrichedSessions.filter(s => s.is_active).length,
       });
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [tableFilter, actionFilter, departmentFilter, departments.length]);
 
+  const generateSystemReport = useCallback(async () => {
+    setGeneratingReport(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('system-monitor', {
+        body: { action: 'generate_report' },
+      });
+
+      if (error) throw error;
+      
+      toast.success('System report generated successfully');
+      fetchData();
+      setNextReportIn(AUTO_REPORT_INTERVAL);
+    } catch (err) {
+      console.error('Failed to generate report:', err);
+      toast.error('Failed to generate system report');
+    } finally {
+      setGeneratingReport(false);
+    }
+  }, [fetchData]);
+
+  // Initial fetch
   useEffect(() => {
     if (highestRole === 'super_admin') {
       fetchData();
     }
-  }, [highestRole, tableFilter, actionFilter, departmentFilter]);
+  }, [highestRole, fetchData]);
 
-  // Only super_admin can access this page
+  // Auto-report timer
+  useEffect(() => {
+    if (!autoReportEnabled || highestRole !== 'super_admin') return;
+
+    autoReportRef.current = setInterval(() => {
+      generateSystemReport();
+    }, AUTO_REPORT_INTERVAL);
+
+    countdownRef.current = setInterval(() => {
+      setNextReportIn((prev) => Math.max(0, prev - 1000));
+    }, 1000);
+
+    return () => {
+      if (autoReportRef.current) clearInterval(autoReportRef.current);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [autoReportEnabled, highestRole, generateSystemReport]);
+
+  // Real-time subscriptions
+  useEffect(() => {
+    if (highestRole !== 'super_admin') return;
+
+    const channel = supabase
+      .channel('super-admin-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, () => {
+        fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_sessions' }, () => {
+        fetchData();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [highestRole, fetchData]);
+
   if (!roleLoading && highestRole !== 'super_admin') {
     return (
       <DashboardLayout>
@@ -252,7 +349,7 @@ export default function SuperAdmin() {
                 Access Denied
               </CardTitle>
               <CardDescription>
-                This page is restricted to Super Admins only. Regular admins do not have access.
+                This page is restricted to Super Admins only.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -286,11 +383,7 @@ export default function SuperAdmin() {
     allKeys.forEach((key) => {
       if (key === 'updated_at' || key === 'created_at') return;
       if (JSON.stringify(oldObj[key]) !== JSON.stringify(newObj[key])) {
-        changes.push({
-          field: key,
-          oldValue: oldObj[key],
-          newValue: newObj[key],
-        });
+        changes.push({ field: key, oldValue: oldObj[key], newValue: newObj[key] });
       }
     });
     
@@ -307,32 +400,298 @@ export default function SuperAdmin() {
     const exportData = filteredLogs.map((log, index) => ({
       'No.': index + 1,
       'User': log.user_name || log.user_email || 'Unknown',
-      'Email': log.user_email || 'N/A',
       'Department': getDepartmentName(log.department_id),
       'Action': log.action,
       'Table': log.table_name,
       'Timestamp': format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
-      'Record ID': log.record_id || 'N/A',
     }));
 
     const headers = Object.keys(exportData[0] || {}).join(',');
     const rows = exportData.map((row) =>
-      Object.values(row)
-        .map((val) => `"${String(val).replace(/"/g, '""')}"`)
-        .join(',')
+      Object.values(row).map((val) => `"${String(val).replace(/"/g, '""')}"`).join(',')
     );
     const csv = [headers, ...rows].join('\n');
-
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `audit_logs_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.csv`;
     link.click();
-    toast.success('Audit logs exported successfully');
+    toast.success('Audit logs exported');
   };
+
+  const formatCountdown = (ms: number) => {
+    const minutes = Math.floor(ms / 60000);
+    const seconds = Math.floor((ms % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const activeSessions = sessions.filter(s => s.is_active);
+  const inactiveSessions = sessions.filter(s => !s.is_active);
 
   const renderMainContent = () => {
     switch (activeTool) {
+      case 'live':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Activity className="w-5 h-5 text-emerald-500 animate-pulse" />
+                Live Activity Monitor
+              </h3>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600">
+                  <Wifi className="w-3 h-3 mr-1" />
+                  {activeSessions.length} online
+                </Badge>
+                <Badge variant="outline" className="bg-slate-500/10 text-slate-600">
+                  <WifiOff className="w-3 h-3 mr-1" />
+                  {inactiveSessions.length} offline
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Active Users */}
+              <Card className="border-emerald-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <Wifi className="w-4 h-4 text-emerald-500" />
+                    Active Users ({activeSessions.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[300px]">
+                    {activeSessions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">No active users</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {activeSessions.map((session) => (
+                          <div key={session.id} className="flex items-center gap-3 p-2 bg-emerald-500/5 rounded-lg">
+                            <div className="relative">
+                              <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                <User className="w-4 h-4 text-emerald-600" />
+                              </div>
+                              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-background" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{session.full_name || session.email || 'Unknown'}</p>
+                              <p className="text-xs text-muted-foreground truncate">{session.current_page || '/'}</p>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(session.last_activity), { addSuffix: true })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+
+              {/* Recently Inactive */}
+              <Card className="border-slate-500/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2">
+                    <WifiOff className="w-4 h-4 text-slate-500" />
+                    Recently Inactive ({inactiveSessions.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="h-[300px]">
+                    {inactiveSessions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">No inactive sessions</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {inactiveSessions.slice(0, 15).map((session) => (
+                          <div key={session.id} className="flex items-center gap-3 p-2 bg-muted/30 rounded-lg">
+                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                              <User className="w-4 h-4 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{session.full_name || session.email || 'Unknown'}</p>
+                              <p className="text-xs text-muted-foreground truncate">Last: {session.current_page || '/'}</p>
+                            </div>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(session.last_activity), { addSuffix: true })}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        );
+
+      case 'reports':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">System Reports</h3>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <Timer className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-muted-foreground">Next report in:</span>
+                  <Badge variant="outline">{formatCountdown(nextReportIn)}</Badge>
+                </div>
+                <Button
+                  size="sm"
+                  onClick={generateSystemReport}
+                  disabled={generatingReport}
+                >
+                  {generatingReport ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <FileText className="w-4 h-4 mr-2" />}
+                  Generate Now
+                </Button>
+              </div>
+            </div>
+
+            {/* Auto-report progress */}
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="py-3">
+                <div className="flex items-center gap-4">
+                  <Bell className="w-5 h-5 text-primary" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">Auto-Report Timer</span>
+                      <span className="text-xs text-muted-foreground">Every 10 minutes</span>
+                    </div>
+                    <Progress value={((AUTO_REPORT_INTERVAL - nextReportIn) / AUTO_REPORT_INTERVAL) * 100} className="h-2" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <ScrollArea className="h-[400px]">
+              {reports.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No reports generated yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {reports.map((report) => (
+                    <Card key={report.id} className="hover:bg-muted/30 transition-colors">
+                      <CardContent className="py-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className={cn(
+                              'w-10 h-10 rounded-lg flex items-center justify-center',
+                              report.issues_detected > 0 ? 'bg-orange-500/10' : 'bg-emerald-500/10'
+                            )}>
+                              {report.issues_detected > 0 ? (
+                                <AlertTriangle className="w-5 h-5 text-orange-500" />
+                              ) : (
+                                <CheckCircle className="w-5 h-5 text-emerald-500" />
+                              )}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium">
+                                {report.report_type === 'periodic' ? 'Periodic Report' : 'Manual Report'}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(report.created_at), 'PPpp')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant={report.issues_detected > 0 ? 'destructive' : 'secondary'}>
+                              {report.issues_detected} issues
+                            </Badge>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        );
+
+      case 'analytics':
+        return (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">System Analytics</h3>
+            
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card className="bg-emerald-500/5">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-3">
+                    <ArrowUpCircle className="w-8 h-8 text-emerald-500" />
+                    <div>
+                      <p className="text-2xl font-bold">{stats.insertsCount}</p>
+                      <p className="text-xs text-muted-foreground">Inserts</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-blue-500/5">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-3">
+                    <Edit className="w-8 h-8 text-blue-500" />
+                    <div>
+                      <p className="text-2xl font-bold">{stats.updatesCount}</p>
+                      <p className="text-xs text-muted-foreground">Updates</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-red-500/5">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-3">
+                    <ArrowDownCircle className="w-8 h-8 text-red-500" />
+                    <div>
+                      <p className="text-2xl font-bold">{stats.deletesCount}</p>
+                      <p className="text-xs text-muted-foreground">Deletes</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card className="bg-purple-500/5">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-3">
+                    <TrendingUp className="w-8 h-8 text-purple-500" />
+                    <div>
+                      <p className="text-2xl font-bold">{stats.totalActions}</p>
+                      <p className="text-xs text-muted-foreground">Total Actions</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Activity Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm">Inserts</span>
+                      <span className="text-sm text-muted-foreground">{stats.insertsCount}</span>
+                    </div>
+                    <Progress value={(stats.insertsCount / Math.max(stats.totalActions, 1)) * 100} className="h-2 bg-muted" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm">Updates</span>
+                      <span className="text-sm text-muted-foreground">{stats.updatesCount}</span>
+                    </div>
+                    <Progress value={(stats.updatesCount / Math.max(stats.totalActions, 1)) * 100} className="h-2 bg-muted" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between mb-1">
+                      <span className="text-sm">Deletes</span>
+                      <span className="text-sm text-muted-foreground">{stats.deletesCount}</span>
+                    </div>
+                    <Progress value={(stats.deletesCount / Math.max(stats.totalActions, 1)) * 100} className="h-2 bg-muted" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        );
+
       case 'users':
         return (
           <div className="space-y-4">
@@ -353,46 +712,48 @@ export default function SuperAdmin() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((user, index) => (
-                    <TableRow key={user.id} className="hover:bg-muted/30">
-                      <TableCell className="font-mono text-xs text-muted-foreground">
-                        {index + 1}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                            <User className="w-4 h-4 text-primary" />
+                  {users.map((user, index) => {
+                    const isOnline = activeSessions.some(s => s.user_id === user.id);
+                    return (
+                      <TableRow key={user.id} className="hover:bg-muted/30">
+                        <TableCell className="font-mono text-xs text-muted-foreground">{index + 1}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="relative">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <User className="w-4 h-4 text-primary" />
+                              </div>
+                              {isOnline && (
+                                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-background" />
+                              )}
+                            </div>
+                            <span className="font-medium">{user.full_name || 'No Name'}</span>
                           </div>
-                          <span className="font-medium">{user.full_name || 'No Name'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {user.email}
-                      </TableCell>
-                      <TableCell>
-                        <Badge 
-                          variant="outline"
-                          className={cn(
-                            user.role === 'super_admin' && 'bg-purple-500/15 text-purple-700 border-purple-500/30',
-                            user.role === 'admin' && 'bg-red-500/15 text-red-700 border-red-500/30',
-                            user.role === 'director' && 'bg-blue-500/15 text-blue-700 border-blue-500/30',
-                            user.role === 'manager' && 'bg-cyan-500/15 text-cyan-700 border-cyan-500/30',
-                          )}
-                        >
-                          {user.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm">{user.department_name || '—'}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="text-xs text-muted-foreground">Active</span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{user.email}</TableCell>
+                        <TableCell>
+                          <Badge 
+                            variant="outline"
+                            className={cn(
+                              user.role === 'super_admin' && 'bg-purple-500/15 text-purple-700 border-purple-500/30',
+                              user.role === 'admin' && 'bg-red-500/15 text-red-700 border-red-500/30',
+                              user.role === 'director' && 'bg-blue-500/15 text-blue-700 border-blue-500/30',
+                              user.role === 'manager' && 'bg-cyan-500/15 text-cyan-700 border-cyan-500/30',
+                            )}
+                          >
+                            {user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell><span className="text-sm">{user.department_name || '—'}</span></TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1">
+                            <div className={cn('w-2 h-2 rounded-full', isOnline ? 'bg-emerald-500' : 'bg-slate-400')} />
+                            <span className="text-xs text-muted-foreground">{isOnline ? 'Online' : 'Offline'}</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </ScrollArea>
@@ -435,27 +796,7 @@ export default function SuperAdmin() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">System Audit Logs</h3>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary">{filteredLogs.length} records</Badge>
-                <div className="flex border rounded-lg overflow-hidden">
-                  <Button
-                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="rounded-none h-8"
-                    onClick={() => setViewMode('list')}
-                  >
-                    <Layers className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="rounded-none h-8"
-                    onClick={() => setViewMode('compact')}
-                  >
-                    <Database className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
+              <Badge variant="secondary">{filteredLogs.length} records</Badge>
             </div>
 
             {loading ? (
@@ -491,9 +832,7 @@ export default function SuperAdmin() {
                           className="cursor-pointer hover:bg-muted/30 transition-colors"
                           onClick={() => setSelectedLog(log)}
                         >
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {index + 1}
-                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{index + 1}</TableCell>
                           <TableCell>
                             <Badge variant="outline" className="font-normal text-xs">
                               {getDepartmentName(log.department_id)}
@@ -505,12 +844,8 @@ export default function SuperAdmin() {
                                 <User className="w-3.5 h-3.5 text-muted-foreground" />
                               </div>
                               <div>
-                                <div className="font-medium text-sm leading-tight">
-                                  {log.user_name || 'System'}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {log.user_email?.split('@')[0] || 'system'}
-                                </div>
+                                <div className="font-medium text-sm leading-tight">{log.user_name || 'System'}</div>
+                                <div className="text-xs text-muted-foreground">{log.user_email?.split('@')[0] || 'system'}</div>
                               </div>
                             </div>
                           </TableCell>
@@ -521,9 +856,7 @@ export default function SuperAdmin() {
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">
-                              {log.table_name.replace(/_/g, '_')}
-                            </code>
+                            <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{log.table_name}</code>
                           </TableCell>
                           <TableCell className="font-mono text-xs text-muted-foreground">
                             {format(new Date(log.created_at), 'MMM dd, HH:mm')}
@@ -559,63 +892,45 @@ export default function SuperAdmin() {
               <p className="text-xs text-slate-400">Complete system control & monitoring</p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-2 px-4">
+
+          <div className="flex items-center gap-3 px-4">
+            {/* Live indicator */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/20 rounded-full">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs text-emerald-400 font-medium">{stats.activeNow} online</span>
+            </div>
+
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
                 placeholder="Search records..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 w-[200px] h-9 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-purple-500"
+                className="pl-9 w-[200px] h-9 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500"
               />
             </div>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={exportToExcel}
-              className="h-9 border-slate-700 bg-slate-800/50 text-white hover:bg-slate-700"
-            >
+            <Button variant="outline" size="sm" onClick={exportToExcel} className="h-9 border-slate-700 bg-slate-800/50 text-white hover:bg-slate-700">
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={fetchData}
-              disabled={loading}
-              className="h-9 border-slate-700 bg-slate-800/50 text-white hover:bg-slate-700"
-            >
+            <Button variant="outline" size="sm" onClick={() => fetchData()} disabled={loading} className="h-9 border-slate-700 bg-slate-800/50 text-white hover:bg-slate-700">
               <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
             </Button>
           </div>
         </div>
 
-        {/* Category tabs - secondary bar */}
+        {/* Filters Bar */}
         <div className="flex items-center gap-1 px-1 py-2 bg-slate-100 dark:bg-slate-900 rounded-lg mb-4 overflow-x-auto">
-          <Button
-            variant={tableFilter === 'all' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setTableFilter('all')}
-            className="shrink-0"
-          >
+          <Button variant={tableFilter === 'all' ? 'default' : 'ghost'} size="sm" onClick={() => setTableFilter('all')} className="shrink-0">
             All Tables
           </Button>
-          {tables.slice(0, 6).map((table) => (
-            <Button
-              key={table}
-              variant={tableFilter === table ? 'default' : 'ghost'}
-              size="sm"
-              onClick={() => setTableFilter(table)}
-              className="shrink-0 capitalize"
-            >
+          {tables.slice(0, 5).map((table) => (
+            <Button key={table} variant={tableFilter === table ? 'default' : 'ghost'} size="sm" onClick={() => setTableFilter(table)} className="shrink-0 capitalize">
               {table.replace(/_/g, ' ')}
             </Button>
           ))}
           <Select value={actionFilter} onValueChange={setActionFilter}>
-            <SelectTrigger className="w-[120px] h-8">
-              <SelectValue placeholder="Action" />
-            </SelectTrigger>
+            <SelectTrigger className="w-[120px] h-8"><SelectValue placeholder="Action" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Actions</SelectItem>
               <SelectItem value="INSERT">Insert</SelectItem>
@@ -624,23 +939,19 @@ export default function SuperAdmin() {
             </SelectContent>
           </Select>
           <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-            <SelectTrigger className="w-[140px] h-8">
-              <SelectValue placeholder="Department" />
-            </SelectTrigger>
+            <SelectTrigger className="w-[140px] h-8"><SelectValue placeholder="Department" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Depts</SelectItem>
               {departments.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id}>
-                  {dept.name}
-                </SelectItem>
+                <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Main Content Area */}
+        {/* Main Content */}
         <div className="flex gap-4 flex-1 min-h-0">
-          {/* Left Sidebar - Tools */}
+          {/* Left Sidebar */}
           <div className="w-[220px] shrink-0 space-y-2">
             <Card className="overflow-hidden">
               <div className="p-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
@@ -656,16 +967,12 @@ export default function SuperAdmin() {
                     onClick={() => setActiveTool(tool.id)}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all",
-                      activeTool === tool.id 
-                        ? "bg-primary/10 text-primary font-medium" 
-                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                      activeTool === tool.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-muted-foreground hover:text-foreground"
                     )}
                   >
                     <tool.icon className="w-4 h-4 shrink-0" />
                     <span className="text-sm">{tool.label}</span>
-                    {activeTool === tool.id && (
-                      <ChevronRight className="w-4 h-4 ml-auto" />
-                    )}
+                    {activeTool === tool.id && <ChevronRight className="w-4 h-4 ml-auto" />}
                   </button>
                 ))}
               </CardContent>
@@ -696,10 +1003,10 @@ export default function SuperAdmin() {
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Database className="w-4 h-4" />
-                    <span>Total Actions</span>
+                    <Wifi className="w-4 h-4" />
+                    <span>Online Now</span>
                   </div>
-                  <span className="font-bold">{stats.totalActions}</span>
+                  <span className="font-bold text-emerald-600">{stats.activeNow}</span>
                 </div>
                 <hr className="my-2" />
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -720,7 +1027,7 @@ export default function SuperAdmin() {
             </Card>
           </div>
 
-          {/* Main Content */}
+          {/* Main Content Area */}
           <Card className="flex-1 min-w-0">
             <CardContent className="p-4 h-full">
               {renderMainContent()}
@@ -736,9 +1043,7 @@ export default function SuperAdmin() {
                 {selectedLog && actionIcons[selectedLog.action]}
                 Action Details
               </DialogTitle>
-              <DialogDescription>
-                Complete details of the selected action
-              </DialogDescription>
+              <DialogDescription>Complete details of the selected action</DialogDescription>
             </DialogHeader>
             {selectedLog && (
               <div className="space-y-4">
