@@ -19,16 +19,25 @@ import {
   Edit,
   Trash2,
   Plus,
-  Filter,
   Calendar,
   User,
   Users,
   Database,
-  FileSpreadsheet,
   Download,
   Building2,
   ChevronRight,
-  AlertTriangle
+  FileText,
+  Settings,
+  Lock,
+  BarChart3,
+  Clock,
+  Globe,
+  History,
+  UserCheck,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Layers
 } from 'lucide-react';
 import {
   Table,
@@ -47,8 +56,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface AuditLog {
   id: string;
@@ -84,16 +93,35 @@ interface UserWithDepartment {
 }
 
 const actionIcons: Record<string, React.ReactNode> = {
-  INSERT: <Plus className="w-4 h-4 text-green-500" />,
-  UPDATE: <Edit className="w-4 h-4 text-blue-500" />,
-  DELETE: <Trash2 className="w-4 h-4 text-red-500" />,
+  INSERT: <Plus className="w-3.5 h-3.5" />,
+  UPDATE: <Edit className="w-3.5 h-3.5" />,
+  DELETE: <Trash2 className="w-3.5 h-3.5" />,
 };
 
 const actionColors: Record<string, string> = {
-  INSERT: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  UPDATE: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  DELETE: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  INSERT: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+  UPDATE: 'bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30',
+  DELETE: 'bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30',
 };
+
+// Admin tools sidebar items
+const sidebarTools = [
+  { id: 'audit', label: 'Audit Logs', icon: History, description: 'System activity history' },
+  { id: 'users', label: 'User Overview', icon: Users, description: 'All system users' },
+  { id: 'departments', label: 'Departments', icon: Building2, description: 'Department management' },
+  { id: 'reports', label: 'Reports', icon: FileText, description: 'System reports' },
+  { id: 'permissions', label: 'Permissions', icon: Lock, description: 'Access control' },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Usage statistics' },
+  { id: 'settings', label: 'Settings', icon: Settings, description: 'System configuration' },
+];
+
+// Quick stats items
+const quickStatItems = [
+  { id: 'online', icon: Globe, label: 'Online Now', color: 'text-emerald-500' },
+  { id: 'pending', icon: Clock, label: 'Pending', color: 'text-amber-500' },
+  { id: 'approved', icon: CheckCircle, label: 'Approved', color: 'text-blue-500' },
+  { id: 'flagged', icon: AlertTriangle, label: 'Flagged', color: 'text-red-500' },
+];
 
 export default function SuperAdmin() {
   const { highestRole, loading: roleLoading } = useUserRole();
@@ -108,6 +136,8 @@ export default function SuperAdmin() {
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [activeTool, setActiveTool] = useState('audit');
+  const [viewMode, setViewMode] = useState<'list' | 'compact'>('list');
   const [stats, setStats] = useState<SystemStats>({
     totalUsers: 0,
     totalDepartments: 0,
@@ -222,7 +252,7 @@ export default function SuperAdmin() {
                 Access Denied
               </CardTitle>
               <CardDescription>
-                This page is restricted to Super Admins only. Regular admins do not have access to this dashboard.
+                This page is restricted to Super Admins only. Regular admins do not have access.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -285,7 +315,6 @@ export default function SuperAdmin() {
       'Record ID': log.record_id || 'N/A',
     }));
 
-    // Create CSV content
     const headers = Object.keys(exportData[0] || {}).join(',');
     const rows = exportData.map((row) =>
       Object.values(row)
@@ -294,7 +323,6 @@ export default function SuperAdmin() {
     );
     const csv = [headers, ...rows].join('\n');
 
-    // Download
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -303,322 +331,402 @@ export default function SuperAdmin() {
     toast.success('Audit logs exported successfully');
   };
 
-  return (
-    <DashboardLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
-              <Shield className="w-6 h-6 text-purple-600" />
-              Super Admin Dashboard
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Complete system control and monitoring
-            </p>
+  const renderMainContent = () => {
+    switch (activeTool) {
+      case 'users':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">All System Users</h3>
+              <Badge variant="secondary">{users.length} users</Badge>
+            </div>
+            <ScrollArea className="h-[calc(100vh-380px)]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/50">
+                    <TableHead className="w-[50px]">#</TableHead>
+                    <TableHead>User</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead className="w-[80px]">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user, index) => (
+                    <TableRow key={user.id} className="hover:bg-muted/30">
+                      <TableCell className="font-mono text-xs text-muted-foreground">
+                        {index + 1}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                            <User className="w-4 h-4 text-primary" />
+                          </div>
+                          <span className="font-medium">{user.full_name || 'No Name'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {user.email}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline"
+                          className={cn(
+                            user.role === 'super_admin' && 'bg-purple-500/15 text-purple-700 border-purple-500/30',
+                            user.role === 'admin' && 'bg-red-500/15 text-red-700 border-red-500/30',
+                            user.role === 'director' && 'bg-blue-500/15 text-blue-700 border-blue-500/30',
+                            user.role === 'manager' && 'bg-cyan-500/15 text-cyan-700 border-cyan-500/30',
+                          )}
+                        >
+                          {user.role}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{user.department_name || '—'}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                          <span className="text-xs text-muted-foreground">Active</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={exportToExcel} variant="outline" disabled={loading}>
-              <Download className="w-4 h-4 mr-2" />
-              Export to Excel
-            </Button>
-            <Button onClick={fetchData} variant="outline" disabled={loading}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
+        );
 
-        {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-7">
-          <Card className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/20 border-purple-200 dark:border-purple-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300 flex items-center gap-2">
-                <Users className="w-4 h-4" /> Total Users
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-purple-900 dark:text-purple-100">{stats.totalUsers}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/20 border-blue-200 dark:border-blue-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300 flex items-center gap-2">
-                <Building2 className="w-4 h-4" /> Departments
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">{stats.totalDepartments}</div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-950/30 dark:to-amber-900/20 border-amber-200 dark:border-amber-800">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-amber-700 dark:text-amber-300 flex items-center gap-2">
-                <Activity className="w-4 h-4" /> Active (24h)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">{stats.activeUsers24h}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Actions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.totalActions}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Plus className="w-4 h-4 text-green-500" /> Inserts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-green-600">{stats.insertsCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Edit className="w-4 h-4 text-blue-500" /> Updates
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-600">{stats.updatesCount}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Trash2 className="w-4 h-4 text-red-500" /> Deletes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">{stats.deletesCount}</div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Tabs for different views */}
-        <Tabs defaultValue="audit" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 lg:w-[400px]">
-            <TabsTrigger value="audit" className="flex items-center gap-2">
-              <Activity className="w-4 h-4" />
-              Audit Logs
-            </TabsTrigger>
-            <TabsTrigger value="users" className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              User Overview
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Audit Logs Tab */}
-          <TabsContent value="audit">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Database className="w-5 h-5" />
-                      System Audit Logs
-                    </CardTitle>
-                    <CardDescription>
-                      Complete history of all user actions across the system
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        placeholder="Search logs..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="pl-8 w-[180px]"
-                      />
+      case 'departments':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">Department Management</h3>
+              <Badge variant="secondary">{departments.length} departments</Badge>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {departments.map((dept) => (
+                <Card key={dept.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                  <CardContent className="pt-4">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-primary" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-semibold">{dept.name}</h4>
+                        <p className="text-xs text-muted-foreground">{dept.code}</p>
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                          {dept.description || 'No description'}
+                        </p>
+                      </div>
                     </div>
-                    <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                      <SelectTrigger className="w-[160px]">
-                        <Building2 className="w-4 h-4 mr-2" />
-                        <SelectValue placeholder="Department" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Departments</SelectItem>
-                        {departments.map((dept) => (
-                          <SelectItem key={dept.id} value={dept.id}>
-                            {dept.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={tableFilter} onValueChange={setTableFilter}>
-                      <SelectTrigger className="w-[160px]">
-                        <Filter className="w-4 h-4 mr-2" />
-                        <SelectValue placeholder="Table" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Tables</SelectItem>
-                        {tables.map((table) => (
-                          <SelectItem key={table} value={table}>
-                            {table.replace(/_/g, ' ')}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select value={actionFilter} onValueChange={setActionFilter}>
-                      <SelectTrigger className="w-[130px]">
-                        <SelectValue placeholder="Action" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Actions</SelectItem>
-                        <SelectItem value="INSERT">Insert</SelectItem>
-                        <SelectItem value="UPDATE">Update</SelectItem>
-                        <SelectItem value="DELETE">Delete</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  </div>
-                ) : (
-                  <ScrollArea className="h-[600px]">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[60px]">No.</TableHead>
-                          <TableHead className="w-[140px]">Department</TableHead>
-                          <TableHead>User</TableHead>
-                          <TableHead>Action</TableHead>
-                          <TableHead>Table</TableHead>
-                          <TableHead className="w-[160px]">Timestamp</TableHead>
-                          <TableHead className="w-[80px]">Details</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredLogs.length === 0 ? (
-                          <TableRow>
-                            <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                              No audit logs found
-                            </TableCell>
-                          </TableRow>
-                        ) : (
-                          filteredLogs.map((log, index) => (
-                            <TableRow 
-                              key={log.id}
-                              className="cursor-pointer hover:bg-muted/50"
-                              onClick={() => setSelectedLog(log)}
-                            >
-                              <TableCell className="font-mono text-sm font-semibold">
-                                {index + 1}
-                              </TableCell>
-                              <TableCell>
-                                <Badge variant="outline" className="font-normal">
-                                  {getDepartmentName(log.department_id)}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <User className="w-4 h-4 text-muted-foreground" />
-                                  <div>
-                                    <div className="font-medium text-sm">
-                                      {log.user_name || 'System'}
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                      {log.user_email || 'system'}
-                                    </div>
-                                  </div>
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Badge className={actionColors[log.action]}>
-                                  <span className="flex items-center gap-1">
-                                    {actionIcons[log.action]}
-                                    {log.action}
-                                  </span>
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <code className="text-xs bg-muted px-2 py-1 rounded">
-                                  {log.table_name}
-                                </code>
-                              </TableCell>
-                              <TableCell className="font-mono text-xs">
-                                <div className="flex items-center gap-2">
-                                  <Calendar className="w-3 h-3 text-muted-foreground" />
-                                  {format(new Date(log.created_at), 'MMM dd, HH:mm:ss')}
-                                </div>
-                              </TableCell>
-                              <TableCell>
-                                <Button variant="ghost" size="sm">
-                                  <Eye className="w-4 h-4" />
-                                  <ChevronRight className="w-3 h-3 ml-1" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        )}
-                      </TableBody>
-                    </Table>
-                  </ScrollArea>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        );
 
-          {/* Users Overview Tab */}
-          <TabsContent value="users">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  All System Users
-                </CardTitle>
-                <CardDescription>
-                  Overview of all users and their department assignments
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[500px]">
-                  <Table>
-                    <TableHeader>
+      default:
+        // Audit logs view
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">System Audit Logs</h3>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{filteredLogs.length} records</Badge>
+                <div className="flex border rounded-lg overflow-hidden">
+                  <Button
+                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="rounded-none h-8"
+                    onClick={() => setViewMode('list')}
+                  >
+                    <Layers className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'compact' ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="rounded-none h-8"
+                    onClick={() => setViewMode('compact')}
+                  >
+                    <Database className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <ScrollArea className="h-[calc(100vh-380px)]">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-[50px]">#</TableHead>
+                      <TableHead className="w-[120px]">Department</TableHead>
+                      <TableHead>User</TableHead>
+                      <TableHead className="w-[100px]">Action</TableHead>
+                      <TableHead>Table</TableHead>
+                      <TableHead className="w-[150px]">Timestamp</TableHead>
+                      <TableHead className="w-[60px] text-center">View</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredLogs.length === 0 ? (
                       <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Email</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Primary Department</TableHead>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                          <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          No audit logs found
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {users.map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">
-                            {user.full_name || 'No Name'}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {user.email}
+                    ) : (
+                      filteredLogs.map((log, index) => (
+                        <TableRow 
+                          key={log.id}
+                          className="cursor-pointer hover:bg-muted/30 transition-colors"
+                          onClick={() => setSelectedLog(log)}
+                        >
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {index + 1}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={user.role === 'super_admin' ? 'default' : user.role === 'admin' ? 'secondary' : 'outline'}>
-                              {user.role}
+                            <Badge variant="outline" className="font-normal text-xs">
+                              {getDepartmentName(log.department_id)}
                             </Badge>
                           </TableCell>
                           <TableCell>
-                            {user.department_name || <span className="text-muted-foreground">Not assigned</span>}
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+                                <User className="w-3.5 h-3.5 text-muted-foreground" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-sm leading-tight">
+                                  {log.user_name || 'System'}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {log.user_email?.split('@')[0] || 'system'}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn('text-xs gap-1', actionColors[log.action])}>
+                              {actionIcons[log.action]}
+                              {log.action}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">
+                              {log.table_name.replace(/_/g, '_')}
+                            </code>
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">
+                            {format(new Date(log.created_at), 'MMM dd, HH:mm')}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <Eye className="w-3.5 h-3.5" />
+                            </Button>
                           </TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </ScrollArea>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </ScrollArea>
+            )}
+          </div>
+        );
+    }
+  };
+
+  return (
+    <DashboardLayout>
+      <div className="flex flex-col h-[calc(100vh-120px)]">
+        {/* Header Bar */}
+        <div className="flex items-center justify-between px-1 py-3 border-b bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900 rounded-t-xl -mx-1 mb-4">
+          <div className="flex items-center gap-3 px-4">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center shadow-lg">
+              <Shield className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-white">Super Admin Dashboard</h1>
+              <p className="text-xs text-slate-400">Complete system control & monitoring</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2 px-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="Search records..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 w-[200px] h-9 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 focus-visible:ring-purple-500"
+              />
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={exportToExcel}
+              className="h-9 border-slate-700 bg-slate-800/50 text-white hover:bg-slate-700"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={fetchData}
+              disabled={loading}
+              className="h-9 border-slate-700 bg-slate-800/50 text-white hover:bg-slate-700"
+            >
+              <RefreshCw className={cn("w-4 h-4", loading && "animate-spin")} />
+            </Button>
+          </div>
+        </div>
+
+        {/* Category tabs - secondary bar */}
+        <div className="flex items-center gap-1 px-1 py-2 bg-slate-100 dark:bg-slate-900 rounded-lg mb-4 overflow-x-auto">
+          <Button
+            variant={tableFilter === 'all' ? 'default' : 'ghost'}
+            size="sm"
+            onClick={() => setTableFilter('all')}
+            className="shrink-0"
+          >
+            All Tables
+          </Button>
+          {tables.slice(0, 6).map((table) => (
+            <Button
+              key={table}
+              variant={tableFilter === table ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setTableFilter(table)}
+              className="shrink-0 capitalize"
+            >
+              {table.replace(/_/g, ' ')}
+            </Button>
+          ))}
+          <Select value={actionFilter} onValueChange={setActionFilter}>
+            <SelectTrigger className="w-[120px] h-8">
+              <SelectValue placeholder="Action" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Actions</SelectItem>
+              <SelectItem value="INSERT">Insert</SelectItem>
+              <SelectItem value="UPDATE">Update</SelectItem>
+              <SelectItem value="DELETE">Delete</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <SelectTrigger className="w-[140px] h-8">
+              <SelectValue placeholder="Department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Depts</SelectItem>
+              {departments.map((dept) => (
+                <SelectItem key={dept.id} value={dept.id}>
+                  {dept.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Main Content Area */}
+        <div className="flex gap-4 flex-1 min-h-0">
+          {/* Left Sidebar - Tools */}
+          <div className="w-[220px] shrink-0 space-y-2">
+            <Card className="overflow-hidden">
+              <div className="p-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+                <h3 className="font-semibold text-sm flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Admin Tools
+                </h3>
+              </div>
+              <CardContent className="p-2">
+                {sidebarTools.map((tool) => (
+                  <button
+                    key={tool.id}
+                    onClick={() => setActiveTool(tool.id)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all",
+                      activeTool === tool.id 
+                        ? "bg-primary/10 text-primary font-medium" 
+                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <tool.icon className="w-4 h-4 shrink-0" />
+                    <span className="text-sm">{tool.label}</span>
+                    {activeTool === tool.id && (
+                      <ChevronRight className="w-4 h-4 ml-auto" />
+                    )}
+                  </button>
+                ))}
               </CardContent>
             </Card>
-          </TabsContent>
-        </Tabs>
+
+            {/* Quick Stats */}
+            <Card>
+              <CardHeader className="py-3 px-4">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-muted-foreground" />
+                  Quick Stats
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 pt-0 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Users className="w-4 h-4" />
+                    <span>Total Users</span>
+                  </div>
+                  <span className="font-bold">{stats.totalUsers}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Activity className="w-4 h-4" />
+                    <span>Active (24h)</span>
+                  </div>
+                  <span className="font-bold text-emerald-600">{stats.activeUsers24h}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Database className="w-4 h-4" />
+                    <span>Total Actions</span>
+                  </div>
+                  <span className="font-bold">{stats.totalActions}</span>
+                </div>
+                <hr className="my-2" />
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-emerald-500/10 rounded-lg p-2">
+                    <div className="text-lg font-bold text-emerald-600">{stats.insertsCount}</div>
+                    <div className="text-[10px] text-muted-foreground">Inserts</div>
+                  </div>
+                  <div className="bg-blue-500/10 rounded-lg p-2">
+                    <div className="text-lg font-bold text-blue-600">{stats.updatesCount}</div>
+                    <div className="text-[10px] text-muted-foreground">Updates</div>
+                  </div>
+                  <div className="bg-red-500/10 rounded-lg p-2">
+                    <div className="text-lg font-bold text-red-600">{stats.deletesCount}</div>
+                    <div className="text-[10px] text-muted-foreground">Deletes</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Main Content */}
+          <Card className="flex-1 min-w-0">
+            <CardContent className="p-4 h-full">
+              {renderMainContent()}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Action Detail Dialog */}
         <Dialog open={!!selectedLog} onOpenChange={() => setSelectedLog(null)}>
