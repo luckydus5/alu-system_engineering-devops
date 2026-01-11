@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -37,6 +38,11 @@ import {
   Eye,
   Loader2,
   AlertCircle,
+  Calendar,
+  CalendarDays,
+  Users,
+  CheckSquare,
+  Megaphone,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { cn } from '@/lib/utils';
@@ -45,23 +51,30 @@ import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { useSupportTickets } from '@/hooks/useSupportTickets';
 import { useITEquipment, ITEquipmentItem } from '@/hooks/useITEquipment';
+import { useOfficeActivities, OfficeActivity, CreateActivityData } from '@/hooks/useOfficeActivities';
 import { ITEquipmentDetailDialog } from './ITEquipmentDetailDialog';
 import { ITEquipmentFolderView } from './ITEquipmentFolderView';
+import { ActivityCard } from '@/components/office/ActivityCard';
+import { AddActivityDialog } from '@/components/office/AddActivityDialog';
 
 interface ITDashboardProps {
   department: Department;
   canManage: boolean;
 }
 
-type TabType = 'overview' | 'tickets' | 'equipment';
+type TabType = 'overview' | 'tickets' | 'equipment' | 'activities';
 
 export function ITDashboard({ department, canManage }: ITDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedEquipment, setSelectedEquipment] = useState<ITEquipmentItem | null>(null);
   const [equipmentDetailOpen, setEquipmentDetailOpen] = useState(false);
+  const [addActivityDialogOpen, setAddActivityDialogOpen] = useState(false);
+  const [editActivity, setEditActivity] = useState<OfficeActivity | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
   // Fetch real data
@@ -71,6 +84,20 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
   });
 
   const { equipment, folders, loading: equipmentLoading, stats: equipmentStats, refetch: refetchEquipment } = useITEquipment();
+
+  // Activities data
+  const {
+    activities,
+    loading: activitiesLoading,
+    stats: activityStats,
+    todayActivities,
+    upcomingActivities,
+    createActivity,
+    updateActivity,
+    deleteActivity,
+    togglePin,
+    refetch: refetchActivities,
+  } = useOfficeActivities(department.id);
 
   const deptColors = getDepartmentColors(department.code);
   const DeptIcon = getDepartmentIcon(department.code);
@@ -125,6 +152,7 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
   const handleRefresh = () => {
     refetchTickets();
     refetchEquipment();
+    refetchActivities();
     toast({ title: 'Refreshed', description: 'Data has been refreshed' });
   };
 
@@ -132,6 +160,50 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
     setSelectedEquipment(item);
     setEquipmentDetailOpen(true);
   };
+
+  // Activity handlers
+  const handleActivitySubmit = async (data: CreateActivityData) => {
+    setIsSubmitting(true);
+    if (editActivity) {
+      await updateActivity(editActivity.id, data);
+      setEditActivity(null);
+    } else {
+      await createActivity({
+        ...data,
+        department_id: department.id,
+      });
+    }
+    setIsSubmitting(false);
+    setAddActivityDialogOpen(false);
+  };
+
+  const handleEditActivity = (activity: OfficeActivity) => {
+    setEditActivity(activity);
+    setAddActivityDialogOpen(true);
+  };
+
+  const handleActivityStatusChange = async (id: string, status: OfficeActivity['status']) => {
+    await updateActivity(id, { status });
+  };
+
+  const handleActivityDialogClose = (open: boolean) => {
+    if (!open) {
+      setEditActivity(null);
+    }
+    setAddActivityDialogOpen(open);
+  };
+
+  // Filter activities
+  const filteredActivities = activities.filter((activity) => {
+    const matchesSearch =
+      searchQuery === '' ||
+      activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      activity.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesType = typeFilter === 'all' || activity.activity_type === typeFilter;
+    const matchesStatus = statusFilter === 'all' || activity.status === statusFilter;
+    return matchesSearch && matchesType && matchesStatus;
+  });
+
 
   // Filter equipment
   const filteredEquipment = equipment.filter(item => {
@@ -191,11 +263,20 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
               variant="secondary" 
               size="icon" 
               onClick={handleRefresh} 
-              disabled={isLoading}
+              disabled={isLoading || activitiesLoading}
               className="bg-white/20 hover:bg-white/30 text-white border-none"
             >
-              <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+              <RefreshCw className={cn('h-4 w-4', (isLoading || activitiesLoading) && 'animate-spin')} />
             </Button>
+            {canManage && activeTab === 'activities' && (
+              <Button 
+                onClick={() => setAddActivityDialogOpen(true)}
+                className="bg-white text-gray-800 hover:bg-white/90 shadow-lg"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                New Activity
+              </Button>
+            )}
           </div>
         </div>
 
@@ -238,6 +319,7 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
           { id: 'overview' as TabType, label: 'Overview', icon: LayoutGrid },
           { id: 'tickets' as TabType, label: 'Support Tickets', icon: Ticket },
           { id: 'equipment' as TabType, label: 'IT Equipment', icon: Monitor },
+          { id: 'activities' as TabType, label: 'Activities', icon: CalendarDays },
         ].map((tab) => (
           <Button
             key={tab.id}
@@ -538,11 +620,284 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
         </Card>
       )}
 
+      {/* Activities Tab */}
+      {activeTab === 'activities' && (
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left: Today's Activities & Upcoming */}
+          <div className="space-y-6">
+            {/* Today's Activities */}
+            <Card className="shadow-corporate overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-primary/10 to-transparent pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  Today
+                  <span className="text-xs font-normal text-muted-foreground ml-auto">
+                    {format(new Date(), 'EEEE, MMM d')}
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                {todayActivities.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No activities scheduled for today</p>
+                    {canManage && (
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setAddActivityDialogOpen(true)}
+                        className="mt-2"
+                      >
+                        Add one now
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {todayActivities.map((activity) => (
+                      <ActivityCard
+                        key={activity.id}
+                        activity={activity}
+                        canManage={canManage}
+                        onTogglePin={togglePin}
+                        onDelete={deleteActivity}
+                        onEdit={handleEditActivity}
+                        onStatusChange={handleActivityStatusChange}
+                        variant="compact"
+                      />
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Upcoming */}
+            <Card className="shadow-corporate">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <CalendarDays className="h-5 w-5 text-muted-foreground" />
+                  Upcoming (7 days)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3">
+                {upcomingActivities.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No upcoming activities
+                  </p>
+                ) : (
+                  <ScrollArea className="h-[300px]">
+                    <div className="space-y-2 pr-3">
+                      {upcomingActivities.map((activity) => (
+                        <ActivityCard
+                          key={activity.id}
+                          activity={activity}
+                          canManage={canManage}
+                          onTogglePin={togglePin}
+                          onDelete={deleteActivity}
+                          onEdit={handleEditActivity}
+                          onStatusChange={handleActivityStatusChange}
+                          variant="compact"
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right: All Activities */}
+          <div className="lg:col-span-2">
+            <Card className="shadow-corporate">
+              <CardHeader className="pb-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <CardTitle className="text-lg">All Activities</CardTitle>
+                  
+                  {/* Filters */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 h-9"
+                      />
+                    </div>
+
+                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                      <SelectTrigger className="w-[130px] h-9">
+                        <SelectValue placeholder="Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Types</SelectItem>
+                        <SelectItem value="meeting">Meetings</SelectItem>
+                        <SelectItem value="task">Tasks</SelectItem>
+                        <SelectItem value="announcement">Announcements</SelectItem>
+                        <SelectItem value="update">Updates</SelectItem>
+                        <SelectItem value="milestone">Milestones</SelectItem>
+                        <SelectItem value="event">Events</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger className="w-[130px] h-9">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="scheduled">Scheduled</SelectItem>
+                        <SelectItem value="in_progress">In Progress</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <div className="flex border rounded-lg overflow-hidden">
+                      <Button
+                        variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                        size="icon"
+                        className="rounded-none h-9 w-9"
+                        onClick={() => setViewMode('grid')}
+                      >
+                        <LayoutGrid className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant={viewMode === 'list' ? 'default' : 'ghost'}
+                        size="icon"
+                        className="rounded-none h-9 w-9"
+                        onClick={() => setViewMode('list')}
+                      >
+                        <List className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="all">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="all">All ({filteredActivities.length})</TabsTrigger>
+                    <TabsTrigger value="meetings">
+                      <Users className="h-4 w-4 mr-1" />
+                      Meetings ({activityStats.meetings})
+                    </TabsTrigger>
+                    <TabsTrigger value="tasks">
+                      <CheckSquare className="h-4 w-4 mr-1" />
+                      Tasks ({activityStats.tasks})
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="all">
+                    {activitiesLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : filteredActivities.length === 0 ? (
+                      <div className="text-center py-16">
+                        <Megaphone className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">No activities found</h3>
+                        <p className="text-muted-foreground mb-4">
+                          Start by creating your first activity
+                        </p>
+                        {canManage && (
+                          <Button onClick={() => setAddActivityDialogOpen(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create Activity
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className={cn('gap-4', viewMode === 'grid' ? 'grid md:grid-cols-2' : 'flex flex-col')}>
+                        {filteredActivities.map((activity) => (
+                          <ActivityCard
+                            key={activity.id}
+                            activity={activity}
+                            canManage={canManage}
+                            onTogglePin={togglePin}
+                            onDelete={deleteActivity}
+                            onEdit={handleEditActivity}
+                            onStatusChange={handleActivityStatusChange}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="meetings">
+                    {activitiesLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : filteredActivities.filter(a => a.activity_type === 'meeting').length === 0 ? (
+                      <div className="text-center py-16">
+                        <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">No meetings scheduled</h3>
+                      </div>
+                    ) : (
+                      <div className={cn('gap-4', viewMode === 'grid' ? 'grid md:grid-cols-2' : 'flex flex-col')}>
+                        {filteredActivities.filter(a => a.activity_type === 'meeting').map((activity) => (
+                          <ActivityCard
+                            key={activity.id}
+                            activity={activity}
+                            canManage={canManage}
+                            onTogglePin={togglePin}
+                            onDelete={deleteActivity}
+                            onEdit={handleEditActivity}
+                            onStatusChange={handleActivityStatusChange}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="tasks">
+                    {activitiesLoading ? (
+                      <div className="flex items-center justify-center py-12">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : filteredActivities.filter(a => a.activity_type === 'task').length === 0 ? (
+                      <div className="text-center py-16">
+                        <CheckSquare className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                        <h3 className="text-lg font-semibold mb-2">No tasks yet</h3>
+                      </div>
+                    ) : (
+                      <div className={cn('gap-4', viewMode === 'grid' ? 'grid md:grid-cols-2' : 'flex flex-col')}>
+                        {filteredActivities.filter(a => a.activity_type === 'task').map((activity) => (
+                          <ActivityCard
+                            key={activity.id}
+                            activity={activity}
+                            canManage={canManage}
+                            onTogglePin={togglePin}
+                            onDelete={deleteActivity}
+                            onEdit={handleEditActivity}
+                            onStatusChange={handleActivityStatusChange}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
       {/* Equipment Detail Dialog */}
       <ITEquipmentDetailDialog
         open={equipmentDetailOpen}
         onOpenChange={setEquipmentDetailOpen}
         item={selectedEquipment}
+      />
+
+      {/* Add/Edit Activity Dialog */}
+      <AddActivityDialog
+        open={addActivityDialogOpen}
+        onOpenChange={handleActivityDialogClose}
+        onSubmit={handleActivitySubmit}
+        editActivity={editActivity}
+        isSubmitting={isSubmitting}
       />
     </div>
   );
