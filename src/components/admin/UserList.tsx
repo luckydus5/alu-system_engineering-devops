@@ -184,10 +184,10 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.length === 0 ? (
+                {filteredUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                      No users found
+                      No users found in {adminDepartmentId ? 'your department' : 'the system'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -268,11 +268,13 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {roles.map((role) => (
-                    <SelectItem key={role.value} value={role.value}>
-                      {role.label}
-                    </SelectItem>
-                  ))}
+                  {roles
+                    .filter(role => isSuperAdmin || !['admin', 'super_admin'].includes(role.value))
+                    .map((role) => (
+                      <SelectItem key={role.value} value={role.value}>
+                        {role.label}
+                      </SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
             </div>
@@ -281,19 +283,25 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
               <Select
                 value={editForm.departmentId || 'none'}
                 onValueChange={(value) => setEditForm((prev) => ({ ...prev, departmentId: value === 'none' ? '' : value }))}
+                disabled={!isSuperAdmin && !!adminDepartmentId}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">No department</SelectItem>
-                  {departments.map((dept) => (
+                  {isSuperAdmin && <SelectItem value="none">No department</SelectItem>}
+                  {(isSuperAdmin ? departments : departments.filter(d => d.id === adminDepartmentId)).map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {!isSuperAdmin && (
+                <p className="text-xs text-muted-foreground">
+                  You can only manage users in your assigned department.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>

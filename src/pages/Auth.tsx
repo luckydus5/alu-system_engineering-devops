@@ -29,9 +29,18 @@ export default function Auth() {
   // Redirect if already logged in
   useEffect(() => {
     if (!loading && user) {
-      navigate('/');
+      navigate('/', { replace: true });
     }
   }, [user, loading, navigate]);
+
+  // Show loading state during initial auth check
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const validateField = (field: string, value: string, schema: z.ZodString) => {
     try {
