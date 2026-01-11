@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -19,15 +19,41 @@ interface Profile {
   phone: string | null;
 }
 
+// Global cache for user role data - persists across hook instances
+interface UserRoleCache {
+  userId: string;
+  roles: UserRole[];
+  profile: Profile | null;
+  highestRole: AppRole;
+  grantedDepartmentIds: string[];
+  timestamp: number;
+}
+
+let globalUserRoleCache: UserRoleCache | null = null;
+const ROLE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache for roles
+
 export function useUserRole() {
   const { user } = useAuth();
-  const [roles, setRoles] = useState<UserRole[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [highestRole, setHighestRole] = useState<AppRole>('staff');
-  const [grantedDepartmentIds, setGrantedDepartmentIds] = useState<string[]>([]);
+  const [roles, setRoles] = useState<UserRole[]>(() => 
+    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.roles : []
+  );
+  const [profile, setProfile] = useState<Profile | null>(() =>
+    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.profile : null
+  );
+  const [loading, setLoading] = useState(() => 
+    !(globalUserRoleCache?.userId === user?.id)
+  );
+  const [highestRole, setHighestRole] = useState<AppRole>(() =>
+    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.highestRole : 'staff'
+  );
+  const [grantedDepartmentIds, setGrantedDepartmentIds] = useState<string[]>(() =>
+    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.grantedDepartmentIds : []
+  );
+  
+  const fetchInProgress = useRef(false);
+  const lastUserId = useRef<string | null>(null);
 
-  useEffect(() => {
+  const fetchUserData = useCallback(async (forceRefresh = false) => {
     if (!user) {
       setRoles([]);
       setProfile(null);
@@ -37,57 +63,95 @@ export function useUserRole() {
       return;
     }
 
-    const fetchUserData = async () => {
-      setLoading(true);
-      try {
-        // Fetch user roles
-        const { data: rolesData, error: rolesError } = await supabase
+    // Check cache first
+    if (!forceRefresh && globalUserRoleCache && 
+        globalUserRoleCache.userId === user.id && 
+        Date.now() - globalUserRoleCache.timestamp < ROLE_CACHE_TTL) {
+      setRoles(globalUserRoleCache.roles);
+      setProfile(globalUserRoleCache.profile);
+      setHighestRole(globalUserRoleCache.highestRole);
+      setGrantedDepartmentIds(globalUserRoleCache.grantedDepartmentIds);
+      setLoading(false);
+      return;
+    }
+
+    // Prevent duplicate fetches
+    if (fetchInProgress.current && !forceRefresh) {
+      return;
+    }
+
+    try {
+      fetchInProgress.current = true;
+      // Don't show loading if we have cached data
+      if (!globalUserRoleCache || globalUserRoleCache.userId !== user.id) {
+        setLoading(true);
+      }
+
+      // Fetch all data in parallel
+      const [rolesResult, profileResult, accessResult] = await Promise.all([
+        supabase
           .from('user_roles')
           .select('id, role, department_id')
-          .eq('user_id', user.id);
-
-        if (rolesError) throw rolesError;
-
-        const typedRoles: UserRole[] = (rolesData || []).map(r => ({
-          ...r,
-          role: r.role as AppRole
-        }));
-        setRoles(typedRoles);
-
-        // Determine highest role
-        const roleHierarchy: AppRole[] = ['admin', 'director', 'manager', 'supervisor', 'staff'];
-        const highest = roleHierarchy.find(role => 
-          typedRoles.some(r => r.role === role)
-        ) || 'staff';
-        setHighestRole(highest);
-
-        // Fetch profile
-        const { data: profileData, error: profileError } = await supabase
+          .eq('user_id', user.id),
+        supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
-          .maybeSingle();
-
-        if (profileError) throw profileError;
-        setProfile(profileData);
-
-        // Fetch granted department access
-        const { data: accessData, error: accessError } = await supabase
+          .maybeSingle(),
+        supabase
           .from('user_department_access')
           .select('department_id')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+      ]);
 
-        if (accessError) throw accessError;
-        setGrantedDepartmentIds((accessData || []).map(a => a.department_id));
-      } catch (error) {
-        console.error('Error fetching user data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      if (rolesResult.error) throw rolesResult.error;
+      if (profileResult.error) throw profileResult.error;
+      if (accessResult.error) throw accessResult.error;
 
-    fetchUserData();
+      const typedRoles: UserRole[] = (rolesResult.data || []).map(r => ({
+        ...r,
+        role: r.role as AppRole
+      }));
+
+      // Determine highest role
+      const roleHierarchy: AppRole[] = ['admin', 'director', 'manager', 'supervisor', 'staff'];
+      const highest = roleHierarchy.find(role => 
+        typedRoles.some(r => r.role === role)
+      ) || 'staff';
+
+      const grantedIds = (accessResult.data || []).map(a => a.department_id);
+
+      // Update cache
+      globalUserRoleCache = {
+        userId: user.id,
+        roles: typedRoles,
+        profile: profileResult.data,
+        highestRole: highest,
+        grantedDepartmentIds: grantedIds,
+        timestamp: Date.now(),
+      };
+
+      setRoles(typedRoles);
+      setProfile(profileResult.data);
+      setHighestRole(highest);
+      setGrantedDepartmentIds(grantedIds);
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+    } finally {
+      setLoading(false);
+      fetchInProgress.current = false;
+    }
   }, [user]);
+
+  useEffect(() => {
+    // Only fetch if user changed or no cached data
+    if (user?.id !== lastUserId.current) {
+      lastUserId.current = user?.id || null;
+      fetchUserData();
+    } else if (user && roles.length === 0) {
+      fetchUserData();
+    }
+  }, [user, fetchUserData, roles.length]);
 
   const hasRole = (role: AppRole): boolean => {
     return roles.some(r => r.role === role);
@@ -115,5 +179,6 @@ export function useUserRole() {
     hasMinRole,
     isInDepartment,
     grantedDepartmentIds,
+    refetch: () => fetchUserData(true),
   };
 }
