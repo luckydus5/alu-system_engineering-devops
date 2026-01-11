@@ -44,20 +44,28 @@ Deno.serve(async (req) => {
     console.log('Requesting user ID:', requestingUserId);
 
     // Check admin permission using SECURITY DEFINER function (avoids RLS recursion/denials)
-    const { data: isAdmin, error: isAdminError } = await supabaseClient.rpc('has_role', {
-      _user_id: requestingUserId,
-      _role: 'admin',
-    });
+    const [adminCheck, superAdminCheck] = await Promise.all([
+      supabaseClient.rpc('has_role', {
+        _user_id: requestingUserId,
+        _role: 'admin',
+      }),
+      supabaseClient.rpc('has_role', {
+        _user_id: requestingUserId,
+        _role: 'super_admin',
+      }),
+    ]);
 
-    if (isAdminError) {
-      console.error('Admin check failed:', isAdminError);
-      return new Response(JSON.stringify({ error: 'Failed to verify admin privileges' }), {
+    if (adminCheck.error || superAdminCheck.error) {
+      console.error('Role check failed:', adminCheck.error || superAdminCheck.error);
+      return new Response(JSON.stringify({ error: 'Failed to verify privileges' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    if (!isAdmin) {
+    const isAllowed = !!adminCheck.data || !!superAdminCheck.data;
+
+    if (!isAllowed) {
       return new Response(JSON.stringify({ error: 'Unauthorized - Admin access required' }), {
         status: 403,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -4,6 +4,8 @@ import {
   LogOut,
   ChevronDown,
   UserCog,
+  Shield,
+  Activity,
   Menu,
   X
 } from 'lucide-react';
@@ -31,6 +33,9 @@ export function TopNavbar() {
   const { profile, highestRole } = useUserRole();
   const { departments } = useDepartments();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
+  const isSuperAdmin = highestRole === 'super_admin';
 
   const mainNavItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
@@ -134,12 +139,25 @@ export function TopNavbar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {highestRole === 'admin' && (
+              {isAdmin && (
                 <>
                   <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
                     <UserCog className="h-4 w-4 mr-2" />
                     User Management
                   </DropdownMenuItem>
+
+                  <DropdownMenuItem onClick={() => navigate('/super-admin')} className="cursor-pointer">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Audit Logs
+                  </DropdownMenuItem>
+
+                  {isSuperAdmin && (
+                    <DropdownMenuItem onClick={() => navigate('/system-health')} className="cursor-pointer">
+                      <Activity className="h-4 w-4 mr-2" />
+                      System Health
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuSeparator />
                 </>
               )}
@@ -183,20 +201,52 @@ export function TopNavbar() {
               </NavLink>
             ))}
 
-            {highestRole === 'admin' && (
-              <NavLink
-                to="/admin"
-                onClick={() => setMobileMenuOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                  isActive('/admin')
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+            {isAdmin && (
+              <>
+                <NavLink
+                  to="/admin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                    isActive('/admin')
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  <UserCog className="h-5 w-5" />
+                  User Management
+                </NavLink>
+
+                <NavLink
+                  to="/super-admin"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                    isActive('/super-admin')
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  <Shield className="h-5 w-5" />
+                  Audit Logs
+                </NavLink>
+
+                {isSuperAdmin && (
+                  <NavLink
+                    to="/system-health"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                      isActive('/system-health')
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                    )}
+                  >
+                    <Activity className="h-5 w-5" />
+                    System Health
+                  </NavLink>
                 )}
-              >
-                <UserCog className="h-5 w-5" />
-                User Management
-              </NavLink>
+              </>
             )}
 
             <div className="border-t border-border mt-2 pt-2">

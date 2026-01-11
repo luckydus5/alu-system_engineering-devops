@@ -10,6 +10,7 @@ import ResetPassword from "./pages/ResetPassword";
 import Department from "./pages/Department";
 import Admin from "./pages/Admin";
 import SuperAdmin from "./pages/SuperAdmin";
+import SystemHealth from "./pages/SystemHealth";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -37,6 +38,7 @@ const App = () => (
             <Route path="/department/:code" element={<Department />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/super-admin" element={<SuperAdmin />} />
+            <Route path="/system-health" element={<SystemHealth />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
