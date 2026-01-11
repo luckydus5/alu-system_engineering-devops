@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SessionTracker } from "@/components/SessionTracker";
+import { PasswordResetEnforcer } from "@/components/auth/PasswordResetEnforcer";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { RouteErrorFallback } from "@/components/RouteErrorFallback";
 import Index from "./pages/Index";
@@ -17,6 +18,7 @@ import SuperAdmin from "./pages/SuperAdmin";
 import SystemHealth from "./pages/SystemHealth";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +40,7 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <SessionTracker />
+            <PasswordResetEnforcer />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
@@ -57,5 +60,6 @@ const App = () => (
     </QueryClientProvider>
   </ErrorBoundary>
 );
+
 
 export default App;

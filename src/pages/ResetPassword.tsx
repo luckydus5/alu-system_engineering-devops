@@ -22,8 +22,36 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if we have a valid session from the reset link
-    const checkSession = async () => {
+    // Supabase password recovery (PKCE) sends users back with ?code=...
+    // Since our client disables detectSessionInUrl globally, we must manually exchange.
+    const ensureRecoverySession = async () => {
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('code');
+
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          toast({
+            title: "Invalid or expired link",
+            description: "Please request a new password reset link.",
+            variant: "destructive",
+          });
+          navigate('/auth', { replace: true });
+          return;
+        }
+
+        // Clean URL so refresh/back button doesn't re-use the code
+        url.searchParams.delete('code');
+        url.searchParams.delete('type');
+        const cleanedSearch = url.searchParams.toString();
+        window.history.replaceState(
+          {},
+          document.title,
+          `${url.pathname}${cleanedSearch ? `?${cleanedSearch}` : ''}`
+        );
+      }
+
+      // Check if we have a valid session from the reset link
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         toast({
@@ -31,11 +59,13 @@ export default function ResetPassword() {
           description: "Please request a new password reset link.",
           variant: "destructive",
         });
-        navigate('/auth');
+        navigate('/auth', { replace: true });
       }
     };
-    checkSession();
+
+    ensureRecoverySession();
   }, [navigate, toast]);
+
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();

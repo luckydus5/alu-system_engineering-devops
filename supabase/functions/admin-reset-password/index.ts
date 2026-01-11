@@ -23,12 +23,12 @@ serve(async (req: Request): Promise<Response> => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    
+
     // Create admin client with service role key
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+      auth: { autoRefreshToken: false, persistSession: false },
     });
+
 
     const { action, userId, userEmail, token, newPassword }: ResetPasswordRequest = await req.json();
 
@@ -119,6 +119,16 @@ serve(async (req: Request): Promise<Response> => {
 
       console.log("Reset token created:", resetData.id);
 
+      // Force the user to re-authenticate everywhere (prevents continued access after admin reset)
+      try {
+        const { error: signOutError } = await supabaseAdmin.auth.admin.signOut(userId);
+        if (signOutError) {
+          console.warn("Failed to revoke sessions for user:", userId, signOutError);
+        }
+      } catch (e) {
+        console.warn("Failed to revoke sessions (exception):", e);
+      }
+
       // Create a notification for the user
       await supabaseAdmin
         .from("notifications")
@@ -130,13 +140,14 @@ serve(async (req: Request): Promise<Response> => {
         });
 
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           message: "Password reset initiated successfully",
-          expiresAt: resetData.expires_at
+          expiresAt: resetData.expires_at,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+
 
     } else if (action === "complete") {
       // Complete password reset - no auth required, just valid token
