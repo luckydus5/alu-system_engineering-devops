@@ -12,6 +12,10 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
     // Get the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -22,11 +26,9 @@ Deno.serve(async (req) => {
     }
 
     // Create a client with the user's token to verify them
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
 
     // Validate the JWT and get claims
     const token = authHeader.replace('Bearer ', '');
@@ -40,41 +42,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    const requestingUserId = claimsData.claims.sub;
+    const requestingUserId = claimsData.claims.sub as string;
     console.log('Requesting user ID:', requestingUserId);
-
-    // Check admin permission using SECURITY DEFINER function (avoids RLS recursion/denials)
-    const [adminCheck, superAdminCheck] = await Promise.all([
-      supabaseClient.rpc('has_role', {
-        _user_id: requestingUserId,
-        _role: 'admin',
-      }),
-      supabaseClient.rpc('has_role', {
-        _user_id: requestingUserId,
-        _role: 'super_admin',
-      }),
-    ]);
-
-    if (adminCheck.error || superAdminCheck.error) {
-      console.error('Role check failed:', adminCheck.error || superAdminCheck.error);
-      return new Response(JSON.stringify({ error: 'Failed to verify privileges' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const isAllowed = !!adminCheck.data || !!superAdminCheck.data;
-
-    if (!isAllowed) {
-      return new Response(JSON.stringify({ error: 'Unauthorized - Admin access required' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // Create admin client for privileged operations (Auth admin API, bypasses RLS)
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
     if (!supabaseUrl || !serviceRoleKey) {
       console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -84,9 +53,38 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Create admin client for privileged operations
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
+
+    // Check if requesting user is admin or super_admin and get their department
+    const { data: roleRows, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role, department_id')
+      .eq('user_id', requestingUserId);
+
+    if (roleError) {
+      console.error('Error fetching roles:', roleError);
+      return new Response(JSON.stringify({ error: 'Failed to verify privileges' }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const roles = roleRows || [];
+    const isSuperAdmin = roles.some((r: { role: string }) => r.role === 'super_admin');
+    const isAdmin = roles.some((r: { role: string }) => r.role === 'admin');
+    const adminDepartmentId = roles.find((r: { role: string; department_id: string | null }) => 
+      r.role === 'admin' || r.role === 'super_admin'
+    )?.department_id;
+
+    if (!isSuperAdmin && !isAdmin) {
+      return new Response(JSON.stringify({ error: 'Unauthorized - Admin access required' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Get request body
     const { email, password, fullName, role, departmentId } = await req.json();
@@ -98,7 +96,26 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log('Creating user:', email, 'with role:', role, 'department:', departmentId);
+    // Validate role assignment - admins cannot create admin or super_admin
+    if (!isSuperAdmin && (role === 'admin' || role === 'super_admin')) {
+      return new Response(JSON.stringify({ error: 'You cannot assign admin or super_admin roles' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Validate department assignment - admins can only create users in their department
+    if (!isSuperAdmin && departmentId && departmentId !== adminDepartmentId) {
+      return new Response(JSON.stringify({ error: 'You can only create users in your department' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // For non-super admins, force the department to be their own
+    const finalDepartmentId = isSuperAdmin ? departmentId : (adminDepartmentId || departmentId);
+
+    console.log('Creating user:', email, 'with role:', role, 'department:', finalDepartmentId);
 
     // Create the user using admin API
     const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
@@ -121,7 +138,7 @@ Deno.serve(async (req) => {
     // Update the user's role (the trigger creates a default staff role)
     const { error: updateRoleError } = await supabaseAdmin
       .from('user_roles')
-      .update({ role, department_id: departmentId || null })
+      .update({ role, department_id: finalDepartmentId || null })
       .eq('user_id', newUserId);
 
     if (updateRoleError) {
@@ -129,10 +146,10 @@ Deno.serve(async (req) => {
     }
 
     // Update the profile with department
-    if (departmentId) {
+    if (finalDepartmentId) {
       const { error: profileError } = await supabaseAdmin
         .from('profiles')
-        .update({ department_id: departmentId })
+        .update({ department_id: finalDepartmentId })
         .eq('id', newUserId);
 
       if (profileError) {

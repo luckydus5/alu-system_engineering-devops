@@ -50,17 +50,29 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // Check if requesting user is admin or super_admin
+    // Check if requesting user is admin or super_admin and get their department
     const { data: roleRows, error: roleError } = await supabaseAdmin
       .from('user_roles')
-      .select('role')
+      .select('role, department_id')
       .eq('user_id', requestingUserId);
 
-    const roleList = (roleRows || []).map((r: { role: string }) => r.role);
-    const isAllowed = roleList.includes('admin') || roleList.includes('super_admin');
+    if (roleError) {
+      console.error('Error fetching roles:', roleError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify privileges' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    if (roleError || !isAllowed) {
-      console.log('Access denied for user:', requestingUserId, 'Roles:', roleList);
+    const roles = roleRows || [];
+    const isSuperAdmin = roles.some((r: { role: string }) => r.role === 'super_admin');
+    const isAdmin = roles.some((r: { role: string }) => r.role === 'admin');
+    const adminDepartmentId = roles.find((r: { role: string; department_id: string | null }) => 
+      r.role === 'admin' || r.role === 'super_admin'
+    )?.department_id;
+
+    if (!isSuperAdmin && !isAdmin) {
+      console.log('Access denied for user:', requestingUserId, 'Roles:', roles);
       return new Response(
         JSON.stringify({ error: 'Only admins can manage users' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -68,9 +80,72 @@ Deno.serve(async (req) => {
     }
 
     const { action, userId, role, departmentId, fullName, departmentIds } = await req.json();
-    console.log(`Managing user: action=${action}, userId=${userId}`);
+    console.log(`Managing user: action=${action}, userId=${userId}, isSuperAdmin=${isSuperAdmin}`);
+
+    // Helper function to check if admin can manage the target user
+    const canManageUser = async (targetUserId: string): Promise<boolean> => {
+      if (isSuperAdmin) return true;
+      
+      // Get target user's department
+      const { data: targetRole } = await supabaseAdmin
+        .from('user_roles')
+        .select('department_id, role')
+        .eq('user_id', targetUserId)
+        .single();
+      
+      // Admin can only manage users in their department
+      if (!targetRole || targetRole.department_id !== adminDepartmentId) {
+        return false;
+      }
+      
+      // Admin cannot manage other admins or super_admins
+      if (targetRole.role === 'admin' || targetRole.role === 'super_admin') {
+        return false;
+      }
+      
+      return true;
+    };
+
+    // Helper to validate department assignment
+    const canAssignDepartment = (deptId: string | null): boolean => {
+      if (isSuperAdmin) return true;
+      // Admins can only assign users to their own department
+      return deptId === adminDepartmentId || deptId === null;
+    };
+
+    // Helper to validate role assignment
+    const canAssignRole = (targetRole: string): boolean => {
+      if (isSuperAdmin) return true;
+      // Admins cannot assign admin or super_admin roles
+      const restrictedRoles = ['admin', 'super_admin'];
+      return !restrictedRoles.includes(targetRole);
+    };
 
     if (action === 'update') {
+      // Check if admin can manage this user
+      if (!await canManageUser(userId)) {
+        return new Response(
+          JSON.stringify({ error: 'You can only manage users in your department' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Validate role assignment
+      if (role && !canAssignRole(role)) {
+        return new Response(
+          JSON.stringify({ error: 'You cannot assign admin or super_admin roles' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Validate department assignment
+      if (!canAssignDepartment(departmentId)) {
+        return new Response(
+          JSON.stringify({ error: 'You can only assign users to your department' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Update user profile
       if (fullName !== undefined) {
         const { error: profileError } = await supabaseAdmin
@@ -119,6 +194,14 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Check if admin can manage this user
+      if (!await canManageUser(userId)) {
+        return new Response(
+          JSON.stringify({ error: 'You can only delete users in your department' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // Delete user from auth (this will cascade to profiles and roles due to foreign keys)
       const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
 
@@ -134,8 +217,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Grant additional department access
+    // Grant additional department access - SUPER ADMIN ONLY
     if (action === 'grant_department_access') {
+      if (!isSuperAdmin) {
+        return new Response(
+          JSON.stringify({ error: 'Only super admins can grant department access' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { error: grantError } = await supabaseAdmin
         .from('user_department_access')
         .insert({
@@ -145,7 +235,6 @@ Deno.serve(async (req) => {
         });
 
       if (grantError) {
-        // Check if it's a unique constraint violation
         if (grantError.code === '23505') {
           return new Response(
             JSON.stringify({ error: 'User already has access to this department' }),
@@ -163,8 +252,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Revoke department access
+    // Revoke department access - SUPER ADMIN ONLY
     if (action === 'revoke_department_access') {
+      if (!isSuperAdmin) {
+        return new Response(
+          JSON.stringify({ error: 'Only super admins can revoke department access' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       const { error: revokeError } = await supabaseAdmin
         .from('user_department_access')
         .delete()
@@ -183,8 +279,15 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update multiple department accesses at once
+    // Update multiple department accesses at once - SUPER ADMIN ONLY
     if (action === 'update_department_access') {
+      if (!isSuperAdmin) {
+        return new Response(
+          JSON.stringify({ error: 'Only super admins can update department access' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // First, remove all existing additional access
       const { error: deleteError } = await supabaseAdmin
         .from('user_department_access')
