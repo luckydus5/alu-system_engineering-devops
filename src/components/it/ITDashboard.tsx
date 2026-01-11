@@ -46,6 +46,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useSupportTickets } from '@/hooks/useSupportTickets';
 import { useITEquipment, ITEquipmentItem } from '@/hooks/useITEquipment';
 import { ITEquipmentDetailDialog } from './ITEquipmentDetailDialog';
+import { ITEquipmentFolderView } from './ITEquipmentFolderView';
 
 interface ITDashboardProps {
   department: Department;
@@ -69,7 +70,7 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
     showAllTickets: true,
   });
 
-  const { equipment, loading: equipmentLoading, stats: equipmentStats, refetch: refetchEquipment } = useITEquipment();
+  const { equipment, folders, loading: equipmentLoading, stats: equipmentStats, refetch: refetchEquipment } = useITEquipment();
 
   const deptColors = getDepartmentColors(department.code);
   const DeptIcon = getDepartmentIcon(department.code);
@@ -500,50 +501,24 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
 
       {activeTab === 'equipment' && (
         <Card className="shadow-corporate">
-          <CardHeader>
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Monitor className="h-5 w-5 text-primary" />
                 IT Equipment Inventory
               </CardTitle>
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search equipment..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9"
-                  />
+              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>{equipmentStats.inStock} In Stock</span>
                 </div>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[130px]">
-                    <SelectValue placeholder="Stock" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Items</SelectItem>
-                    <SelectItem value="in_stock">In Stock</SelectItem>
-                    <SelectItem value="low_stock">Low Stock</SelectItem>
-                    <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                  </SelectContent>
-                </Select>
-                <div className="flex items-center border rounded-lg">
-                  <Button
-                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
-                    size="icon"
-                    className="rounded-r-none"
-                    onClick={() => setViewMode('grid')}
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-                    size="icon"
-                    className="rounded-l-none"
-                    onClick={() => setViewMode('list')}
-                  >
-                    <List className="h-4 w-4" />
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-amber-500" />
+                  <span>{equipmentStats.lowStock} Low</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-red-500" />
+                  <span>{equipmentStats.outOfStock} Out</span>
                 </div>
               </div>
             </div>
@@ -553,78 +528,11 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredEquipment.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
-                <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
-                <p>No equipment found</p>
-              </div>
-            ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredEquipment.map((item) => {
-                  const EquipIcon = getEquipmentIcon(item.item_name);
-                  return (
-                    <div
-                      key={item.id}
-                      className="p-4 rounded-xl border bg-card hover:shadow-md transition-all cursor-pointer group"
-                      onClick={() => handleViewEquipment(item)}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:scale-105 transition-transform">
-                          <EquipIcon className="h-5 w-5 text-blue-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium truncate">{item.item_name}</h4>
-                          <p className="text-sm text-muted-foreground font-mono">{item.item_number}</p>
-                          <div className="mt-2">
-                            {getStockBadge(item)}
-                          </div>
-                          <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                            <MapPin className="h-3 w-3" />
-                            <span className="truncate">{item.location_name || item.location || 'No location'}</span>
-                          </div>
-                          <div className="flex items-center justify-between mt-2 text-sm">
-                            <span className="text-muted-foreground">Qty:</span>
-                            <span className="font-semibold">{item.quantity} {item.unit || 'pcs'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
             ) : (
-              <ScrollArea className="h-[500px]">
-                <div className="space-y-2">
-                  {filteredEquipment.map((item) => {
-                    const EquipIcon = getEquipmentIcon(item.item_name);
-                    return (
-                      <div
-                        key={item.id}
-                        className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
-                        onClick={() => handleViewEquipment(item)}
-                      >
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
-                          <EquipIcon className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-medium truncate">{item.item_name}</h4>
-                          <p className="text-sm text-muted-foreground font-mono">{item.item_number}</p>
-                        </div>
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          <span className="max-w-[100px] truncate">{item.location_name || item.location || 'N/A'}</span>
-                        </div>
-                        {getStockBadge(item)}
-                        <div className="text-right min-w-[60px]">
-                          <span className="font-semibold">{item.quantity}</span>
-                          <span className="text-xs text-muted-foreground ml-1">{item.unit || 'pcs'}</span>
-                        </div>
-                        <Eye className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
+              <ITEquipmentFolderView
+                folders={folders}
+                onViewItem={handleViewEquipment}
+              />
             )}
           </CardContent>
         </Card>
