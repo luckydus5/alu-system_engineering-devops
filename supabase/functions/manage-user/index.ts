@@ -50,17 +50,19 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
-    // Check if requesting user is admin
-    const { data: roleData, error: roleError } = await supabaseAdmin
+    // Check if requesting user is admin or super_admin
+    const { data: roleRows, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role')
-      .eq('user_id', requestingUserId)
-      .single();
+      .eq('user_id', requestingUserId);
 
-    if (roleError || roleData?.role !== 'admin') {
-      console.log('Access denied for user:', requestingUserId, 'Role:', roleData?.role);
+    const roleList = (roleRows || []).map((r: { role: string }) => r.role);
+    const isAllowed = roleList.includes('admin') || roleList.includes('super_admin');
+
+    if (roleError || !isAllowed) {
+      console.log('Access denied for user:', requestingUserId, 'Roles:', roleList);
       return new Response(
-        JSON.stringify({ error: 'Only administrators can manage users' }),
+        JSON.stringify({ error: 'Only admins can manage users' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
