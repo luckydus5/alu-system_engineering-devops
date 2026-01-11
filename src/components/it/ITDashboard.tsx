@@ -3,9 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
   Select,
   SelectContent,
@@ -13,16 +11,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import {
   Plus,
   Search,
@@ -43,134 +31,70 @@ import {
   Settings,
   Bug,
   Wrench,
-  Users,
-  TrendingUp,
-  AlertCircle,
-  Sparkles,
   Shield,
+  Sparkles,
+  MapPin,
+  Eye,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { cn } from '@/lib/utils';
 import { getDepartmentIcon, getDepartmentColors } from '@/lib/departmentIcons';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { useSupportTickets } from '@/hooks/useSupportTickets';
+import { useITEquipment, ITEquipmentItem } from '@/hooks/useITEquipment';
+import { ITEquipmentDetailDialog } from './ITEquipmentDetailDialog';
 
 interface ITDashboardProps {
   department: Department;
   canManage: boolean;
 }
 
-// Mock data for IT equipment and tickets
-interface ITEquipment {
-  id: string;
-  name: string;
-  type: 'laptop' | 'desktop' | 'server' | 'network' | 'printer' | 'other';
-  status: 'active' | 'maintenance' | 'retired' | 'assigned';
-  assignedTo?: string;
-  serialNumber: string;
-  location: string;
-  lastMaintenance?: string;
-}
-
-interface ITTicket {
-  id: string;
-  title: string;
-  description: string;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'in_progress' | 'resolved' | 'closed';
-  category: 'hardware' | 'software' | 'network' | 'security' | 'other';
-  assignedTo?: string;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface ITProject {
-  id: string;
-  name: string;
-  description: string;
-  status: 'planning' | 'in_progress' | 'testing' | 'completed' | 'on_hold';
-  progress: number;
-  startDate: string;
-  endDate?: string;
-  teamMembers: string[];
-}
-
-// Sample data
-const sampleEquipment: ITEquipment[] = [
-  { id: '1', name: 'Dell Latitude 5520', type: 'laptop', status: 'assigned', assignedTo: 'John Doe', serialNumber: 'DL5520-001', location: 'Office A' },
-  { id: '2', name: 'HP ProDesk 400', type: 'desktop', status: 'active', serialNumber: 'HP400-002', location: 'Office B' },
-  { id: '3', name: 'Dell PowerEdge R740', type: 'server', status: 'active', serialNumber: 'PE740-001', location: 'Server Room' },
-  { id: '4', name: 'Cisco Switch 2960', type: 'network', status: 'active', serialNumber: 'CS2960-001', location: 'Network Closet' },
-  { id: '5', name: 'MacBook Pro 14"', type: 'laptop', status: 'maintenance', serialNumber: 'MBP14-003', location: 'IT Office' },
-];
-
-const sampleTickets: ITTicket[] = [
-  { id: 'TKT-001', title: 'Cannot connect to VPN', description: 'VPN connection fails after password change', priority: 'high', status: 'open', category: 'network', createdBy: 'Jane Smith', createdAt: '2026-01-11T08:00:00Z', updatedAt: '2026-01-11T08:00:00Z' },
-  { id: 'TKT-002', title: 'New laptop request', description: 'Need new laptop for new hire', priority: 'medium', status: 'in_progress', category: 'hardware', assignedTo: 'IT Admin', createdBy: 'HR Team', createdAt: '2026-01-10T10:00:00Z', updatedAt: '2026-01-11T09:00:00Z' },
-  { id: 'TKT-003', title: 'Software installation', description: 'Install Adobe Creative Suite', priority: 'low', status: 'resolved', category: 'software', assignedTo: 'IT Admin', createdBy: 'Marketing', createdAt: '2026-01-09T14:00:00Z', updatedAt: '2026-01-10T16:00:00Z' },
-];
-
-const sampleProjects: ITProject[] = [
-  { id: 'PRJ-001', name: 'Network Upgrade', description: 'Upgrade office network infrastructure to 10Gbps', status: 'in_progress', progress: 65, startDate: '2026-01-01', endDate: '2026-03-31', teamMembers: ['IT Admin', 'Network Engineer'] },
-  { id: 'PRJ-002', name: 'Security Audit', description: 'Annual security audit and compliance check', status: 'planning', progress: 15, startDate: '2026-02-01', teamMembers: ['Security Lead'] },
-  { id: 'PRJ-003', name: 'Cloud Migration', description: 'Migrate on-premise servers to cloud', status: 'testing', progress: 85, startDate: '2025-10-01', endDate: '2026-01-31', teamMembers: ['Cloud Architect', 'DevOps'] },
-];
-
-type TabType = 'overview' | 'tickets' | 'equipment' | 'projects';
+type TabType = 'overview' | 'tickets' | 'equipment';
 
 export function ITDashboard({ department, canManage }: ITDashboardProps) {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [isLoading, setIsLoading] = useState(false);
-  const [newTicketOpen, setNewTicketOpen] = useState(false);
-  const [newEquipmentOpen, setNewEquipmentOpen] = useState(false);
+  const [selectedEquipment, setSelectedEquipment] = useState<ITEquipmentItem | null>(null);
+  const [equipmentDetailOpen, setEquipmentDetailOpen] = useState(false);
   const { toast } = useToast();
 
-  // Stats
-  const stats = {
-    totalEquipment: sampleEquipment.length,
-    activeEquipment: sampleEquipment.filter(e => e.status === 'active' || e.status === 'assigned').length,
-    maintenanceItems: sampleEquipment.filter(e => e.status === 'maintenance').length,
-    openTickets: sampleTickets.filter(t => t.status === 'open' || t.status === 'in_progress').length,
-    resolvedTickets: sampleTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length,
-    criticalTickets: sampleTickets.filter(t => t.priority === 'critical' && t.status !== 'closed').length,
-    activeProjects: sampleProjects.filter(p => p.status === 'in_progress' || p.status === 'testing').length,
-  };
+  // Fetch real data
+  const { tickets, loading: ticketsLoading, stats: ticketStats, updateTicket, refetch: refetchTickets } = useSupportTickets({
+    isITDepartment: true,
+    showAllTickets: true,
+  });
+
+  const { equipment, loading: equipmentLoading, stats: equipmentStats, refetch: refetchEquipment } = useITEquipment();
 
   const deptColors = getDepartmentColors(department.code);
   const DeptIcon = getDepartmentIcon(department.code);
 
-  const getEquipmentIcon = (type: ITEquipment['type']) => {
-    switch (type) {
-      case 'laptop': return Laptop;
-      case 'desktop': return Monitor;
-      case 'server': return Server;
-      case 'network': return Wifi;
-      default: return HardDrive;
-    }
+  const getEquipmentIcon = (name: string) => {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('laptop') || lowerName.includes('notebook')) return Laptop;
+    if (lowerName.includes('server')) return Server;
+    if (lowerName.includes('switch') || lowerName.includes('router') || lowerName.includes('wifi')) return Wifi;
+    if (lowerName.includes('monitor') || lowerName.includes('desktop')) return Monitor;
+    return HardDrive;
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active':
-      case 'assigned':
       case 'resolved':
-      case 'completed':
+      case 'closed':
         return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
       case 'in_progress':
-      case 'testing':
         return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
-      case 'maintenance':
-      case 'planning':
-      case 'on_hold':
+      case 'pending':
         return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
       case 'open':
         return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400';
-      case 'retired':
-      case 'closed':
+      case 'cancelled':
         return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400';
       default:
         return 'bg-gray-100 text-gray-700';
@@ -187,23 +111,50 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
     }
   };
 
+  const getStockBadge = (item: ITEquipmentItem) => {
+    if (item.quantity === 0) {
+      return <Badge variant="destructive" className="text-xs">Out of Stock</Badge>;
+    }
+    if (item.quantity <= (item.min_quantity || 0)) {
+      return <Badge className="bg-amber-500 text-xs">Low Stock</Badge>;
+    }
+    return <Badge className="bg-emerald-500 text-xs">In Stock</Badge>;
+  };
+
   const handleRefresh = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      toast({ title: 'Refreshed', description: 'Data has been refreshed' });
-    }, 1000);
+    refetchTickets();
+    refetchEquipment();
+    toast({ title: 'Refreshed', description: 'Data has been refreshed' });
   };
 
-  const handleCreateTicket = () => {
-    toast({ title: 'Ticket Created', description: 'Your support ticket has been submitted' });
-    setNewTicketOpen(false);
+  const handleViewEquipment = (item: ITEquipmentItem) => {
+    setSelectedEquipment(item);
+    setEquipmentDetailOpen(true);
   };
 
-  const handleAddEquipment = () => {
-    toast({ title: 'Equipment Added', description: 'New equipment has been registered' });
-    setNewEquipmentOpen(false);
-  };
+  // Filter equipment
+  const filteredEquipment = equipment.filter(item => {
+    const matchesSearch = item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.item_number.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (statusFilter === 'all') return matchesSearch;
+    if (statusFilter === 'low_stock') return matchesSearch && item.quantity <= (item.min_quantity || 0) && item.quantity > 0;
+    if (statusFilter === 'out_of_stock') return matchesSearch && item.quantity === 0;
+    if (statusFilter === 'in_stock') return matchesSearch && item.quantity > (item.min_quantity || 0);
+    return matchesSearch;
+  });
+
+  // Filter tickets
+  const filteredTickets = tickets.filter(ticket => {
+    const matchesSearch = ticket.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.ticket_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ticket.department_name?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (statusFilter === 'all') return matchesSearch;
+    return matchesSearch && ticket.status === statusFilter;
+  });
+
+  const isLoading = ticketsLoading || equipmentLoading;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -244,15 +195,6 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
             >
               <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
             </Button>
-            {canManage && (
-              <Button 
-                onClick={() => setNewTicketOpen(true)}
-                className="bg-white text-gray-800 hover:bg-white/90 shadow-lg"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                New Ticket
-              </Button>
-            )}
           </div>
         </div>
 
@@ -263,28 +205,28 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
               <Monitor className="h-4 w-4" />
               Equipment
             </div>
-            <p className="text-3xl font-bold">{stats.totalEquipment}</p>
+            <p className="text-3xl font-bold">{equipmentStats.total}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/70 text-sm mb-1">
               <Ticket className="h-4 w-4" />
               Open Tickets
             </div>
-            <p className="text-3xl font-bold">{stats.openTickets}</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-            <div className="flex items-center gap-2 text-white/70 text-sm mb-1">
-              <FolderOpen className="h-4 w-4" />
-              Projects
-            </div>
-            <p className="text-3xl font-bold">{stats.activeProjects}</p>
+            <p className="text-3xl font-bold">{ticketStats.open + ticketStats.inProgress}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
             <div className="flex items-center gap-2 text-white/70 text-sm mb-1">
               <AlertTriangle className="h-4 w-4" />
               Critical
             </div>
-            <p className="text-3xl font-bold">{stats.criticalTickets}</p>
+            <p className="text-3xl font-bold">{ticketStats.critical}</p>
+          </div>
+          <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+            <div className="flex items-center gap-2 text-white/70 text-sm mb-1">
+              <CheckCircle2 className="h-4 w-4" />
+              Resolved
+            </div>
+            <p className="text-3xl font-bold">{ticketStats.resolved}</p>
           </div>
         </div>
       </div>
@@ -294,8 +236,7 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
         {[
           { id: 'overview' as TabType, label: 'Overview', icon: LayoutGrid },
           { id: 'tickets' as TabType, label: 'Support Tickets', icon: Ticket },
-          { id: 'equipment' as TabType, label: 'Equipment', icon: Monitor },
-          { id: 'projects' as TabType, label: 'Projects', icon: FolderOpen },
+          { id: 'equipment' as TabType, label: 'IT Equipment', icon: Monitor },
         ].map((tab) => (
           <Button
             key={tab.id}
@@ -304,7 +245,11 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
               'gap-2',
               activeTab === tab.id && 'bg-primary'
             )}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSearchQuery('');
+              setStatusFilter('all');
+            }}
           >
             <tab.icon className="h-4 w-4" />
             {tab.label}
@@ -327,86 +272,126 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
               </Button>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {sampleTickets.slice(0, 3).map((ticket) => (
-                  <div key={ticket.id} className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge className={cn('text-xs', getPriorityColor(ticket.priority))}>
-                            {ticket.priority}
-                          </Badge>
-                          <Badge variant="outline" className={getStatusColor(ticket.status)}>
-                            {ticket.status.replace('_', ' ')}
-                          </Badge>
+              {ticketsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : tickets.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Ticket className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                  <p>No support tickets yet</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {tickets.slice(0, 5).map((ticket) => (
+                    <div key={ticket.id} className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge className={cn('text-xs', getPriorityColor(ticket.priority))}>
+                              {ticket.priority}
+                            </Badge>
+                            <Badge variant="outline" className={getStatusColor(ticket.status)}>
+                              {ticket.status.replace('_', ' ')}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs">
+                              {ticket.department_name}
+                            </Badge>
+                          </div>
+                          <h4 className="font-medium truncate">{ticket.title}</h4>
+                          <p className="text-sm text-muted-foreground truncate">{ticket.description}</p>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {ticket.ticket_number} • {ticket.requester_name} • {format(new Date(ticket.created_at), 'MMM d, h:mm a')}
+                          </p>
                         </div>
-                        <h4 className="font-medium truncate">{ticket.title}</h4>
-                        <p className="text-sm text-muted-foreground truncate">{ticket.description}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {ticket.id} • {format(new Date(ticket.createdAt), 'MMM d, h:mm a')}
-                        </p>
+                        {canManage && ticket.status !== 'resolved' && ticket.status !== 'closed' && (
+                          <Select
+                            value={ticket.status}
+                            onValueChange={(value) => updateTicket(ticket.id, { status: value as any })}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="resolved">Resolved</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Quick Actions & Status */}
+          {/* Equipment Summary & Quick Actions */}
           <div className="space-y-6">
             <Card className="shadow-corporate">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <Settings className="h-5 w-5 text-muted-foreground" />
-                  Quick Actions
+                  <Package className="h-5 w-5 text-primary" />
+                  Equipment Summary
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                {canManage && (
-                  <>
-                    <Button className="w-full justify-start gap-2" variant="outline" onClick={() => setNewTicketOpen(true)}>
-                      <Bug className="h-4 w-4" />
-                      Report an Issue
-                    </Button>
-                    <Button className="w-full justify-start gap-2" variant="outline" onClick={() => setNewEquipmentOpen(true)}>
-                      <Package className="h-4 w-4" />
-                      Register Equipment
-                    </Button>
-                    <Button className="w-full justify-start gap-2" variant="outline">
-                      <Wrench className="h-4 w-4" />
-                      Request Maintenance
-                    </Button>
-                  </>
-                )}
-                <Button className="w-full justify-start gap-2" variant="outline">
-                  <Shield className="h-4 w-4" />
-                  Security Status
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-center">
+                    <p className="text-2xl font-bold text-emerald-600">{equipmentStats.inStock}</p>
+                    <p className="text-xs text-muted-foreground">In Stock</p>
+                  </div>
+                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-center">
+                    <p className="text-2xl font-bold text-amber-600">{equipmentStats.lowStock}</p>
+                    <p className="text-xs text-muted-foreground">Low Stock</p>
+                  </div>
+                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-center">
+                    <p className="text-2xl font-bold text-red-600">{equipmentStats.outOfStock}</p>
+                    <p className="text-xs text-muted-foreground">Out of Stock</p>
+                  </div>
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
+                    <p className="text-2xl font-bold text-blue-600">{equipmentStats.totalQuantity}</p>
+                    <p className="text-xs text-muted-foreground">Total Units</p>
+                  </div>
+                </div>
+                <Button variant="outline" className="w-full" onClick={() => setActiveTab('equipment')}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  View All Equipment
                 </Button>
               </CardContent>
             </Card>
 
-            {/* Active Projects */}
             <Card className="shadow-corporate">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-primary" />
-                  Active Projects
+                  <Settings className="h-5 w-5 text-muted-foreground" />
+                  Ticket Statistics
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {sampleProjects.filter(p => p.status === 'in_progress' || p.status === 'testing').slice(0, 2).map((project) => (
-                  <div key={project.id} className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-sm">{project.name}</span>
-                      <Badge variant="outline" className={getStatusColor(project.status)}>
-                        {project.status.replace('_', ' ')}
-                      </Badge>
-                    </div>
-                    <Progress value={project.progress} className="h-2" />
-                    <p className="text-xs text-muted-foreground">{project.progress}% complete</p>
-                  </div>
-                ))}
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Open</span>
+                  <Badge variant="outline">{ticketStats.open}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">In Progress</span>
+                  <Badge variant="outline">{ticketStats.inProgress}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Pending</span>
+                  <Badge variant="outline">{ticketStats.pending}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">High Priority</span>
+                  <Badge className="bg-orange-500">{ticketStats.high}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Critical</span>
+                  <Badge variant="destructive">{ticketStats.critical}</Badge>
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -417,7 +402,7 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
         <Card className="shadow-corporate">
           <CardHeader>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <CardTitle>Support Tickets</CardTitle>
+              <CardTitle>All Support Tickets</CardTitle>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -429,13 +414,14 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
                   />
                 </div>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[130px]">
                     <SelectValue placeholder="Status" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="open">Open</SelectItem>
                     <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
                     <SelectItem value="resolved">Resolved</SelectItem>
                     <SelectItem value="closed">Closed</SelectItem>
                   </SelectContent>
@@ -444,36 +430,70 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {sampleTickets.map((ticket) => (
-                <div key={ticket.id} className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-xs font-mono text-muted-foreground">{ticket.id}</span>
-                        <Badge className={cn('text-xs', getPriorityColor(ticket.priority))}>
-                          {ticket.priority}
-                        </Badge>
-                        <Badge variant="outline" className={getStatusColor(ticket.status)}>
-                          {ticket.status.replace('_', ' ')}
-                        </Badge>
-                        <Badge variant="secondary">{ticket.category}</Badge>
-                      </div>
-                      <h4 className="font-medium">{ticket.title}</h4>
-                      <p className="text-sm text-muted-foreground">{ticket.description}</p>
-                      <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
-                        <span>Created by: {ticket.createdBy}</span>
-                        <span>•</span>
-                        <span>{format(new Date(ticket.createdAt), 'MMM d, yyyy h:mm a')}</span>
+            {ticketsLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredTickets.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Ticket className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                <p>No tickets found</p>
+              </div>
+            ) : (
+              <ScrollArea className="h-[500px]">
+                <div className="space-y-3">
+                  {filteredTickets.map((ticket) => (
+                    <div key={ticket.id} className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2 flex-wrap">
+                            <Badge className={cn('text-xs', getPriorityColor(ticket.priority))}>
+                              {ticket.priority}
+                            </Badge>
+                            <Badge variant="outline" className={getStatusColor(ticket.status)}>
+                              {ticket.status.replace('_', ' ')}
+                            </Badge>
+                            <Badge variant="secondary" className="text-xs gap-1">
+                              <FolderOpen className="h-3 w-3" />
+                              {ticket.department_name}
+                            </Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {ticket.category.replace('_', ' ')}
+                            </Badge>
+                          </div>
+                          <h4 className="font-medium">{ticket.title}</h4>
+                          {ticket.description && (
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{ticket.description}</p>
+                          )}
+                          <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                            <span className="font-mono">{ticket.ticket_number}</span>
+                            <span>By: {ticket.requester_name}</span>
+                            <span>{format(new Date(ticket.created_at), 'MMM d, yyyy h:mm a')}</span>
+                          </div>
+                        </div>
+                        {canManage && ticket.status !== 'resolved' && ticket.status !== 'closed' && (
+                          <Select
+                            value={ticket.status}
+                            onValueChange={(value) => updateTicket(ticket.id, { status: value as any })}
+                          >
+                            <SelectTrigger className="w-32">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="pending">Pending</SelectItem>
+                              <SelectItem value="resolved">Resolved</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </div>
-                    {canManage && (
-                      <Button variant="outline" size="sm">Manage</Button>
-                    )}
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </ScrollArea>
+            )}
           </CardContent>
         </Card>
       )}
@@ -483,7 +503,7 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
           <CardHeader>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <CardTitle className="flex items-center gap-2">
-                <Monitor className="h-5 w-5" />
+                <Monitor className="h-5 w-5 text-primary" />
                 IT Equipment Inventory
               </CardTitle>
               <div className="flex items-center gap-2">
@@ -496,195 +516,126 @@ export function ITDashboard({ department, canManage }: ITDashboardProps) {
                     className="pl-9"
                   />
                 </div>
-                {canManage && (
-                  <Button onClick={() => setNewEquipmentOpen(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Equipment
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-[130px]">
+                    <SelectValue placeholder="Stock" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Items</SelectItem>
+                    <SelectItem value="in_stock">In Stock</SelectItem>
+                    <SelectItem value="low_stock">Low Stock</SelectItem>
+                    <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center border rounded-lg">
+                  <Button
+                    variant={viewMode === 'grid' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className="rounded-r-none"
+                    onClick={() => setViewMode('grid')}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
                   </Button>
-                )}
+                  <Button
+                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className="rounded-l-none"
+                    onClick={() => setViewMode('list')}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {sampleEquipment.map((item) => {
-                const Icon = getEquipmentIcon(item.type);
-                return (
-                  <Card key={item.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                    <CardContent className="p-4">
+            {equipmentLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : filteredEquipment.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Package className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                <p>No equipment found</p>
+              </div>
+            ) : viewMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredEquipment.map((item) => {
+                  const EquipIcon = getEquipmentIcon(item.item_name);
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-4 rounded-xl border bg-card hover:shadow-md transition-all cursor-pointer group"
+                      onClick={() => handleViewEquipment(item)}
+                    >
                       <div className="flex items-start gap-3">
-                        <div className="p-2 rounded-lg bg-primary/10">
-                          <Icon className="h-6 w-6 text-primary" />
+                        <div className="p-2.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:scale-105 transition-transform">
+                          <EquipIcon className="h-5 w-5 text-blue-600" />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <h4 className="font-medium truncate">{item.name}</h4>
-                          <p className="text-xs text-muted-foreground font-mono">{item.serialNumber}</p>
-                          <div className="flex items-center gap-2 mt-2">
-                            <Badge variant="outline" className={getStatusColor(item.status)}>
-                              {item.status}
-                            </Badge>
+                          <h4 className="font-medium truncate">{item.item_name}</h4>
+                          <p className="text-sm text-muted-foreground font-mono">{item.item_number}</p>
+                          <div className="mt-2">
+                            {getStockBadge(item)}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-2">
-                            📍 {item.location}
-                            {item.assignedTo && ` • 👤 ${item.assignedTo}`}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {activeTab === 'projects' && (
-        <Card className="shadow-corporate">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FolderOpen className="h-5 w-5" />
-              IT Projects
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {sampleProjects.map((project) => (
-                <Card key={project.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h4 className="font-semibold">{project.name}</h4>
-                          <Badge variant="outline" className={getStatusColor(project.status)}>
-                            {project.status.replace('_', ' ')}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-3">{project.description}</p>
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span>Progress</span>
-                            <span className="font-medium">{project.progress}%</span>
+                          <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                            <MapPin className="h-3 w-3" />
+                            <span className="truncate">{item.location_name || item.location || 'No location'}</span>
                           </div>
-                          <Progress value={project.progress} className="h-2" />
-                        </div>
-                        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                          <span>Start: {format(new Date(project.startDate), 'MMM d, yyyy')}</span>
-                          {project.endDate && (
-                            <span>End: {format(new Date(project.endDate), 'MMM d, yyyy')}</span>
-                          )}
-                          <span>Team: {project.teamMembers.length} members</span>
+                          <div className="flex items-center justify-between mt-2 text-sm">
+                            <span className="text-muted-foreground">Qty:</span>
+                            <span className="font-semibold">{item.quantity} {item.unit || 'pcs'}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <ScrollArea className="h-[500px]">
+                <div className="space-y-2">
+                  {filteredEquipment.map((item) => {
+                    const EquipIcon = getEquipmentIcon(item.item_name);
+                    return (
+                      <div
+                        key={item.id}
+                        className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+                        onClick={() => handleViewEquipment(item)}
+                      >
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                          <EquipIcon className="h-4 w-4 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-medium truncate">{item.item_name}</h4>
+                          <p className="text-sm text-muted-foreground font-mono">{item.item_number}</p>
+                        </div>
+                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                          <MapPin className="h-3 w-3" />
+                          <span className="max-w-[100px] truncate">{item.location_name || item.location || 'N/A'}</span>
+                        </div>
+                        {getStockBadge(item)}
+                        <div className="text-right min-w-[60px]">
+                          <span className="font-semibold">{item.quantity}</span>
+                          <span className="text-xs text-muted-foreground ml-1">{item.unit || 'pcs'}</span>
+                        </div>
+                        <Eye className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {/* New Ticket Dialog */}
-      <Dialog open={newTicketOpen} onOpenChange={setNewTicketOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Create Support Ticket</DialogTitle>
-            <DialogDescription>
-              Report an issue or request IT assistance
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
-              <Input id="title" placeholder="Brief description of the issue" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <Select defaultValue="software">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="hardware">Hardware</SelectItem>
-                  <SelectItem value="software">Software</SelectItem>
-                  <SelectItem value="network">Network</SelectItem>
-                  <SelectItem value="security">Security</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
-              <Select defaultValue="medium">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select priority" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea id="description" placeholder="Detailed description of the issue..." rows={4} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewTicketOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateTicket}>Create Ticket</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* New Equipment Dialog */}
-      <Dialog open={newEquipmentOpen} onOpenChange={setNewEquipmentOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>Register New Equipment</DialogTitle>
-            <DialogDescription>
-              Add a new device to the IT inventory
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="equipName">Equipment Name</Label>
-              <Input id="equipName" placeholder="e.g., Dell Latitude 5520" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="type">Type</Label>
-              <Select defaultValue="laptop">
-                <SelectTrigger>
-                  <SelectValue placeholder="Select type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="laptop">Laptop</SelectItem>
-                  <SelectItem value="desktop">Desktop</SelectItem>
-                  <SelectItem value="server">Server</SelectItem>
-                  <SelectItem value="network">Network Device</SelectItem>
-                  <SelectItem value="printer">Printer</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="serial">Serial Number</Label>
-              <Input id="serial" placeholder="Enter serial number" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="location">Location</Label>
-              <Input id="location" placeholder="e.g., Office A, Server Room" />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setNewEquipmentOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddEquipment}>Add Equipment</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Equipment Detail Dialog */}
+      <ITEquipmentDetailDialog
+        open={equipmentDetailOpen}
+        onOpenChange={setEquipmentDetailOpen}
+        item={selectedEquipment}
+      />
     </div>
   );
 }
