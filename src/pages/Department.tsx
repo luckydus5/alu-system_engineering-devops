@@ -16,9 +16,9 @@ export default function Department() {
 
   const department = departments.find(d => d.code.toLowerCase() === code?.toLowerCase());
 
-  // Check access: user must be admin, director, or in the department
-  const isAdmin = hasRole('admin') || hasRole('director');
-  const canManage = hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager');
+  // Check access: user must be super_admin, admin, director, or in the department
+  const isAdmin = hasRole('super_admin') || hasRole('admin') || hasRole('director');
+  const canManage = hasRole('super_admin') || hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager');
   const hasAccess = isAdmin || (department && isInDepartment(department.id));
 
   // Check department types

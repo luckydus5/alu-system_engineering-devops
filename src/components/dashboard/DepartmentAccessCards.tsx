@@ -80,8 +80,8 @@ export function DepartmentAccessCards() {
     d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId
   );
 
-  // For admin/director, show all departments
-  const isAdminOrDirector = highestRole === 'admin' || highestRole === 'director';
+  // For super_admin/admin/director, show all departments
+  const isAdminOrDirector = highestRole === 'super_admin' || highestRole === 'admin' || highestRole === 'director';
   
   // All accessible departments for the user
   const accessibleDepts = isAdminOrDirector 
