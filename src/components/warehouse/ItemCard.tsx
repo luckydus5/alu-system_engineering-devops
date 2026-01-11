@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Package, MoreVertical, Edit, Trash2, Plus, Minus, Eye, FolderInput } from 'lucide-react';
+import { Package, MoreVertical, Edit, Trash2, Plus, Minus, Eye, FolderInput, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ItemCardProps {
@@ -24,6 +24,8 @@ interface ItemCardProps {
   selectionMode?: boolean;
   isSelected?: boolean;
   onSelect?: (selected: boolean) => void;
+  locationName?: string;
+  classificationName?: string;
 }
 
 export function ItemCard({
@@ -38,6 +40,8 @@ export function ItemCard({
   selectionMode = false,
   isSelected = false,
   onSelect,
+  locationName,
+  classificationName,
 }: ItemCardProps) {
   const isLowStock = item.quantity <= (item.min_quantity || 0);
   const isOutOfStock = item.quantity === 0;
@@ -185,13 +189,38 @@ export function ItemCard({
       </div>
 
       {/* Info Section */}
-      <div className="p-3">
+      <div 
+        className="p-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
+        onClick={(e) => {
+          if (!selectionMode && onViewDetails) {
+            e.stopPropagation();
+            onViewDetails();
+          }
+        }}
+      >
         <p className="font-medium text-sm truncate" title={item.item_name}>
           {item.item_name}
         </p>
         <p className="text-xs text-muted-foreground truncate" title={item.item_number}>
           {item.item_number}
         </p>
+        
+        {/* Location Display */}
+        {(locationName || classificationName || item.location) && (
+          <div 
+            className="mt-1 flex items-center gap-1 text-xs text-muted-foreground hover:text-amber-600 cursor-pointer transition-colors"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onViewDetails) onViewDetails();
+            }}
+            title="Click to view full location details"
+          >
+            <MapPin className="h-3 w-3 flex-shrink-0" />
+            <span className="truncate">
+              {locationName || classificationName || item.location || 'Unassigned'}
+            </span>
+          </div>
+        )}
         
         {/* Quantity Display */}
         <div className="mt-2 flex items-center justify-between">

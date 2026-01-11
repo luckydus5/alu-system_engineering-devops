@@ -45,7 +45,10 @@ import { Department } from '@/hooks/useDepartments';
 import { useWarehouseClassifications, WarehouseClassification } from '@/hooks/useWarehouseClassifications';
 import { useWarehouseLocations, WarehouseLocation } from '@/hooks/useWarehouseLocations';
 import { useInventory, InventoryItem } from '@/hooks/useInventory';
+import { useStockTransactions } from '@/hooks/useStockTransactions';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import { FolderCard } from './FolderCard';
 import { ClassificationDialog } from './ClassificationDialog';
 import { LocationDialog } from './LocationDialog';
@@ -53,6 +56,9 @@ import { ItemCard } from './ItemCard';
 import { AddItemDialog } from './AddItemDialog';
 import { EditItemDialog } from './EditItemDialog';
 import { MoveItemsDialog } from './MoveItemsDialog';
+import { StockTransactionDialog, StockTransaction } from './StockTransactionDialog';
+import { ItemDetailDialog } from './ItemDetailDialog';
+import { ImagePreviewDialog } from './ImagePreviewDialog';
 import { cn } from '@/lib/utils';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
@@ -72,6 +78,7 @@ interface NavigationState {
 
 export function WarehouseDashboardView({ department, canManage }: WarehouseDashboardViewProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   
   // Navigation state
   const [navState, setNavState] = useState<NavigationState>({ level: 'classifications' });
@@ -98,6 +105,19 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   const [singleItemToMove, setSingleItemToMove] = useState<InventoryItem | null>(null);
   const [editItemDialogOpen, setEditItemDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
+  
+  // Stock transaction dialog states
+  const [stockTransactionOpen, setStockTransactionOpen] = useState(false);
+  const [stockTransactionItem, setStockTransactionItem] = useState<InventoryItem | null>(null);
+  const [stockTransactionType, setStockTransactionType] = useState<'stock_in' | 'stock_out'>('stock_in');
+  
+  // Item detail dialog states
+  const [itemDetailOpen, setItemDetailOpen] = useState(false);
+  const [detailItem, setDetailItem] = useState<InventoryItem | null>(null);
+  
+  // Image preview dialog states
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   // Data hooks
   const { 
@@ -134,6 +154,36 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     moveItems,
     refetch: refetchItems,
   } = useInventory(department.id);
+
+  // Stock transactions hook
+  const { createTransaction, refetch: refetchTransactions } = useStockTransactions(department.id);
+
+  // Real-time subscription for inventory updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('inventory-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'inventory_items',
+          filter: `department_id=eq.${department.id}`,
+        },
+        (payload) => {
+          console.log('Inventory change detected:', payload);
+          // Refetch on any change
+          refetchItems();
+          refetchClassifications();
+          refetchLocations();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [department.id, refetchItems, refetchClassifications, refetchLocations]);
 
   // Compute accurate counts locally from the full inventory list (avoids 1000-row API caps)
   const locationStatsById = useMemo(() => {
@@ -405,6 +455,84 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
       classification_id: navState.classification.id,
       location_id: navState.currentLocation?.id || null,
     });
+  };
+
+  // Stock transaction handler
+  const handleStockTransaction = async (transaction: StockTransaction): Promise<boolean> => {
+    const item = items.find(i => i.id === transaction.item_id);
+    if (!item) return false;
+
+    const newQuantity = transaction.type === 'stock_in' 
+      ? item.quantity + transaction.quantity 
+      : item.quantity - transaction.quantity;
+
+    if (newQuantity < 0) {
+      toast({
+        title: 'Error',
+        description: 'Cannot reduce quantity below zero',
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    const success = await updateItem(transaction.item_id, { quantity: newQuantity });
+    
+    if (success) {
+      // Record the transaction
+      await createTransaction({
+        inventory_item_id: item.id,
+        department_id: department.id,
+        transaction_type: transaction.type === 'stock_in' ? 'in' : 'out',
+        quantity: transaction.quantity,
+        previous_quantity: item.quantity,
+        new_quantity: newQuantity,
+        notes: transaction.notes,
+      });
+      
+      toast({
+        title: transaction.type === 'stock_in' ? 'Stock In Recorded' : 'Stock Out Recorded',
+        description: `${transaction.quantity} units ${transaction.type === 'stock_in' ? 'added to' : 'removed from'} ${item.item_name}`,
+      });
+      
+      // Refetch to update UI
+      await refetchItems();
+      await refetchTransactions();
+    }
+    
+    return success;
+  };
+
+  // Open stock in dialog
+  const openStockIn = (item: InventoryItem) => {
+    setStockTransactionItem(item);
+    setStockTransactionType('stock_in');
+    setStockTransactionOpen(true);
+  };
+
+  // Open stock out dialog
+  const openStockOut = (item: InventoryItem) => {
+    setStockTransactionItem(item);
+    setStockTransactionType('stock_out');
+    setStockTransactionOpen(true);
+  };
+
+  // Open item detail dialog
+  const openItemDetail = (item: InventoryItem) => {
+    setDetailItem(item);
+    setItemDetailOpen(true);
+  };
+
+  // Open image preview
+  const openImagePreview = (url: string) => {
+    setPreviewImageUrl(url);
+    setImagePreviewOpen(true);
+  };
+
+  // Get location and classification info for an item
+  const getItemLocationInfo = (item: InventoryItem) => {
+    const classification = classifications.find(c => c.id === item.classification_id);
+    const location = locations.find(l => l.id === item.location_id);
+    return { classification, location };
   };
 
   // Refresh handler
@@ -927,24 +1055,30 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                       )}
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                      {paginatedLocationItems.map((item) => (
-                        <ItemCard
-                          key={item.id}
-                          item={item}
-                          canManage={canManage}
-                          selectionMode={selectionMode}
-                          isSelected={selectedItemIds.has(item.id)}
-                          onSelect={(selected) => toggleItemSelection(item.id, selected)}
-                          onEdit={() => {
-                            setEditingItem(item);
-                            setEditItemDialogOpen(true);
-                          }}
-                          onDelete={() => deleteItem(item.id)}
-                          onStockIn={() => {}}
-                          onStockOut={() => {}}
-                          onMove={() => openMoveDialogForSingleItem(item)}
-                        />
-                      ))}
+                      {paginatedLocationItems.map((item) => {
+                        const { classification, location } = getItemLocationInfo(item);
+                        return (
+                          <ItemCard
+                            key={item.id}
+                            item={item}
+                            canManage={canManage}
+                            selectionMode={selectionMode}
+                            isSelected={selectedItemIds.has(item.id)}
+                            onSelect={(selected) => toggleItemSelection(item.id, selected)}
+                            onEdit={() => {
+                              setEditingItem(item);
+                              setEditItemDialogOpen(true);
+                            }}
+                            onDelete={() => deleteItem(item.id)}
+                            onStockIn={() => openStockIn(item)}
+                            onStockOut={() => openStockOut(item)}
+                            onViewDetails={() => openItemDetail(item)}
+                            onMove={() => openMoveDialogForSingleItem(item)}
+                            locationName={navState.currentLocation?.name || location?.name}
+                            classificationName={navState.classification?.name || classification?.name}
+                          />
+                        );
+                      })}
                     </div>
                     {/* Bottom Pagination for large lists */}
                     {totalItemsPages > 1 && (
@@ -1090,6 +1224,43 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Stock Transaction Dialog */}
+      <StockTransactionDialog
+        open={stockTransactionOpen}
+        onOpenChange={setStockTransactionOpen}
+        item={stockTransactionItem}
+        onSubmit={handleStockTransaction}
+      />
+
+      {/* Item Detail Dialog */}
+      <ItemDetailDialog
+        open={itemDetailOpen}
+        onOpenChange={setItemDetailOpen}
+        item={detailItem}
+        classification={navState.classification ? { id: navState.classification.id, name: navState.classification.name, color: navState.classification.color } : null}
+        location={navState.currentLocation ? { id: navState.currentLocation.id, name: navState.currentLocation.name } : null}
+        parentLocations={navState.parentLocations?.map(l => ({ id: l.id, name: l.name })) || []}
+        canManage={canManage}
+        onStockIn={() => detailItem && openStockIn(detailItem)}
+        onStockOut={() => detailItem && openStockOut(detailItem)}
+        onEdit={() => {
+          if (detailItem) {
+            setEditingItem(detailItem);
+            setEditItemDialogOpen(true);
+          }
+        }}
+        onDelete={() => detailItem && deleteItem(detailItem.id)}
+        onViewFullImage={openImagePreview}
+      />
+
+      {/* Image Preview Dialog */}
+      <ImagePreviewDialog
+        open={imagePreviewOpen}
+        onOpenChange={setImagePreviewOpen}
+        imageUrl={previewImageUrl}
+        alt={detailItem?.item_name}
+      />
     </div>
   );
 }
