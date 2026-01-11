@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.system-monitor]
 verify_jwt = false
+
+[functions.admin-reset-password]
+verify_jwt = false

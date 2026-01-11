@@ -23,6 +23,7 @@ serve(async (req: Request): Promise<Response> => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     
     // Create admin client with service role key
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
@@ -34,26 +35,30 @@ serve(async (req: Request): Promise<Response> => {
     if (action === "initiate") {
       // Verify the caller is a super admin
       const authHeader = req.headers.get("Authorization");
-      if (!authHeader) {
+      if (!authHeader?.startsWith("Bearer ")) {
+        console.log("No auth header provided");
         return new Response(
           JSON.stringify({ error: "Unauthorized" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      // Create a client with the user's token to verify their identity
-      const supabaseUser = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
-        global: { headers: { Authorization: authHeader } },
-        auth: { autoRefreshToken: false, persistSession: false }
-      });
-
-      const { data: { user: callingUser }, error: authError } = await supabaseUser.auth.getUser();
-      if (authError || !callingUser) {
+      // Extract the JWT token
+      const jwt = authHeader.replace("Bearer ", "");
+      
+      // Use admin client to get user from JWT
+      const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(jwt);
+      
+      if (userError || !userData?.user) {
+        console.error("User verification error:", userError);
         return new Response(
           JSON.stringify({ error: "Invalid authentication" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      const callingUser = userData.user;
+      console.log("Authenticated user:", callingUser.id, callingUser.email);
 
       // Check if calling user is super_admin
       const { data: roleData, error: roleError } = await supabaseAdmin
@@ -61,6 +66,8 @@ serve(async (req: Request): Promise<Response> => {
         .select("role")
         .eq("user_id", callingUser.id)
         .single();
+
+      console.log("Role check:", roleData, roleError);
 
       if (roleError || roleData?.role !== "super_admin") {
         return new Response(
@@ -72,7 +79,7 @@ serve(async (req: Request): Promise<Response> => {
       // Get calling user's profile for the initiated_by_name field
       const { data: callerProfile } = await supabaseAdmin
         .from("profiles")
-        .select("full_name")
+        .select("full_name, email")
         .eq("id", callingUser.id)
         .single();
 
@@ -97,7 +104,7 @@ serve(async (req: Request): Promise<Response> => {
           user_id: userId,
           user_email: userEmail,
           initiated_by: callingUser.id,
-          initiated_by_name: callerProfile?.full_name || callingUser.email,
+          initiated_by_name: callerProfile?.full_name || callerProfile?.email || callingUser.email,
         })
         .select()
         .single();
@@ -109,6 +116,8 @@ serve(async (req: Request): Promise<Response> => {
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      console.log("Reset token created:", resetData.id);
 
       // Create a notification for the user
       await supabaseAdmin
@@ -164,11 +173,14 @@ serve(async (req: Request): Promise<Response> => {
         .single();
 
       if (findError || !resetData) {
+        console.error("Token lookup error:", findError);
         return new Response(
           JSON.stringify({ error: "Invalid or expired reset token" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      console.log("Found valid reset token for user:", resetData.user_id);
 
       // Update the user's password using admin API
       const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
@@ -199,6 +211,8 @@ serve(async (req: Request): Promise<Response> => {
           message: "Your password has been changed. You can now log in with your new password.",
           type: "security",
         });
+
+      console.log("Password updated successfully for user:", resetData.user_id);
 
       return new Response(
         JSON.stringify({ success: true, message: "Password updated successfully" }),
