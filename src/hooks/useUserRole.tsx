@@ -32,22 +32,27 @@ interface UserRoleCache {
 let globalUserRoleCache: UserRoleCache | null = null;
 const ROLE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache for roles
 
+// Helper to check if cache is valid for a user
+const isCacheValid = (userId: string | undefined): boolean => {
+  return !!(globalUserRoleCache && userId && globalUserRoleCache.userId === userId);
+};
+
 export function useUserRole() {
   const { user } = useAuth();
   const [roles, setRoles] = useState<UserRole[]>(() => 
-    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.roles : []
+    isCacheValid(user?.id) ? globalUserRoleCache!.roles : []
   );
   const [profile, setProfile] = useState<Profile | null>(() =>
-    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.profile : null
+    isCacheValid(user?.id) ? globalUserRoleCache!.profile : null
   );
   const [loading, setLoading] = useState(() => 
-    !(globalUserRoleCache?.userId === user?.id)
+    !isCacheValid(user?.id)
   );
   const [highestRole, setHighestRole] = useState<AppRole>(() =>
-    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.highestRole : 'staff'
+    isCacheValid(user?.id) ? globalUserRoleCache!.highestRole : 'staff'
   );
   const [grantedDepartmentIds, setGrantedDepartmentIds] = useState<string[]>(() =>
-    globalUserRoleCache?.userId === user?.id ? globalUserRoleCache.grantedDepartmentIds : []
+    isCacheValid(user?.id) ? globalUserRoleCache!.grantedDepartmentIds : []
   );
   
   const fetchInProgress = useRef(false);
