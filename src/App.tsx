@@ -14,6 +14,7 @@ import Department from "./pages/Department";
 import Admin from "./pages/Admin";
 import SuperAdmin from "./pages/SuperAdmin";
 import SystemHealth from "./pages/SystemHealth";
+import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/admin" element={<Admin />} />
               <Route path="/super-admin" element={<SuperAdmin />} />
               <Route path="/system-health" element={<SystemHealth />} />
+              <Route path="/notifications" element={<Notifications />} />
               {/* Catch-all route for 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>

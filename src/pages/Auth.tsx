@@ -157,11 +157,11 @@ export default function Auth() {
             </div>
           </div>
           <h1 className="text-5xl xl:text-6xl font-bold text-white mb-4 leading-tight">
-            Fleet & Maintenance
-            <span className="block text-gradient-gold">Management System</span>
+            HQ Power
+            <span className="block text-gradient-gold">Management Systems</span>
           </h1>
           <p className="text-xl text-white/70 max-w-md">
-            Empowering operational excellence through intelligent fleet management.
+            Empowering operational excellence through intelligent management systems.
           </p>
         </div>
 
@@ -304,7 +304,7 @@ export default function Auth() {
           <div className="lg:hidden flex flex-col items-center mb-10">
             <img src={hqPowerLogo} alt="HQ Power" className="h-16 w-auto mb-4" />
             <h1 className="text-2xl font-bold text-foreground">HQ Power</h1>
-            <p className="text-sm text-muted-foreground">Fleet Management System</p>
+            <p className="text-sm text-muted-foreground">Management Systems</p>
           </div>
 
           {/* Welcome Text */}

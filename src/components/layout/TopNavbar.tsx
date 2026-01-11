@@ -7,14 +7,17 @@ import {
   Shield,
   Activity,
   Menu,
-  X
+  X,
+  Bell
 } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +35,7 @@ export function TopNavbar() {
   const { signOut } = useAuth();
   const { profile, highestRole, roles, grantedDepartmentIds } = useUserRole();
   const { departments } = useDepartments();
+  const { unreadCount } = useNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
@@ -121,8 +125,25 @@ export function TopNavbar() {
 
         </nav>
 
-        {/* Right side - Profile */}
-        <div className="flex items-center gap-3 ml-auto">
+        {/* Right side - Notifications & Profile */}
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Notification Bell */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative rounded-lg"
+            onClick={() => navigate('/notifications')}
+          >
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <Badge 
+                className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-xs bg-destructive text-destructive-foreground"
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Badge>
+            )}
+          </Button>
+
           {/* Profile Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

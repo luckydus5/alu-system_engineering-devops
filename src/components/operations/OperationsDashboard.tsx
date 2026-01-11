@@ -27,11 +27,13 @@ import {
   Clock,
   Truck,
   Radio,
+  Headphones,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useFieldUpdates, FieldUpdate, CreateFieldUpdateData } from '@/hooks/useFieldUpdates';
 import { FieldUpdateCard } from './FieldUpdateCard';
 import { AddUpdateDialog } from './AddUpdateDialog';
+import { RequestITSupportDialog } from '@/components/shared/RequestITSupportDialog';
 import { cn } from '@/lib/utils';
 
 interface OperationsDashboardProps {
@@ -47,6 +49,7 @@ export function OperationsDashboard({ department, canManage }: OperationsDashboa
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [itSupportOpen, setItSupportOpen] = useState(false);
 
   const {
     updates,
@@ -153,6 +156,15 @@ export function OperationsDashboard({ department, canManage }: OperationsDashboa
           </div>
           
           <div className="flex items-center gap-3">
+            <Button 
+              variant="secondary" 
+              size="sm"
+              onClick={() => setItSupportOpen(true)}
+              className="bg-white/20 hover:bg-white/30 text-white border-none"
+            >
+              <Headphones className="h-4 w-4 mr-2" />
+              IT Support
+            </Button>
             <Button 
               variant="secondary" 
               size="icon" 
@@ -498,6 +510,14 @@ export function OperationsDashboard({ department, canManage }: OperationsDashboa
         onSubmit={handleSubmit}
         editUpdate={editUpdate}
         isSubmitting={isSubmitting}
+      />
+
+      {/* IT Support Dialog */}
+      <RequestITSupportDialog
+        open={itSupportOpen}
+        onOpenChange={setItSupportOpen}
+        departmentId={department.id}
+        departmentName={department.name}
       />
     </div>
   );
