@@ -78,12 +78,16 @@ export function useInventory(departmentId: string | undefined) {
 
     try {
       fetchInProgress.current = true;
-      setLoading(true);
+      // Don't show loading if we have cached data
+      if (!globalCache || globalCache.departmentId !== departmentId) {
+        setLoading(true);
+      }
 
       // Supabase/PostgREST enforces a max rows per request (often 1000).
       // We must paginate to ensure large folders don't appear empty.
-      // Use parallel fetching for speed
+      // Use batched parallel fetching to avoid overwhelming the network
       const pageSize = 1000;
+      const maxConcurrent = 3; // Limit concurrent requests to prevent "Failed to fetch"
       
       // First, get the count to know how many pages we need
       const { count, error: countError } = await supabase
@@ -96,27 +100,31 @@ export function useInventory(departmentId: string | undefined) {
       const totalCount = count || 0;
       const numPages = Math.ceil(totalCount / pageSize);
       
-      // Fetch all pages in parallel (much faster than sequential)
-      const pagePromises = [];
-      for (let page = 0; page < numPages; page++) {
-        const from = page * pageSize;
-        pagePromises.push(
-          supabase
-            .from('inventory_items')
-            .select('*')
-            .eq('department_id', departmentId)
-            .order('item_number', { ascending: true })
-            .range(from, from + pageSize - 1)
-        );
-      }
-
-      const results = await Promise.all(pagePromises);
-      
-      // Combine all results
+      // Fetch pages in batches to avoid network overload
       const all: InventoryItem[] = [];
-      for (const result of results) {
-        if (result.error) throw result.error;
-        all.push(...(result.data as InventoryItem[] || []));
+      
+      for (let batchStart = 0; batchStart < numPages; batchStart += maxConcurrent) {
+        const batchEnd = Math.min(batchStart + maxConcurrent, numPages);
+        const batchPromises = [];
+        
+        for (let page = batchStart; page < batchEnd; page++) {
+          const from = page * pageSize;
+          batchPromises.push(
+            supabase
+              .from('inventory_items')
+              .select('*')
+              .eq('department_id', departmentId)
+              .order('item_number', { ascending: true })
+              .range(from, from + pageSize - 1)
+          );
+        }
+        
+        const results = await Promise.all(batchPromises);
+        
+        for (const result of results) {
+          if (result.error) throw result.error;
+          all.push(...(result.data as InventoryItem[] || []));
+        }
       }
 
       // Calculate stats
