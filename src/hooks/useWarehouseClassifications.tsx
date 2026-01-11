@@ -35,7 +35,7 @@ export function useWarehouseClassifications(departmentId: string | undefined) {
     try {
       setLoading(true);
       
-      // Fetch classifications
+      // Fetch classifications - single query
       const { data, error } = await (supabase as any)
         .from('warehouse_classifications')
         .select('*')
@@ -52,36 +52,51 @@ export function useWarehouseClassifications(departmentId: string | undefined) {
         throw error;
       }
 
-      // Fetch location counts and item stats for each classification
-      const classificationsWithStats = await Promise.all(
-        (data || []).map(async (classification: WarehouseClassification) => {
-          // Get location count
-          const { count: locationCount } = await (supabase as any)
-            .from('warehouse_locations')
-            .select('*', { count: 'exact', head: true })
-            .eq('classification_id', classification.id);
+      // If no classifications, return early
+      if (!data || data.length === 0) {
+        setClassifications([]);
+        setLoading(false);
+        return;
+      }
 
-          // Get item stats
-          const { data: items } = await (supabase as any)
-            .from('inventory_items')
-            .select('quantity, min_quantity')
-            .eq('classification_id', classification.id);
+      // Optimized: Fetch all data in parallel with single queries
+      const classificationIds = data.map((c: WarehouseClassification) => c.id);
 
-          const itemCount = items?.length || 0;
-          const totalQuantity = items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
-          const lowStockCount = items?.filter((item: any) => 
-            item.quantity <= (item.min_quantity || 0)
-          ).length || 0;
+      // Batch fetch location counts and items in parallel
+      const [locationsResult, itemsResult] = await Promise.all([
+        (supabase as any)
+          .from('warehouse_locations')
+          .select('classification_id')
+          .in('classification_id', classificationIds),
+        (supabase as any)
+          .from('inventory_items')
+          .select('classification_id, quantity, min_quantity')
+          .in('classification_id', classificationIds)
+      ]);
 
-          return {
-            ...classification,
-            location_count: locationCount || 0,
-            item_count: itemCount,
-            total_quantity: totalQuantity,
-            low_stock_count: lowStockCount,
-          };
-        })
-      );
+      // Build maps for O(1) lookups
+      const locationCounts = new Map<string, number>();
+      (locationsResult.data || []).forEach((loc: any) => {
+        locationCounts.set(loc.classification_id, (locationCounts.get(loc.classification_id) || 0) + 1);
+      });
+
+      const itemStats = new Map<string, { count: number; quantity: number; lowStock: number }>();
+      (itemsResult.data || []).forEach((item: any) => {
+        const stats = itemStats.get(item.classification_id) || { count: 0, quantity: 0, lowStock: 0 };
+        stats.count += 1;
+        stats.quantity += item.quantity || 0;
+        if (item.quantity <= (item.min_quantity || 0)) stats.lowStock += 1;
+        itemStats.set(item.classification_id, stats);
+      });
+
+      // Build final array
+      const classificationsWithStats = data.map((classification: WarehouseClassification) => ({
+        ...classification,
+        location_count: locationCounts.get(classification.id) || 0,
+        item_count: itemStats.get(classification.id)?.count || 0,
+        total_quantity: itemStats.get(classification.id)?.quantity || 0,
+        low_stock_count: itemStats.get(classification.id)?.lowStock || 0,
+      }));
 
       setClassifications(classificationsWithStats);
     } catch (error: any) {

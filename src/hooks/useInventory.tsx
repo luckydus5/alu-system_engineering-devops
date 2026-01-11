@@ -83,49 +83,18 @@ export function useInventory(departmentId: string | undefined) {
         setLoading(true);
       }
 
-      // Supabase/PostgREST enforces a max rows per request (often 1000).
-      // We must paginate to ensure large folders don't appear empty.
-      // Use batched parallel fetching to avoid overwhelming the network
-      const pageSize = 1000;
-      const maxConcurrent = 3; // Limit concurrent requests to prevent "Failed to fetch"
-      
-      // First, get the count to know how many pages we need
-      const { count, error: countError } = await supabase
+      // Optimized: Single query with reasonable limit for initial load
+      // Most departments won't have more than 5000 items
+      const { data, error } = await supabase
         .from('inventory_items')
-        .select('*', { count: 'exact', head: true })
-        .eq('department_id', departmentId);
+        .select('*')
+        .eq('department_id', departmentId)
+        .order('updated_at', { ascending: false })
+        .limit(5000);
 
-      if (countError) throw countError;
+      if (error) throw error;
 
-      const totalCount = count || 0;
-      const numPages = Math.ceil(totalCount / pageSize);
-      
-      // Fetch pages in batches to avoid network overload
-      const all: InventoryItem[] = [];
-      
-      for (let batchStart = 0; batchStart < numPages; batchStart += maxConcurrent) {
-        const batchEnd = Math.min(batchStart + maxConcurrent, numPages);
-        const batchPromises = [];
-        
-        for (let page = batchStart; page < batchEnd; page++) {
-          const from = page * pageSize;
-          batchPromises.push(
-            supabase
-              .from('inventory_items')
-              .select('*')
-              .eq('department_id', departmentId)
-              .order('item_number', { ascending: true })
-              .range(from, from + pageSize - 1)
-          );
-        }
-        
-        const results = await Promise.all(batchPromises);
-        
-        for (const result of results) {
-          if (result.error) throw result.error;
-          all.push(...(result.data as InventoryItem[] || []));
-        }
-      }
+      const all = (data || []) as InventoryItem[];
 
       // Calculate stats
       const uniqueLocations = new Set(all.map(item => item.location_id || item.location)).size;

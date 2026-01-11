@@ -75,36 +75,52 @@ export function useWarehouseLocations(
         throw error;
       }
 
-      // Fetch item stats for each location
-      const locationsWithStats = await Promise.all(
-        (data || []).map(async (location: WarehouseLocation) => {
-          // Get items in this location
-          const { data: items } = await (supabase as any)
-            .from('inventory_items')
-            .select('quantity, min_quantity')
-            .eq('location_id', location.id);
+      // If no locations, return early
+      if (!data || data.length === 0) {
+        setLocations([]);
+        setLoading(false);
+        return;
+      }
 
-          // Get sub-folder count
-          const { count: subFolderCount } = await (supabase as any)
-            .from('warehouse_locations')
-            .select('*', { count: 'exact', head: true })
-            .eq('parent_id', location.id);
+      // Optimized: Batch fetch all stats in parallel
+      const locationIds = data.map((l: WarehouseLocation) => l.id);
 
-          const itemCount = items?.length || 0;
-          const totalQuantity = items?.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0) || 0;
-          const lowStockCount = items?.filter((item: any) => 
-            item.quantity <= (item.min_quantity || 0)
-          ).length || 0;
+      const [itemsResult, subFoldersResult] = await Promise.all([
+        // Get all items in these locations at once
+        (supabase as any)
+          .from('inventory_items')
+          .select('location_id, quantity, min_quantity')
+          .in('location_id', locationIds),
+        // Get all sub-folders at once
+        (supabase as any)
+          .from('warehouse_locations')
+          .select('parent_id')
+          .in('parent_id', locationIds)
+      ]);
 
-          return {
-            ...location,
-            item_count: itemCount,
-            total_quantity: totalQuantity,
-            low_stock_count: lowStockCount,
-            sub_folder_count: subFolderCount || 0,
-          };
-        })
-      );
+      // Build maps for O(1) lookups
+      const itemStats = new Map<string, { count: number; quantity: number; lowStock: number }>();
+      (itemsResult.data || []).forEach((item: any) => {
+        const stats = itemStats.get(item.location_id) || { count: 0, quantity: 0, lowStock: 0 };
+        stats.count += 1;
+        stats.quantity += item.quantity || 0;
+        if (item.quantity <= (item.min_quantity || 0)) stats.lowStock += 1;
+        itemStats.set(item.location_id, stats);
+      });
+
+      const subFolderCounts = new Map<string, number>();
+      (subFoldersResult.data || []).forEach((loc: any) => {
+        subFolderCounts.set(loc.parent_id, (subFolderCounts.get(loc.parent_id) || 0) + 1);
+      });
+
+      // Build final array
+      const locationsWithStats = data.map((location: WarehouseLocation) => ({
+        ...location,
+        item_count: itemStats.get(location.id)?.count || 0,
+        total_quantity: itemStats.get(location.id)?.quantity || 0,
+        low_stock_count: itemStats.get(location.id)?.lowStock || 0,
+        sub_folder_count: subFolderCounts.get(location.id) || 0,
+      }));
 
       setLocations(locationsWithStats);
     } catch (error: any) {
