@@ -40,6 +40,7 @@ import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2 } from 'lucide-rea
 import { DepartmentAccessDialog } from './DepartmentAccessDialog';
 
 const roleColors: Record<AppRole, string> = {
+  super_admin: 'bg-purple-700 text-white',
   admin: 'bg-destructive text-destructive-foreground',
   director: 'bg-primary text-primary-foreground',
   manager: 'bg-blue-600 text-white',
@@ -53,6 +54,7 @@ const roles: { value: AppRole; label: string }[] = [
   { value: 'manager', label: 'Manager' },
   { value: 'director', label: 'Director' },
   { value: 'admin', label: 'Admin' },
+  { value: 'super_admin', label: 'Super Admin' },
 ];
 
 export function UserList() {
