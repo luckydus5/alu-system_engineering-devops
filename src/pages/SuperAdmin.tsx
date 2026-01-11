@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useUserRole } from '@/hooks/useUserRole';
 import { useDepartments } from '@/hooks/useDepartments';
 import { supabase } from '@/integrations/supabase/client';
+import { WarehouseTransactionHistory } from '@/components/warehouse/WarehouseTransactionHistory';
 import { 
   Shield, 
   Activity, 
@@ -129,6 +130,7 @@ const sidebarTools = [
   { id: 'audit', label: 'Audit Logs', icon: History, description: 'System activity history' },
   { id: 'users', label: 'User Overview', icon: Users, description: 'All system users' },
   { id: 'departments', label: 'Departments', icon: Building2, description: 'Department management' },
+  { id: 'warehouse', label: 'Warehouse', icon: Database, description: 'Stock transactions' },
   { id: 'live', label: 'Live Monitor', icon: Activity, description: 'Real-time activity' },
   { id: 'reports', label: 'System Reports', icon: FileText, description: 'Auto-generated reports' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Usage statistics' },
@@ -759,6 +761,9 @@ export default function SuperAdmin() {
             </ScrollArea>
           </div>
         );
+
+      case 'warehouse':
+        return <WarehouseTransactionHistory departments={departments} />;
 
       case 'departments':
         return (
