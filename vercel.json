@@ -3,5 +3,11 @@
   "outputDirectory": "dist",
   "devCommand": "npm run dev",
   "installCommand": "npm install",
-  "framework": null
+  "framework": "vite",
+  "rewrites": [
+    {
+      "source": "/((?!api|assets|favicon|robots).*)",
+      "destination": "/index.html"
+    }
+  ]
 }
