@@ -43,17 +43,20 @@ export function useSessionHeartbeat() {
     }
   }, [location.pathname, sendHeartbeat]);
 
-  // Set up interval heartbeat
+  // Set up interval heartbeat - delay initial to not block login
   useEffect(() => {
     if (!user) return;
 
-    // Send initial heartbeat immediately
-    sendHeartbeat();
+    // Delay first heartbeat to not block login/navigation
+    const initialTimeout = setTimeout(() => {
+      sendHeartbeat();
+    }, 2000);
 
-    // Set up interval for heartbeat every 15 seconds (more frequent)
-    intervalRef.current = setInterval(sendHeartbeat, 15000);
+    // Set up interval for heartbeat every 30 seconds (balanced frequency)
+    intervalRef.current = setInterval(sendHeartbeat, 30000);
 
     return () => {
+      clearTimeout(initialTimeout);
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }

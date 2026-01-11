@@ -30,11 +30,22 @@ interface UserRoleCache {
 }
 
 let globalUserRoleCache: UserRoleCache | null = null;
-const ROLE_CACHE_TTL = 2 * 60 * 1000; // 2 minutes cache for roles
+const ROLE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache for roles - prevents re-fetching on navigation
 
 // Helper to check if cache is valid for a user
 const isCacheValid = (userId: string | undefined): boolean => {
-  return !!(globalUserRoleCache && userId && globalUserRoleCache.userId === userId);
+  if (!globalUserRoleCache || !userId) return false;
+  if (globalUserRoleCache.userId !== userId) {
+    // Clear stale cache for different user
+    globalUserRoleCache = null;
+    return false;
+  }
+  return true;
+};
+
+// Export function to clear cache on logout
+export const clearUserRoleCache = () => {
+  globalUserRoleCache = null;
 };
 
 export function useUserRole() {
@@ -87,8 +98,9 @@ export function useUserRole() {
 
     try {
       fetchInProgress.current = true;
-      // Don't show loading if we have cached data
-      if (!globalUserRoleCache || globalUserRoleCache.userId !== user.id) {
+      // Don't show loading state if we already have some data - prevents UI flicker
+      const hasExistingData = globalUserRoleCache?.userId === user.id || roles.length > 0;
+      if (!hasExistingData) {
         setLoading(true);
       }
 

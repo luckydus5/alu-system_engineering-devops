@@ -2,6 +2,7 @@ import { useState, useEffect, createContext, useContext, ReactNode, useCallback,
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { clearUserRoleCache } from './useUserRole';
 
 interface AuthContextType {
   user: User | null;
@@ -93,7 +94,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     try {
-      // Clear local state first
+      // Clear user role cache first to prevent stale data
+      clearUserRoleCache();
+      
+      // Clear local state immediately
       setUser(null);
       setSession(null);
       

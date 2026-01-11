@@ -65,9 +65,9 @@ export default function Auth() {
 
     setIsLoading(true);
     const { error } = await signIn(email, password);
-    setIsLoading(false);
 
     if (error) {
+      setIsLoading(false);
       toast({
         title: "Login failed",
         description: error.message === 'Invalid login credentials' 
@@ -78,11 +78,13 @@ export default function Auth() {
       return;
     }
 
+    // Navigate immediately - don't wait for state updates
     toast({
       title: "Welcome back!",
       description: "You have successfully logged in.",
     });
-    navigate('/');
+    navigate('/', { replace: true });
+    // Keep loading true to prevent flicker during navigation
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
