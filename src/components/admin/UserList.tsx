@@ -205,14 +205,16 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                       <TableCell>{user.department_name || '-'}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setAccessUser(user)}
-                            title="Manage department access"
-                          >
-                            <Building2 className="w-4 h-4" />
-                          </Button>
+                          {isSuperAdmin && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setAccessUser(user)}
+                              title="Manage department access"
+                            >
+                              <Building2 className="w-4 h-4" />
+                            </Button>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -340,12 +342,14 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
       </AlertDialog>
 
       {/* Department Access Dialog */}
-      <DepartmentAccessDialog
-        user={accessUser}
-        open={!!accessUser}
-        onOpenChange={() => setAccessUser(null)}
-        onSuccess={refetch}
-      />
+      {isSuperAdmin && (
+        <DepartmentAccessDialog
+          user={accessUser}
+          open={!!accessUser}
+          onOpenChange={() => setAccessUser(null)}
+          onSuccess={refetch}
+        />
+      )}
     </>
   );
 }

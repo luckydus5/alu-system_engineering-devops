@@ -1,25 +1,26 @@
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useUserRole } from '@/hooks/useUserRole';
 import { FleetMaintenanceDashboard } from '@/components/fleet/FleetMaintenanceDashboard';
 import { WarehouseLayout } from '@/components/warehouse/WarehouseLayout';
 import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
 import { OfficeDashboard } from '@/components/office/OfficeDashboard';
-import { ShieldAlert } from 'lucide-react';
 
 export default function Department() {
+  const navigate = useNavigate();
   const { code } = useParams<{ code: string }>();
   const { departments, loading: deptLoading } = useDepartments();
   const { hasRole, isInDepartment, loading: roleLoading } = useUserRole();
 
   const department = departments.find(d => d.code.toLowerCase() === code?.toLowerCase());
 
-  // Check access: user must be super_admin, admin, director, or in the department
-  const isAdmin = hasRole('super_admin') || hasRole('admin') || hasRole('director');
+  // Check access: only super_admin/director can bypass department membership
+  const isPrivileged = hasRole('super_admin') || hasRole('director');
   const canManage = hasRole('super_admin') || hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager');
-  const hasAccess = isAdmin || (department && isInDepartment(department.id));
+  const hasAccess = isPrivileged || (department && isInDepartment(department.id));
 
   // Check department types
   const deptCode = department?.code?.toUpperCase();
@@ -63,11 +64,12 @@ export default function Department() {
           <CardContent className="py-12 text-center">
             <ShieldAlert className="h-12 w-12 mx-auto text-destructive mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Access Denied</h3>
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mb-6">
               You don't have permission to access the {department.name} department.
               <br />
-              Contact an administrator if you need access.
+              Contact your super admin if you need access.
             </p>
+            <Button variant="outline" onClick={() => navigate('/')}>Return to Dashboard</Button>
           </CardContent>
         </Card>
       </DashboardLayout>

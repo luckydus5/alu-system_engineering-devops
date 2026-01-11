@@ -30,12 +30,21 @@ export function TopNavbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const { profile, highestRole } = useUserRole();
+  const { profile, highestRole, roles, grantedDepartmentIds } = useUserRole();
   const { departments } = useDepartments();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
   const isSuperAdmin = highestRole === 'super_admin';
+  const isDirector = highestRole === 'director';
+
+  const primaryDeptId = roles[0]?.department_id;
+  const accessibleDeptIds = new Set(
+    [primaryDeptId, ...grantedDepartmentIds].filter(Boolean) as string[]
+  );
+  const navDepartments = isSuperAdmin || isDirector
+    ? departments
+    : departments.filter((d) => accessibleDeptIds.has(d.id));
 
   const mainNavItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
@@ -83,7 +92,7 @@ export function TopNavbar() {
                 variant="ghost"
                 className={cn(
                   "flex items-center gap-2 px-4 py-2 h-auto text-sm font-medium rounded-lg",
-                  departments.some(d => isDepartmentActive(d.code))
+                  navDepartments.some(d => isDepartmentActive(d.code))
                     ? "bg-primary text-primary-foreground shadow-premium"
                     : "text-muted-foreground hover:text-foreground"
                 )}
@@ -95,7 +104,7 @@ export function TopNavbar() {
             <DropdownMenuContent align="start" className="w-56 bg-popover border-border">
               <DropdownMenuLabel>Select Department</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {departments.map((dept) => (
+              {navDepartments.map((dept) => (
                 <DropdownMenuItem
                   key={dept.id}
                   onClick={() => navigate(`/department/${dept.code.toLowerCase()}`)}
@@ -146,16 +155,18 @@ export function TopNavbar() {
                     User Management
                   </DropdownMenuItem>
 
-                  <DropdownMenuItem onClick={() => navigate('/super-admin')} className="cursor-pointer">
-                    <Shield className="h-4 w-4 mr-2" />
-                    Audit Logs
-                  </DropdownMenuItem>
-
                   {isSuperAdmin && (
-                    <DropdownMenuItem onClick={() => navigate('/system-health')} className="cursor-pointer">
-                      <Activity className="h-4 w-4 mr-2" />
-                      System Health
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem onClick={() => navigate('/super-admin')} className="cursor-pointer">
+                        <Shield className="h-4 w-4 mr-2" />
+                        Audit Logs
+                      </DropdownMenuItem>
+
+                      <DropdownMenuItem onClick={() => navigate('/system-health')} className="cursor-pointer">
+                        <Activity className="h-4 w-4 mr-2" />
+                        System Health
+                      </DropdownMenuItem>
+                    </>
                   )}
 
                   <DropdownMenuSeparator />
@@ -217,34 +228,36 @@ export function TopNavbar() {
                   User Management
                 </NavLink>
 
-                <NavLink
-                  to="/super-admin"
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                    isActive('/super-admin')
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                  )}
-                >
-                  <Shield className="h-5 w-5" />
-                  Audit Logs
-                </NavLink>
-
                 {isSuperAdmin && (
-                  <NavLink
-                    to="/system-health"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={cn(
-                      "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                      isActive('/system-health')
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                    )}
-                  >
-                    <Activity className="h-5 w-5" />
-                    System Health
-                  </NavLink>
+                  <>
+                    <NavLink
+                      to="/super-admin"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                        isActive('/super-admin')
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      )}
+                    >
+                      <Shield className="h-5 w-5" />
+                      Audit Logs
+                    </NavLink>
+
+                    <NavLink
+                      to="/system-health"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                        isActive('/system-health')
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                      )}
+                    >
+                      <Activity className="h-5 w-5" />
+                      System Health
+                    </NavLink>
+                  </>
                 )}
               </>
             )}
@@ -253,7 +266,7 @@ export function TopNavbar() {
               <p className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 Departments
               </p>
-              {departments.map((dept) => (
+              {navDepartments.map((dept) => (
                 <NavLink
                   key={dept.id}
                   to={`/department/${dept.code.toLowerCase()}`}
