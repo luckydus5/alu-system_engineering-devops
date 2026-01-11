@@ -83,18 +83,32 @@ export function useInventory(departmentId: string | undefined) {
         setLoading(true);
       }
 
-      // Optimized: Single query with reasonable limit for initial load
-      // Most departments won't have more than 5000 items
-      const { data, error } = await supabase
-        .from('inventory_items')
-        .select('*')
-        .eq('department_id', departmentId)
-        .order('updated_at', { ascending: false })
-        .limit(5000);
+      // Fetch all items - with pagination to handle large datasets
+      let allData: InventoryItem[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (error) throw error;
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('inventory_items')
+          .select('*')
+          .eq('department_id', departmentId)
+          .order('updated_at', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
 
-      const all = (data || []) as InventoryItem[];
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          page++;
+          hasMore = data.length === pageSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      const all = allData as InventoryItem[];
 
       // Calculate stats
       const uniqueLocations = new Set(all.map(item => item.location_id || item.location)).size;
