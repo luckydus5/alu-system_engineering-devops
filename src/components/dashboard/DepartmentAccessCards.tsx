@@ -80,12 +80,12 @@ export function DepartmentAccessCards() {
     d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId
   );
 
-  // For super_admin/admin/director, show all departments
-  const isAdminOrDirector = highestRole === 'super_admin' || highestRole === 'admin' || highestRole === 'director';
+  // Full access only for super_admin + director
+  const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
   
   // All accessible departments for the user
-  const accessibleDepts = isAdminOrDirector 
-    ? departments 
+  const accessibleDepts = hasFullAccess
+    ? departments
     : [primaryDept, ...grantedDepts].filter(Boolean) as typeof departments;
 
   if (loading) {
@@ -134,7 +134,7 @@ export function DepartmentAccessCards() {
             </p>
           </div>
         </div>
-        {isAdminOrDirector && (
+        {hasFullAccess && (
           <Badge variant="secondary" className="bg-secondary/20 text-secondary-foreground border border-secondary/30">
             <Crown className="h-3 w-3 mr-1" />
             Full Access
