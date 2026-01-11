@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, Mail, Eye, EyeOff, Loader2, Zap, Shield, BarChart3, Users } from 'lucide-react';
+import { ArrowLeft, Mail, Eye, EyeOff, Loader2, Zap, Shield, BarChart3, Users, AlertCircle } from 'lucide-react';
 import { z } from 'zod';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
@@ -21,6 +21,8 @@ export default function Auth() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
+  const [checkingPendingReset, setCheckingPendingReset] = useState(false);
+  const [pendingResetInfo, setPendingResetInfo] = useState<{ hasReset: boolean; token: string | null }>({ hasReset: false, token: null });
   
   const { signIn, user, loading } = useAuth();
   const { toast } = useToast();
@@ -55,6 +57,33 @@ export default function Auth() {
     }
   };
 
+  // Check for pending admin password reset when email changes
+  const checkPendingReset = async (emailToCheck: string) => {
+    if (!emailToCheck || !emailSchema.safeParse(emailToCheck).success) {
+      setPendingResetInfo({ hasReset: false, token: null });
+      return false;
+    }
+
+    setCheckingPendingReset(true);
+    try {
+      const { data, error } = await supabase
+        .rpc('check_pending_password_reset', { email_to_check: emailToCheck });
+
+      if (!error && data && data.length > 0 && data[0].has_pending_reset) {
+        setPendingResetInfo({ hasReset: true, token: data[0].reset_token });
+        return true;
+      } else {
+        setPendingResetInfo({ hasReset: false, token: null });
+        return false;
+      }
+    } catch (err) {
+      setPendingResetInfo({ hasReset: false, token: null });
+      return false;
+    } finally {
+      setCheckingPendingReset(false);
+    }
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -64,10 +93,31 @@ export default function Auth() {
     if (!isEmailValid || !isPasswordValid) return;
 
     setIsLoading(true);
+
+    // First check if there's a pending admin reset for this email
+    const hasPendingReset = await checkPendingReset(email);
+    if (hasPendingReset && pendingResetInfo.token) {
+      setIsLoading(false);
+      navigate(`/admin-password-reset?token=${pendingResetInfo.token}&email=${encodeURIComponent(email)}`);
+      return;
+    }
+
     const { error } = await signIn(email, password);
 
     if (error) {
       setIsLoading(false);
+      
+      // Check if the error might be due to a pending reset (invalid credentials after reset)
+      const checkAgain = await checkPendingReset(email);
+      if (checkAgain && pendingResetInfo.token) {
+        toast({
+          title: "Password Reset Required",
+          description: "Your password has been reset by an administrator. Please set a new password.",
+        });
+        navigate(`/admin-password-reset?token=${pendingResetInfo.token}&email=${encodeURIComponent(email)}`);
+        return;
+      }
+      
       toast({
         title: "Login failed",
         description: error.message === 'Invalid login credentials' 
@@ -323,11 +373,30 @@ export default function Auth() {
                   type="email"
                   placeholder="you@company.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setPendingResetInfo({ hasReset: false, token: null });
+                  }}
+                  onBlur={() => email && checkPendingReset(email)}
                   disabled={isLoading}
                   className="h-12 bg-muted/50 border-border focus:border-primary rounded-xl"
                 />
                 {errors.email && <p className="text-sm text-destructive">{errors.email}</p>}
+                {checkingPendingReset && (
+                  <p className="text-sm text-muted-foreground flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Checking account status...
+                  </p>
+                )}
+                {pendingResetInfo.hasReset && (
+                  <div className="flex items-start gap-2 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
+                    <AlertCircle className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-orange-700 dark:text-orange-400">
+                      <p className="font-medium">Password Reset Required</p>
+                      <p className="text-xs mt-0.5 opacity-80">Your administrator has reset your password. Click "Sign In" to set a new password.</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">

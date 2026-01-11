@@ -36,8 +36,9 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2 } from 'lucide-react';
+import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2, KeyRound } from 'lucide-react';
 import { DepartmentAccessDialog } from './DepartmentAccessDialog';
+import { ResetPasswordDialog } from './ResetPasswordDialog';
 
 const roleColors: Record<AppRole, string> = {
   super_admin: 'bg-purple-700 text-white',
@@ -87,6 +88,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
   const [editingUser, setEditingUser] = useState<UserWithRole | null>(null);
   const [deletingUser, setDeletingUser] = useState<UserWithRole | null>(null);
   const [accessUser, setAccessUser] = useState<UserWithRole | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
   const [editForm, setEditForm] = useState({
     fullName: '',
     role: 'staff' as AppRole,
@@ -217,14 +219,25 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           {isSuperAdmin && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setAccessUser(user)}
-                              title="Manage department access"
-                            >
-                              <Building2 className="w-4 h-4" />
-                            </Button>
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setResetPasswordUser(user)}
+                                title="Reset user password"
+                                className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setAccessUser(user)}
+                                title="Manage department access"
+                              >
+                                <Building2 className="w-4 h-4" />
+                              </Button>
+                            </>
                           )}
                           {canManageUser(user) && (
                             <>
@@ -367,6 +380,16 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
           user={accessUser}
           open={!!accessUser}
           onOpenChange={() => setAccessUser(null)}
+          onSuccess={refetch}
+        />
+      )}
+
+      {/* Reset Password Dialog */}
+      {isSuperAdmin && (
+        <ResetPasswordDialog
+          user={resetPasswordUser}
+          open={!!resetPasswordUser}
+          onOpenChange={() => setResetPasswordUser(null)}
           onSuccess={refetch}
         />
       )}
