@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
-export type AppRole = 'staff' | 'supervisor' | 'manager' | 'director' | 'admin';
+export type AppRole = 'staff' | 'supervisor' | 'manager' | 'director' | 'admin' | 'super_admin';
 
 interface UserRole {
   id: string;
@@ -119,7 +119,7 @@ export function useUserRole() {
       }));
 
       // Determine highest role
-      const roleHierarchy: AppRole[] = ['admin', 'director', 'manager', 'supervisor', 'staff'];
+      const roleHierarchy: AppRole[] = ['super_admin', 'admin', 'director', 'manager', 'supervisor', 'staff'];
       const highest = roleHierarchy.find(role => 
         typedRoles.some(r => r.role === role)
       ) || 'staff';
@@ -163,7 +163,7 @@ export function useUserRole() {
   };
 
   const hasMinRole = (minRole: AppRole): boolean => {
-    const roleHierarchy: AppRole[] = ['staff', 'supervisor', 'manager', 'director', 'admin'];
+    const roleHierarchy: AppRole[] = ['staff', 'supervisor', 'manager', 'director', 'admin', 'super_admin'];
     const minIndex = roleHierarchy.indexOf(minRole);
     const userIndex = roleHierarchy.indexOf(highestRole);
     return userIndex >= minIndex;

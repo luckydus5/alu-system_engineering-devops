@@ -4,6 +4,8 @@ import {
   ChevronDown,
   Building2,
   UserCog,
+  Shield,
+  Users,
 } from 'lucide-react';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 import { NavLink, useLocation } from 'react-router-dom';
@@ -44,6 +46,9 @@ export function AppSidebar() {
   const mainNavItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   ];
+
+  const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
+  const isSuperAdmin = highestRole === 'super_admin';
 
   const isActive = (path: string) => location.pathname === path;
   const isDepartmentActive = departments.some(d => location.pathname.includes(`/department/${d.code.toLowerCase()}`));
@@ -143,6 +148,57 @@ export function AppSidebar() {
             </CollapsibleContent>
           </Collapsible>
         </SidebarGroup>
+
+        {/* Admin Section */}
+        {isAdmin && (
+          <SidebarGroup className="mt-6">
+            <SidebarGroupLabel className="text-sidebar-foreground/40 uppercase text-xs tracking-wider font-semibold mb-2">
+              Administration
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive('/admin')}
+                    tooltip={collapsed ? 'User Management' : undefined}
+                    className={cn(
+                      "rounded-xl transition-all duration-200 mb-1",
+                      isActive('/admin') 
+                        ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-gold font-semibold" 
+                        : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    )}
+                  >
+                    <NavLink to="/admin" className="flex items-center gap-3 py-2.5">
+                      <Users className="h-5 w-5" />
+                      {!collapsed && <span>User Management</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                {(isSuperAdmin || isAdmin) && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive('/super-admin')}
+                      tooltip={collapsed ? 'Audit Logs' : undefined}
+                      className={cn(
+                        "rounded-xl transition-all duration-200 mb-1",
+                        isActive('/super-admin') 
+                          ? "bg-purple-600 text-white shadow-gold font-semibold" 
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                      )}
+                    >
+                      <NavLink to="/super-admin" className="flex items-center gap-3 py-2.5">
+                        <Shield className="h-5 w-5" />
+                        {!collapsed && <span>Audit Logs</span>}
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-4">

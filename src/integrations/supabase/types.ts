@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          department_id: string | null
+          id: string
+          ip_address: string | null
+          new_data: Json | null
+          old_data: Json | null
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+          user_email: string | null
+          user_id: string
+          user_name: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id: string
+          user_name?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          user_email?: string | null
+          user_id?: string
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           code: string
@@ -767,7 +823,13 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "staff" | "supervisor" | "manager" | "director" | "admin"
+      app_role:
+        | "staff"
+        | "supervisor"
+        | "manager"
+        | "director"
+        | "admin"
+        | "super_admin"
       condition_type: "good" | "fair" | "poor"
       fleet_condition:
         | "operational"
@@ -914,7 +976,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["staff", "supervisor", "manager", "director", "admin"],
+      app_role: [
+        "staff",
+        "supervisor",
+        "manager",
+        "director",
+        "admin",
+        "super_admin",
+      ],
       condition_type: ["good", "fair", "poor"],
       fleet_condition: [
         "operational",

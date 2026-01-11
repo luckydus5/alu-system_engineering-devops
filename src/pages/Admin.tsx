@@ -35,8 +35,8 @@ export default function Admin() {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Check if user is admin
-  if (!roleLoading && highestRole !== 'admin') {
+  // Check if user is admin or super_admin
+  if (!roleLoading && highestRole !== 'admin' && highestRole !== 'super_admin') {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-[60vh]">
@@ -142,6 +142,7 @@ export default function Admin() {
     { value: 'manager', label: 'Manager' },
     { value: 'director', label: 'Director' },
     { value: 'admin', label: 'Admin' },
+    { value: 'super_admin', label: 'Super Admin' },
   ];
 
   return (
