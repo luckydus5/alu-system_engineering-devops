@@ -10,6 +10,7 @@ import { RouteErrorFallback } from "@/components/RouteErrorFallback";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import ResetPassword from "./pages/ResetPassword";
+import AdminPasswordReset from "./pages/AdminPasswordReset";
 import Department from "./pages/Department";
 import Admin from "./pages/Admin";
 import SuperAdmin from "./pages/SuperAdmin";
@@ -41,6 +42,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/admin-password-reset" element={<AdminPasswordReset />} />
               <Route path="/department/:code" element={<Department />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/super-admin" element={<SuperAdmin />} />

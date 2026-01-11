@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_password_resets: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          initiated_by: string
+          initiated_by_name: string | null
+          is_used: boolean
+          token: string
+          used_at: string | null
+          user_email: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          initiated_by: string
+          initiated_by_name?: string | null
+          is_used?: boolean
+          token?: string
+          used_at?: string | null
+          user_email: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          initiated_by?: string
+          initiated_by_name?: string | null
+          is_used?: boolean
+          token?: string
+          used_at?: string | null
+          user_email?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1052,6 +1091,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_pending_password_reset: {
+        Args: { email_to_check: string }
+        Returns: {
+          has_pending_reset: boolean
+          reset_token: string
+        }[]
+      }
       cleanup_inactive_sessions: { Args: never; Returns: undefined }
       get_user_department: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
