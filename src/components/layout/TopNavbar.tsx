@@ -8,8 +8,10 @@ import {
   Activity,
   Menu,
   X,
-  Bell
+  Bell,
+  KeyRound
 } from 'lucide-react';
+import { ChangePasswordDialog } from '@/components/profile/ChangePasswordDialog';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -37,6 +39,7 @@ export function TopNavbar() {
   const { departments } = useDepartments();
   const { unreadCount } = useNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
   const isSuperAdmin = highestRole === 'super_admin';
@@ -169,8 +172,16 @@ export function TopNavbar() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => setChangePasswordOpen(true)} 
+                className="cursor-pointer"
+              >
+                <KeyRound className="h-4 w-4 mr-2" />
+                Change Password
+              </DropdownMenuItem>
               {isAdmin && (
                 <>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
                     <UserCog className="h-4 w-4 mr-2" />
                     User Management
@@ -189,16 +200,20 @@ export function TopNavbar() {
                       </DropdownMenuItem>
                     </>
                   )}
-
-                  <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={signOut} className="text-destructive cursor-pointer focus:text-destructive">
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <ChangePasswordDialog 
+            open={changePasswordOpen} 
+            onOpenChange={setChangePasswordOpen} 
+          />
 
           {/* Mobile Menu Button */}
           <Button
