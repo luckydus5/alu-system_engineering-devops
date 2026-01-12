@@ -38,7 +38,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2, KeyRound } from 'lucide-react';
 import { DepartmentAccessDialog } from './DepartmentAccessDialog';
-import { ResetPasswordDialog } from './ResetPasswordDialog';
+import { SetPasswordDialog } from './SetPasswordDialog';
 
 const roleColors: Record<AppRole, string> = {
   super_admin: 'bg-purple-700 text-white',
@@ -384,9 +384,9 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
         />
       )}
 
-      {/* Reset Password Dialog */}
+      {/* Set Password Dialog */}
       {isSuperAdmin && (
-        <ResetPasswordDialog
+        <SetPasswordDialog
           user={resetPasswordUser}
           open={!!resetPasswordUser}
           onOpenChange={() => setResetPasswordUser(null)}

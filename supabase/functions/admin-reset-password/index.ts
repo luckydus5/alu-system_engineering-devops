@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface ResetPasswordRequest {
-  action: "initiate" | "complete";
+  action: "initiate" | "complete" | "set-password";
   userId?: string;
   userEmail?: string;
   token?: string;
@@ -29,38 +29,26 @@ serve(async (req: Request): Promise<Response> => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-
     const { action, userId, userEmail, token, newPassword }: ResetPasswordRequest = await req.json();
 
-    if (action === "initiate") {
-      // Verify the caller is a super admin
-      const authHeader = req.headers.get("Authorization");
+    // Helper function to verify super admin
+    const verifySuperAdmin = async (authHeader: string | null) => {
       if (!authHeader?.startsWith("Bearer ")) {
         console.log("No auth header provided");
-        return new Response(
-          JSON.stringify({ error: "Unauthorized" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return { error: "Unauthorized", status: 401 };
       }
 
-      // Extract the JWT token
       const jwt = authHeader.replace("Bearer ", "");
-      
-      // Use admin client to get user from JWT
       const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(jwt);
       
       if (userError || !userData?.user) {
         console.error("User verification error:", userError);
-        return new Response(
-          JSON.stringify({ error: "Invalid authentication" }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return { error: "Invalid authentication", status: 401 };
       }
 
       const callingUser = userData.user;
       console.log("Authenticated user:", callingUser.id, callingUser.email);
 
-      // Check if calling user is super_admin
       const { data: roleData, error: roleError } = await supabaseAdmin
         .from("user_roles")
         .select("role")
@@ -70,11 +58,124 @@ serve(async (req: Request): Promise<Response> => {
       console.log("Role check:", roleData, roleError);
 
       if (roleError || roleData?.role !== "super_admin") {
+        return { error: "Only super admins can reset passwords", status: 403 };
+      }
+
+      return { user: callingUser };
+    };
+
+    // NEW ACTION: Set password directly (super admin sets password for user)
+    if (action === "set-password") {
+      const authResult = await verifySuperAdmin(req.headers.get("Authorization"));
+      if (authResult.error) {
         return new Response(
-          JSON.stringify({ error: "Only super admins can reset passwords" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: authResult.error }),
+          { status: authResult.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      const callingUser = authResult.user!;
+
+      if (!userId || !userEmail || !newPassword) {
+        return new Response(
+          JSON.stringify({ error: "User ID, email, and new password are required" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Validate password strength
+      if (newPassword.length < 8) {
+        return new Response(
+          JSON.stringify({ error: "Password must be at least 8 characters" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (!/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || 
+          !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+        return new Response(
+          JSON.stringify({ error: "Password must contain uppercase, lowercase, number, and special character" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Get calling user's profile for audit log
+      const { data: callerProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", callingUser.id)
+        .single();
+
+      // Get target user's profile for audit log
+      const { data: targetProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("full_name, email")
+        .eq("id", userId)
+        .single();
+
+      // Update the user's password using admin API
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+        userId,
+        { password: newPassword }
+      );
+
+      if (updateError) {
+        console.error("Password update error:", updateError);
+        return new Response(
+          JSON.stringify({ error: "Failed to update password: " + updateError.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      console.log("Password set successfully for user:", userId, "by super admin:", callingUser.id);
+
+      // Log to audit_logs
+      await supabaseAdmin
+        .from("audit_logs")
+        .insert({
+          user_id: callingUser.id,
+          user_email: callerProfile?.email || callingUser.email,
+          user_name: callerProfile?.full_name || callingUser.email,
+          table_name: "auth.users",
+          record_id: userId,
+          action: "PASSWORD_RESET",
+          old_data: null,
+          new_data: { 
+            affected_user: targetProfile?.full_name || userEmail,
+            affected_email: userEmail,
+            reset_type: "admin_direct_set"
+          },
+        });
+
+      // Create a notification for the user
+      await supabaseAdmin
+        .from("notifications")
+        .insert({
+          user_id: userId,
+          title: "Password Changed",
+          message: `Your password has been reset by an administrator (${callerProfile?.full_name || callingUser.email}). Please contact them to receive your new password.`,
+          type: "security",
+        });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "Password set successfully",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === "initiate") {
+      const authResult = await verifySuperAdmin(req.headers.get("Authorization"));
+      if (authResult.error) {
+        return new Response(
+          JSON.stringify({ error: authResult.error }),
+          { status: authResult.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const callingUser = authResult.user!;
 
       // Get calling user's profile for the initiated_by_name field
       const { data: callerProfile } = await supabaseAdmin
