@@ -50,6 +50,16 @@ Deno.serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false }
     });
 
+    // Get requesting user's profile info for audit logging
+    const { data: requestingUserProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', requestingUserId)
+      .single();
+    
+    const adminName = requestingUserProfile?.full_name || requestingUserProfile?.email || 'Admin';
+    const adminEmail = requestingUserProfile?.email || 'admin@system';
+
     // Check if requesting user is admin or super_admin and get their department
     const { data: roleRows, error: roleError } = await supabaseAdmin
       .from('user_roles')
@@ -78,6 +88,32 @@ Deno.serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Helper function to log audit manually (since service role doesn't have auth context)
+    const logAudit = async (params: {
+      action: string;
+      tableName: string;
+      recordId: string;
+      oldData?: unknown;
+      newData?: unknown;
+      departmentId?: string | null;
+    }) => {
+      try {
+        await supabaseAdmin.from('audit_logs').insert({
+          user_id: requestingUserId,
+          user_name: adminName,
+          user_email: adminEmail,
+          action: params.action,
+          table_name: params.tableName,
+          record_id: params.recordId,
+          old_data: params.oldData || null,
+          new_data: params.newData || null,
+          department_id: params.departmentId || null,
+        });
+      } catch (err) {
+        console.error('Failed to log audit:', err);
+      }
+    };
 
     const { action, userId, role, departmentId, fullName, departmentIds } = await req.json();
     console.log(`Managing user: action=${action}, userId=${userId}, isSuperAdmin=${isSuperAdmin}`);
@@ -146,6 +182,21 @@ Deno.serve(async (req) => {
         );
       }
 
+      // Get the target user's info for better audit logging
+      const { data: targetProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', userId)
+        .single();
+      const targetUserName = targetProfile?.full_name || targetProfile?.email || userId;
+
+      // Get old role data for audit
+      const { data: oldRoleData } = await supabaseAdmin
+        .from('user_roles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
       // Update user profile
       if (fullName !== undefined) {
         const { error: profileError } = await supabaseAdmin
@@ -176,6 +227,23 @@ Deno.serve(async (req) => {
           console.error('Error updating role:', roleUpdateError);
           throw roleUpdateError;
         }
+
+        // Get new role data for audit
+        const { data: newRoleData } = await supabaseAdmin
+          .from('user_roles')
+          .select('*')
+          .eq('user_id', userId)
+          .single();
+
+        // Log the role update with proper admin info
+        await logAudit({
+          action: 'UPDATE',
+          tableName: 'user_roles',
+          recordId: newRoleData?.id || userId,
+          oldData: { ...oldRoleData, affected_user: targetUserName },
+          newData: { ...newRoleData, affected_user: targetUserName },
+          departmentId: departmentId || oldRoleData?.department_id,
+        });
       }
 
       console.log('User updated successfully:', userId);
