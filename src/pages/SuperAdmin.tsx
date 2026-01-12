@@ -398,6 +398,103 @@ export default function SuperAdmin() {
     return dept?.name || 'Unknown';
   };
 
+  // Generate human-readable action description
+  const getActionDetails = (log: typeof logs[0]): string => {
+    const oldData = log.old_data as Record<string, unknown> | null;
+    const newData = log.new_data as Record<string, unknown> | null;
+    const tableName = log.table_name;
+    const action = log.action;
+
+    // For INSERT actions
+    if (action === 'INSERT') {
+      if (tableName === 'user_roles') {
+        const role = newData?.role || 'unknown';
+        const affectedUser = newData?.affected_user || '';
+        return affectedUser ? `Assigned ${role} role to ${affectedUser}` : `Created new ${role} role`;
+      }
+      if (tableName === 'inventory_items') {
+        return `Added item: ${newData?.item_name || 'Unknown item'}`;
+      }
+      if (tableName === 'fleets') {
+        return `Added fleet: ${newData?.fleet_number || 'Unknown'}`;
+      }
+      if (tableName === 'maintenance_records') {
+        return `Created ${newData?.service_type || ''} maintenance record`;
+      }
+      if (tableName === 'reports') {
+        return `Created ${newData?.report_type || ''} report: ${newData?.title || ''}`;
+      }
+      if (tableName === 'stock_transactions') {
+        return `Stock ${newData?.transaction_type || 'transaction'}: ${newData?.quantity || 0} units`;
+      }
+      return `Created new ${tableName.replace(/_/g, ' ')} record`;
+    }
+
+    // For UPDATE actions
+    if (action === 'UPDATE') {
+      if (tableName === 'user_roles') {
+        const oldRole = oldData?.role;
+        const newRole = newData?.role;
+        const affectedUser = newData?.affected_user || oldData?.affected_user || '';
+        if (oldRole !== newRole) {
+          return affectedUser 
+            ? `Changed ${affectedUser}'s role from ${oldRole} to ${newRole}`
+            : `Changed role from ${oldRole} to ${newRole}`;
+        }
+        const oldDept = getDepartmentName(oldData?.department_id as string | null);
+        const newDept = getDepartmentName(newData?.department_id as string | null);
+        if (oldDept !== newDept) {
+          return affectedUser
+            ? `Moved ${affectedUser} from ${oldDept} to ${newDept}`
+            : `Changed department from ${oldDept} to ${newDept}`;
+        }
+        return affectedUser ? `Updated ${affectedUser}'s role settings` : 'Updated role settings';
+      }
+      if (tableName === 'inventory_items') {
+        const oldQty = oldData?.quantity;
+        const newQty = newData?.quantity;
+        if (oldQty !== newQty) {
+          return `Updated ${newData?.item_name || 'item'} quantity: ${oldQty} → ${newQty}`;
+        }
+        return `Updated item: ${newData?.item_name || 'Unknown'}`;
+      }
+      if (tableName === 'fleets') {
+        const changes = getChangedFields(oldData, newData);
+        if (changes.length > 0) {
+          const change = changes[0];
+          return `Updated ${newData?.fleet_number || 'fleet'}: ${change.field.replace(/_/g, ' ')}`;
+        }
+        return `Updated fleet: ${newData?.fleet_number || 'Unknown'}`;
+      }
+      if (tableName === 'reports') {
+        const oldStatus = oldData?.status;
+        const newStatus = newData?.status;
+        if (oldStatus !== newStatus) {
+          return `Report status: ${oldStatus} → ${newStatus}`;
+        }
+        return `Updated report: ${newData?.title || ''}`;
+      }
+      return `Updated ${tableName.replace(/_/g, ' ')} record`;
+    }
+
+    // For DELETE actions
+    if (action === 'DELETE') {
+      if (tableName === 'user_roles') {
+        const affectedUser = oldData?.affected_user || '';
+        return affectedUser ? `Removed role from ${affectedUser}` : 'Removed user role';
+      }
+      if (tableName === 'inventory_items') {
+        return `Deleted item: ${oldData?.item_name || 'Unknown'}`;
+      }
+      if (tableName === 'fleets') {
+        return `Deleted fleet: ${oldData?.fleet_number || 'Unknown'}`;
+      }
+      return `Deleted ${tableName.replace(/_/g, ' ')} record`;
+    }
+
+    return `${action} on ${tableName.replace(/_/g, ' ')}`;
+  };
+
   const exportToExcel = () => {
     const exportData = filteredLogs.map((log, index) => ({
       'No.': index + 1,
@@ -817,6 +914,7 @@ export default function SuperAdmin() {
                       <TableHead className="w-[120px]">Department</TableHead>
                       <TableHead>User</TableHead>
                       <TableHead className="w-[100px]">Action</TableHead>
+                      <TableHead className="min-w-[200px]">Action Details</TableHead>
                       <TableHead>Table</TableHead>
                       <TableHead className="w-[150px]">Timestamp</TableHead>
                       <TableHead className="w-[60px] text-center">View</TableHead>
@@ -825,7 +923,7 @@ export default function SuperAdmin() {
                   <TableBody>
                     {filteredLogs.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                        <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
                           <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
                           No audit logs found
                         </TableCell>
@@ -849,8 +947,8 @@ export default function SuperAdmin() {
                                 <User className="w-3.5 h-3.5 text-muted-foreground" />
                               </div>
                               <div>
-                                <div className="font-medium text-sm leading-tight">{log.user_name || 'System'}</div>
-                                <div className="text-xs text-muted-foreground">{log.user_email?.split('@')[0] || 'system'}</div>
+                                <div className="font-medium text-sm leading-tight">{log.user_name || 'Unknown'}</div>
+                                <div className="text-xs text-muted-foreground">{log.user_email?.split('@')[0] || 'unknown'}</div>
                               </div>
                             </div>
                           </TableCell>
@@ -859,6 +957,9 @@ export default function SuperAdmin() {
                               {actionIcons[log.action]}
                               {log.action}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <span className="text-sm text-muted-foreground">{getActionDetails(log)}</span>
                           </TableCell>
                           <TableCell>
                             <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{log.table_name}</code>
