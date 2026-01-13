@@ -41,6 +41,7 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useWarehouseClassifications, WarehouseClassification } from '@/hooks/useWarehouseClassifications';
@@ -62,6 +63,7 @@ import { ItemDetailDialog } from './ItemDetailDialog';
 import { ImagePreviewDialog } from './ImagePreviewDialog';
 import { ItemRequestHistoryPage } from './ItemRequestHistoryPage';
 import { cn } from '@/lib/utils';
+import { exportLowStockToExcel } from '@/lib/excelExport';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
 interface WarehouseDashboardViewProps {
@@ -562,6 +564,17 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
 
   const loading = classificationsLoading || locationsLoading || itemsLoading;
 
+  // Show Item Request History Page when showRequestHistory is true
+  if (showRequestHistory) {
+    return (
+      <ItemRequestHistoryPage
+        department={department}
+        canManage={canManage}
+        onBack={() => setShowRequestHistory(false)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
@@ -592,6 +605,33 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
               >
                 <FileText className="h-4 w-4" />
                 <span className="hidden sm:inline">Item Requests</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  const result = exportLowStockToExcel(
+                    items, 
+                    classifications.map(c => ({ id: c.id, name: c.name })),
+                    department.name
+                  );
+                  if (result.success) {
+                    toast({
+                      title: 'Export Successful',
+                      description: result.message,
+                    });
+                  } else {
+                    toast({
+                      title: 'No Data',
+                      description: result.message,
+                      variant: 'destructive',
+                    });
+                  }
+                }} 
+                className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                <span className="hidden sm:inline">Low Stock Report</span>
               </Button>
               <Button variant="outline" size="sm" onClick={() => navigate('/')} className="gap-2">
                 <ArrowLeft className="h-4 w-4" />

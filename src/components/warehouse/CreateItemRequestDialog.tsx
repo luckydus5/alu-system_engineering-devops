@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -28,18 +28,30 @@ import {
   FileText,
   CheckCircle2,
   Image as ImageIcon,
+  Search,
+  Plus,
+  Minus,
+  Trash2,
 } from 'lucide-react';
-import { useItemRequests, useItemRequestApprovers } from '@/hooks/useItemRequests';
-import { useInventory } from '@/hooks/useInventory';
-import { useDepartments } from '@/hooks/useDepartments';
+import { useItemRequestApprovers, useCreateItemRequest } from '@/hooks/useItemRequests';
+import { InventoryItem } from '@/hooks/useInventory';
+import { Department } from '@/hooks/useDepartments';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+
+// Type for selected items with quantity
+interface SelectedItemWithQty {
+  item: InventoryItem;
+  quantity: number;
+}
 
 interface CreateItemRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   departmentId: string;
+  items: InventoryItem[];
+  departments: Department[];
   onSuccess?: () => void;
 }
 
@@ -47,26 +59,48 @@ export function CreateItemRequestDialog({
   open,
   onOpenChange,
   departmentId,
+  items,
+  departments,
   onSuccess,
 }: CreateItemRequestDialogProps) {
   const { toast } = useToast();
-  const { createRequest } = useItemRequests(departmentId);
-  const { approvers, loading: approversLoading } = useItemRequestApprovers();
-  const { items } = useInventory(departmentId);
-  const { departments } = useDepartments();
+  const { createRequest } = useCreateItemRequest();
+  const { approvers, loading: approversLoading } = useItemRequestApprovers(open);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   
   // Form fields
   const [requesterName, setRequesterName] = useState('');
-  const [requesterDepartmentId, setRequesterDepartmentId] = useState<string>('');
-  const [selectedItemId, setSelectedItemId] = useState<string>('');
-  const [itemDescription, setItemDescription] = useState('');
-  const [quantity, setQuantity] = useState(1);
+  const [requesterDepartment, setRequesterDepartment] = useState<string>('');
+  const [customDepartment, setCustomDepartment] = useState('');
   const [usagePurpose, setUsagePurpose] = useState('');
+
+  // Static list of requester departments
+  const requesterDepartments = [
+    'Procurement',
+    'HR',
+    'Peat Maintenance',
+    'LAB (Peat)',
+    'Warehouse',
+    'Peat Admin',
+    'Operators',
+    'Camp',
+    'CD&SE',
+    'Cleaners',
+    'IT',
+    'Other'
+  ];
   const [approverId, setApproverId] = useState<string>('');
   const [notes, setNotes] = useState('');
+  
+  // Multiple items selection
+  const [selectedItems, setSelectedItems] = useState<SelectedItemWithQty[]>([]);
+  
+  // Item search state
+  const [itemSearchQuery, setItemSearchQuery] = useState('');
+  const [showItemResults, setShowItemResults] = useState(false);
+  const itemSearchRef = useRef<HTMLDivElement>(null);
   
   // Image upload
   const [proofImage, setProofImage] = useState<File | null>(null);
@@ -74,32 +108,94 @@ export function CreateItemRequestDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Get selected item details
-  const selectedItem = items.find(i => i.id === selectedItemId);
-  const previousQuantity = selectedItem?.quantity || 0;
-  const newQuantity = previousQuantity - quantity;
-
-  // Update item description when item is selected
-  useEffect(() => {
-    if (selectedItem) {
-      setItemDescription(`${selectedItem.item_number} - ${selectedItem.item_name}`);
+  // Fast item search - only show top 10 matching results (exclude already selected)
+  const filteredItems = useMemo(() => {
+    if (!itemSearchQuery.trim()) return [];
+    const query = itemSearchQuery.toLowerCase();
+    const selectedIds = new Set(selectedItems.map(s => s.item.id));
+    const results: InventoryItem[] = [];
+    
+    for (let i = 0; i < items.length && results.length < 10; i++) {
+      const item = items[i];
+      if (selectedIds.has(item.id)) continue; // Skip already selected
+      if (
+        item.item_name.toLowerCase().includes(query) ||
+        item.item_number.toLowerCase().includes(query)
+      ) {
+        results.push(item);
+      }
     }
-  }, [selectedItem]);
+    return results;
+  }, [items, itemSearchQuery, selectedItems]);
 
-  const resetForm = () => {
+  // Memoize requester department options
+  const requesterDepartmentOptions = useMemo(() => 
+    requesterDepartments.map((dept) => (
+      <SelectItem key={dept} value={dept}>
+        {dept}
+      </SelectItem>
+    )), 
+    []
+  );
+
+  // Memoize approver options
+  const approverOptions = useMemo(() => 
+    approvers.map((approver) => (
+      <SelectItem key={approver.id} value={approver.id}>
+        {approver.full_name}
+        {approver.position && ` - ${approver.position}`}
+      </SelectItem>
+    )), 
+    [approvers]
+  );
+
+  // Add item to selection
+  const handleAddItem = useCallback((item: InventoryItem) => {
+    setSelectedItems(prev => [...prev, { item, quantity: 1 }]);
+    setItemSearchQuery('');
+    setShowItemResults(false);
+  }, []);
+
+  // Remove item from selection
+  const handleRemoveItem = useCallback((itemId: string) => {
+    setSelectedItems(prev => prev.filter(s => s.item.id !== itemId));
+  }, []);
+
+  // Update item quantity
+  const handleUpdateQuantity = useCallback((itemId: string, newQty: number) => {
+    setSelectedItems(prev => prev.map(s => 
+      s.item.id === itemId 
+        ? { ...s, quantity: Math.max(1, Math.min(newQty, s.item.quantity)) }
+        : s
+    ));
+  }, []);
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (itemSearchRef.current && !itemSearchRef.current.contains(e.target as Node)) {
+        setShowItemResults(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const resetForm = useCallback(() => {
     setRequesterName('');
-    setRequesterDepartmentId('');
-    setSelectedItemId('');
-    setItemDescription('');
-    setQuantity(1);
+    setRequesterDepartment('');
+    setCustomDepartment('');
+    setSelectedItems([]);
+    setItemSearchQuery('');
     setUsagePurpose('');
     setApproverId('');
     setNotes('');
     setProofImage(null);
     setProofImagePreview(null);
-  };
+    setShowItemResults(false);
+  }, []);
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setProofImage(file);
@@ -109,14 +205,14 @@ export function CreateItemRequestDialog({
       };
       reader.readAsDataURL(file);
     }
-  };
+  }, []);
 
-  const removeImage = () => {
+  const removeImage = useCallback(() => {
     setProofImage(null);
     setProofImagePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
-  };
+  }, []);
 
   const uploadImage = async (file: File): Promise<string | null> => {
     try {
@@ -155,12 +251,8 @@ export function CreateItemRequestDialog({
       toast({ title: 'Error', description: 'Please enter requester name', variant: 'destructive' });
       return;
     }
-    if (!itemDescription.trim()) {
-      toast({ title: 'Error', description: 'Please enter item description', variant: 'destructive' });
-      return;
-    }
-    if (quantity < 1) {
-      toast({ title: 'Error', description: 'Quantity must be at least 1', variant: 'destructive' });
+    if (selectedItems.length === 0) {
+      toast({ title: 'Error', description: 'Please select at least one item', variant: 'destructive' });
       return;
     }
     if (!approverId) {
@@ -171,9 +263,17 @@ export function CreateItemRequestDialog({
       toast({ title: 'Error', description: 'Please upload approval proof image', variant: 'destructive' });
       return;
     }
-    if (selectedItem && quantity > selectedItem.quantity) {
-      toast({ title: 'Error', description: 'Quantity exceeds available stock', variant: 'destructive' });
-      return;
+
+    // Check quantities
+    for (const sel of selectedItems) {
+      if (sel.quantity > sel.item.quantity) {
+        toast({ 
+          title: 'Error', 
+          description: `Quantity for "${sel.item.item_name}" exceeds available stock (${sel.item.quantity})`, 
+          variant: 'destructive' 
+        });
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -189,19 +289,43 @@ export function CreateItemRequestDialog({
         return;
       }
 
+      // Build item description for display (all items in one string)
+      const itemDescriptions = selectedItems.map(s => 
+        `${s.item.item_name} (x${s.quantity})`
+      ).join(', ');
+
+      // Build requested_items JSON for storage
+      const requestedItems = selectedItems.map(s => ({
+        id: s.item.id,
+        item_number: s.item.item_number,
+        item_name: s.item.item_name,
+        quantity: s.quantity,
+        previous_quantity: s.item.quantity,
+        new_quantity: s.item.quantity - s.quantity,
+      }));
+
+      // Calculate totals
+      const totalQuantity = selectedItems.reduce((sum, s) => sum + s.quantity, 0);
+
+      // Determine the final department text
+      const finalDepartment = requesterDepartment === 'Other' 
+        ? customDepartment 
+        : requesterDepartment;
+
       const success = await createRequest({
         department_id: departmentId,
-        inventory_item_id: selectedItemId || null,
+        inventory_item_id: selectedItems.length === 1 ? selectedItems[0].item.id : null,
         requester_name: requesterName,
-        requester_department_id: requesterDepartmentId || null,
-        item_description: itemDescription,
-        quantity_requested: quantity,
-        previous_quantity: previousQuantity,
-        new_quantity: newQuantity,
+        requester_department_text: finalDepartment || null,
+        item_description: itemDescriptions,
+        quantity_requested: totalQuantity,
+        previous_quantity: 0, // Not applicable for multi-item
+        new_quantity: 0, // Not applicable for multi-item
         usage_purpose: usagePurpose,
         approved_by_id: approverId,
         approval_proof_url: imageUrl,
         notes: notes,
+        requested_items: requestedItems, // Store all items as JSON
       });
 
       if (success) {
@@ -216,22 +340,26 @@ export function CreateItemRequestDialog({
     }
   };
 
+  // Calculate total items selected
+  const totalItemsCount = selectedItems.length;
+  const totalQuantity = selectedItems.reduce((sum, s) => sum + s.quantity, 0);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-amber-500" />
             Record Item Request
           </DialogTitle>
           <DialogDescription>
-            Record an approved item request with proof documentation
+            Select one or more items for this request
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Requester Info */}
-          <div className="grid grid-cols-2 gap-3">
+          {/* Row 1: Requester Info */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="requester" className="flex items-center gap-1">
                 <User className="h-3 w-3" />
@@ -246,198 +374,250 @@ export function CreateItemRequestDialog({
             </div>
             <div className="space-y-2">
               <Label>Requester Department</Label>
-              <Select value={requesterDepartmentId} onValueChange={setRequesterDepartmentId}>
+              <Select value={requesterDepartment} onValueChange={(val) => {
+                setRequesterDepartment(val);
+                if (val !== 'Other') setCustomDepartment('');
+              }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name}
-                    </SelectItem>
-                  ))}
+                  {requesterDepartmentOptions}
+                </SelectContent>
+              </Select>
+              {requesterDepartment === 'Other' && (
+                <Input
+                  placeholder="Enter department name..."
+                  value={customDepartment}
+                  onChange={(e) => setCustomDepartment(e.target.value)}
+                  className="mt-2"
+                />
+              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Usage / Purpose</Label>
+              <Input
+                placeholder="What will these items be used for?"
+                value={usagePurpose}
+                onChange={(e) => setUsagePurpose(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Row 2: Item Search and Approver */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Item Search */}
+            <div className="space-y-2 p-3 rounded-lg bg-teal-50 dark:bg-teal-950/40 border-2 border-teal-400 dark:border-teal-600" ref={itemSearchRef}>
+              <Label className="flex items-center gap-1 text-teal-700 dark:text-teal-300 font-semibold text-base">
+                <Package className="h-5 w-5" />
+                Add Items *
+              </Label>
+              
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-teal-600" />
+                <Input
+                  placeholder="Search items by name..."
+                  value={itemSearchQuery}
+                  onChange={(e) => {
+                    setItemSearchQuery(e.target.value);
+                    setShowItemResults(true);
+                  }}
+                  onFocus={() => setShowItemResults(true)}
+                  className="pl-9 border-teal-400 dark:border-teal-600 focus:border-teal-600 focus:ring-teal-500 bg-white dark:bg-slate-900"
+                />
+                
+                {/* Search Results Dropdown */}
+                {showItemResults && itemSearchQuery && (
+                  <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                    {filteredItems.length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground text-center">
+                        No items found
+                      </div>
+                    ) : (
+                      filteredItems.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          className="w-full px-3 py-2 text-left hover:bg-accent flex items-center justify-between gap-2 text-sm"
+                          onClick={() => handleAddItem(item)}
+                        >
+                          <span className="truncate font-medium">
+                            {item.item_name}
+                          </span>
+                          <span className={cn(
+                            "text-xs px-1.5 py-0.5 rounded shrink-0",
+                            item.quantity <= 0 ? 'bg-red-100 text-red-700' :
+                            item.quantity <= 10 ? 'bg-amber-100 text-amber-700' :
+                            'bg-emerald-100 text-emerald-700'
+                          )}>
+                            Stock: {item.quantity}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Approver */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Approved By *
+              </Label>
+              <Select value={approverId} onValueChange={setApproverId}>
+                <SelectTrigger>
+                  <SelectValue placeholder={approversLoading ? "Loading..." : "Select approver"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {approverOptions}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {/* Item Selection */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1">
-              <Package className="h-3 w-3" />
-              Select Item (Optional)
-            </Label>
-            <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select from inventory" />
-              </SelectTrigger>
-              <SelectContent>
-                {items.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.item_number} - {item.item_name} (Stock: {item.quantity})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Item Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Item Description *</Label>
-            <Input
-              id="description"
-              placeholder="Enter item description"
-              value={itemDescription}
-              onChange={(e) => setItemDescription(e.target.value)}
-            />
-          </div>
-
-          {/* Quantity and Stock Info */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity *</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min={1}
-                max={selectedItem?.quantity || 9999}
-                value={quantity}
-                onChange={(e) => setQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-                className={cn(selectedItem && quantity > selectedItem.quantity && 'border-red-500')}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Previous Qty</Label>
-              <div className="h-10 flex items-center justify-center bg-muted rounded-md font-mono">
-                {previousQuantity}
+          {/* Selected Items List */}
+          {selectedItems.length > 0 && (
+            <div className="space-y-2 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/40 border-2 border-blue-400 dark:border-blue-600">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold text-blue-700 dark:text-blue-300 flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Selected Items ({totalItemsCount})
+                </Label>
+                <span className="text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900 px-2 py-0.5 rounded">
+                  Total Qty: {totalQuantity}
+                </span>
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-muted-foreground">Remaining (RE-QTY)</Label>
-              <div className={cn(
-                'h-10 flex items-center justify-center rounded-md font-mono font-bold',
-                newQuantity <= 0 ? 'bg-red-100 text-red-700 dark:bg-red-900/30' :
-                newQuantity < 10 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30' :
-                'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30'
-              )}>
-                {newQuantity}
-              </div>
-            </div>
-          </div>
-
-          {/* Usage Purpose */}
-          <div className="space-y-2">
-            <Label htmlFor="usage">Usage / Purpose</Label>
-            <Input
-              id="usage"
-              placeholder="What will this item be used for?"
-              value={usagePurpose}
-              onChange={(e) => setUsagePurpose(e.target.value)}
-            />
-          </div>
-
-          {/* Approver Selection */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1">
-              <CheckCircle2 className="h-3 w-3" />
-              Approved By *
-            </Label>
-            <Select value={approverId} onValueChange={setApproverId} disabled={approversLoading}>
-              <SelectTrigger>
-                <SelectValue placeholder={approversLoading ? 'Loading...' : 'Select approver'} />
-              </SelectTrigger>
-              <SelectContent>
-                {approvers.length === 0 ? (
-                  <div className="p-2 text-sm text-muted-foreground text-center">
-                    No approvers configured. Contact super admin.
+              <div className="border-2 border-blue-300 dark:border-blue-700 rounded-md divide-y divide-blue-200 dark:divide-blue-800 max-h-40 overflow-y-auto bg-white dark:bg-slate-900">
+                {selectedItems.map((sel) => (
+                  <div key={sel.item.id} className="p-2 flex items-center gap-2 hover:bg-blue-50 dark:hover:bg-blue-950/50">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate text-blue-900 dark:text-blue-100">{sel.item.item_name}</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400">
+                        Available: {sel.item.quantity} → Remaining: {sel.item.quantity - sel.quantity}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7 border-blue-300 hover:bg-blue-100"
+                        onClick={() => handleUpdateQuantity(sel.item.id, sel.quantity - 1)}
+                        disabled={sel.quantity <= 1}
+                      >
+                        <Minus className="h-3 w-3" />
+                      </Button>
+                      <Input
+                        type="number"
+                        value={sel.quantity}
+                        onChange={(e) => handleUpdateQuantity(sel.item.id, parseInt(e.target.value) || 1)}
+                        className="w-14 h-7 text-center text-sm"
+                        min={1}
+                        max={sel.item.quantity}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-7 w-7 border-blue-300 hover:bg-blue-100"
+                        onClick={() => handleUpdateQuantity(sel.item.id, sel.quantity + 1)}
+                        disabled={sel.quantity >= sel.item.quantity}
+                      >
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleRemoveItem(sel.item.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
                   </div>
-                ) : (
-                  approvers.map((approver) => (
-                    <SelectItem key={approver.id} value={approver.id}>
-                      {approver.full_name}
-                      {approver.position && ` - ${approver.position}`}
-                    </SelectItem>
-                  ))
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Photo Upload */}
-          <div className="space-y-2">
-            <Label className="flex items-center gap-1">
-              <ImageIcon className="h-3 w-3" />
-              Approval Proof (Photo) *
-            </Label>
-            
-            {proofImagePreview ? (
-              <div className="relative rounded-lg overflow-hidden border">
-                <img
-                  src={proofImagePreview}
-                  alt="Proof preview"
-                  className="w-full h-48 object-cover"
-                />
-                <Button
-                  variant="destructive"
-                  size="icon"
-                  className="absolute top-2 right-2 h-8 w-8"
-                  onClick={removeImage}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                ))}
               </div>
-            ) : (
-              <div className="flex gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 h-24 flex-col gap-2"
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <Upload className="h-6 w-6 text-muted-foreground" />
-                  <span className="text-xs">Upload Photo</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 h-24 flex-col gap-2"
-                  onClick={() => cameraInputRef.current?.click()}
-                >
-                  <Camera className="h-6 w-6 text-muted-foreground" />
-                  <span className="text-xs">Take Photo</span>
+            </div>
+          )}
+
+          {/* Row 3: Photo Upload and Notes side by side */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Photo Upload */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1">
+                <ImageIcon className="h-3 w-3" />
+                Approval Proof (Photo) *
+              </Label>
+              
+              {proofImagePreview ? (
+                <div className="relative rounded-lg overflow-hidden border">
+                  <img
+                    src={proofImagePreview}
+                    alt="Proof preview"
+                    className="w-full h-32 object-cover"
+                  />
+                  <Button
+                    variant="destructive"
+                    size="icon"
+                    className="absolute top-2 right-2 h-6 w-6"
+                    onClick={removeImage}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-20 flex-col gap-1"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-xs">Upload</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="flex-1 h-20 flex-col gap-1"
+                    onClick={() => cameraInputRef.current?.click()}
+                  >
+                    <Camera className="h-5 w-5 text-muted-foreground" />
+                    <span className="text-xs">Camera</span>
                 </Button>
               </div>
             )}
-            <p className="text-xs text-muted-foreground">
-              Upload the signed approval document as proof
-            </p>
-          </div>
+            </div>
 
-          {/* Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="notes">Additional Notes</Label>
-            <Textarea
-              id="notes"
-              placeholder="Any additional notes..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-            />
+            {/* Notes */}
+            <div className="space-y-2">
+              <Label htmlFor="notes">Additional Notes</Label>
+              <Textarea
+                id="notes"
+                placeholder="Any additional notes..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="h-[120px] resize-none"
+              />
+            </div>
           </div>
         </div>
 
@@ -447,7 +627,7 @@ export function CreateItemRequestDialog({
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={isSubmitting || uploadingImage}
+            disabled={isSubmitting || uploadingImage || selectedItems.length === 0}
             className="bg-amber-500 hover:bg-amber-600"
           >
             {isSubmitting ? (
@@ -458,7 +638,7 @@ export function CreateItemRequestDialog({
             ) : (
               <>
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                Submit Request
+                Submit ({totalItemsCount} items)
               </>
             )}
           </Button>

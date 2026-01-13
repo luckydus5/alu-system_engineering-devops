@@ -39,6 +39,11 @@ interface ItemsCache {
 let globalCache: ItemsCache | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
 
+// Export function to clear cache from outside
+export function clearInventoryCache() {
+  globalCache = null;
+}
+
 export function useInventory(departmentId: string | undefined) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);

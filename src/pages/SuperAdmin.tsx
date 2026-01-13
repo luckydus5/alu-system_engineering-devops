@@ -10,6 +10,7 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useDepartments } from '@/hooks/useDepartments';
 import { supabase } from '@/integrations/supabase/client';
 import { WarehouseTransactionHistory } from '@/components/warehouse/WarehouseTransactionHistory';
+import { ApproversManagement } from '@/components/admin/ApproversManagement';
 import { 
   Shield, 
   Activity, 
@@ -131,6 +132,7 @@ const sidebarTools = [
   { id: 'users', label: 'User Overview', icon: Users, description: 'All system users' },
   { id: 'departments', label: 'Departments', icon: Building2, description: 'Department management' },
   { id: 'warehouse', label: 'Warehouse', icon: Database, description: 'Stock transactions' },
+  { id: 'approvers', label: 'Item Approvers', icon: CheckCircle, description: 'Manage item request approvers' },
   { id: 'live', label: 'Live Monitor', icon: Activity, description: 'Real-time activity' },
   { id: 'reports', label: 'System Reports', icon: FileText, description: 'Auto-generated reports' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Usage statistics' },
@@ -413,19 +415,34 @@ export default function SuperAdmin() {
         return affectedUser ? `Assigned ${role} role to ${affectedUser}` : `Created new ${role} role`;
       }
       if (tableName === 'inventory_items') {
-        return `Added item: ${newData?.item_name || 'Unknown item'}`;
+        const itemNum = newData?.item_number || '';
+        return `Added new inventory item: "${newData?.item_name || 'Unknown'}"${itemNum ? ` (${itemNum})` : ''}`;
       }
       if (tableName === 'fleets') {
-        return `Added fleet: ${newData?.fleet_number || 'Unknown'}`;
+        return `Added new fleet vehicle: ${newData?.fleet_number || 'Unknown'}`;
       }
       if (tableName === 'maintenance_records') {
-        return `Created ${newData?.service_type || ''} maintenance record`;
+        return `Created ${newData?.service_type || ''} maintenance record for fleet`;
       }
       if (tableName === 'reports') {
-        return `Created ${newData?.report_type || ''} report: ${newData?.title || ''}`;
+        return `Created ${newData?.report_type || ''} report: "${newData?.title || ''}"`;
       }
       if (tableName === 'stock_transactions') {
-        return `Stock ${newData?.transaction_type || 'transaction'}: ${newData?.quantity || 0} units`;
+        const type = newData?.transaction_type || 'transaction';
+        const qty = newData?.quantity || 0;
+        const prevQty = newData?.previous_quantity ?? 'N/A';
+        const newQty = newData?.new_quantity ?? 'N/A';
+        const notes = newData?.notes ? ` - ${newData.notes}` : '';
+        return `Stock ${type}: ${qty} unit(s) (${prevQty} → ${newQty})${notes}`;
+      }
+      if (tableName === 'item_requests') {
+        return `Created item request with ${(newData?.requested_items as unknown[])?.length || 1} item(s)`;
+      }
+      if (tableName === 'profiles') {
+        return `New user profile created: ${newData?.full_name || newData?.email || 'Unknown user'}`;
+      }
+      if (tableName === 'support_tickets') {
+        return `Created support ticket: "${newData?.subject || 'No subject'}"`;
       }
       return `Created new ${tableName.replace(/_/g, ' ')} record`;
     }
@@ -481,13 +498,27 @@ export default function SuperAdmin() {
     if (action === 'DELETE') {
       if (tableName === 'user_roles') {
         const affectedUser = oldData?.affected_user || '';
-        return affectedUser ? `Removed role from ${affectedUser}` : 'Removed user role';
+        const role = oldData?.role || 'user';
+        return affectedUser ? `Removed ${role} role from ${affectedUser}` : 'Removed user role';
       }
       if (tableName === 'inventory_items') {
-        return `Deleted item: ${oldData?.item_name || 'Unknown'}`;
+        const itemNum = oldData?.item_number || '';
+        return `Deleted inventory item: "${oldData?.item_name || 'Unknown'}"${itemNum ? ` (${itemNum})` : ''}`;
       }
       if (tableName === 'fleets') {
-        return `Deleted fleet: ${oldData?.fleet_number || 'Unknown'}`;
+        return `Deleted fleet vehicle: ${oldData?.fleet_number || 'Unknown'}`;
+      }
+      if (tableName === 'item_requests') {
+        return `Deleted item request (${(oldData?.requested_items as unknown[])?.length || 1} item(s))`;
+      }
+      if (tableName === 'profiles') {
+        return `Deleted user profile: ${oldData?.full_name || oldData?.email || 'Unknown'}`;
+      }
+      if (tableName === 'support_tickets') {
+        return `Deleted support ticket: "${oldData?.subject || 'No subject'}"`;
+      }
+      if (tableName === 'stock_transactions') {
+        return `Deleted stock transaction: ${oldData?.transaction_type || 'N/A'} (${oldData?.quantity || 0} units)`;
       }
       return `Deleted ${tableName.replace(/_/g, ' ')} record`;
     }
@@ -862,6 +893,9 @@ export default function SuperAdmin() {
       case 'warehouse':
         return <WarehouseTransactionHistory departments={departments} />;
 
+      case 'approvers':
+        return <ApproversManagement />;
+
       case 'departments':
         return (
           <div className="space-y-4">
@@ -1208,9 +1242,22 @@ export default function SuperAdmin() {
                         <Plus className="w-4 h-4 text-green-500" />
                         New Record Created
                       </h4>
-                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto max-h-60">
-                        {JSON.stringify(selectedLog.new_data, null, 2)}
-                      </pre>
+                      <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                        <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-3">
+                          {getActionDetails(selectedLog)}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {Object.entries(selectedLog.new_data as Record<string, unknown>)
+                            .filter(([key]) => !['id', 'created_at', 'updated_at', 'user_id', 'department_id'].includes(key))
+                            .slice(0, 8)
+                            .map(([key, value]) => (
+                              <div key={key} className="flex gap-2">
+                                <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}:</span>
+                                <span className="font-medium truncate">{String(value ?? 'N/A')}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                   {selectedLog.action === 'DELETE' && selectedLog.old_data && (
@@ -1219,9 +1266,22 @@ export default function SuperAdmin() {
                         <Trash2 className="w-4 h-4 text-red-500" />
                         Deleted Record
                       </h4>
-                      <pre className="text-xs bg-muted p-4 rounded-lg overflow-auto max-h-60">
-                        {JSON.stringify(selectedLog.old_data, null, 2)}
-                      </pre>
+                      <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                        <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-3">
+                          {getActionDetails(selectedLog)}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          {Object.entries(selectedLog.old_data as Record<string, unknown>)
+                            .filter(([key]) => !['id', 'created_at', 'updated_at', 'user_id', 'department_id'].includes(key))
+                            .slice(0, 8)
+                            .map(([key, value]) => (
+                              <div key={key} className="flex gap-2">
+                                <span className="text-muted-foreground capitalize">{key.replace(/_/g, ' ')}:</span>
+                                <span className="font-medium truncate">{String(value ?? 'N/A')}</span>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>

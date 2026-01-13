@@ -152,7 +152,7 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.item_number.trim() || !formData.item_name.trim()) return;
+    if (!formData.item_name.trim()) return;
     
     setIsSubmitting(true);
     
@@ -165,6 +165,7 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
 
     const success = await onSubmit({
       ...formData,
+      item_number: formData.item_number.trim() || '', // Empty string will trigger auto-generation
       image_url: imageUrl,
     });
 
@@ -272,14 +273,15 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="item_number">Item Number *</Label>
+                <Label htmlFor="item_number">Item Number</Label>
                 <Input
                   id="item_number"
-                  placeholder="e.g., ITM-001"
+                  placeholder="Auto-generated"
                   value={formData.item_number}
                   onChange={(e) => setFormData({ ...formData, item_number: e.target.value })}
-                  required
+                  className="bg-muted/50"
                 />
+                <p className="text-xs text-muted-foreground">Leave empty to auto-generate</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="unit">Unit</Label>
@@ -360,7 +362,7 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
             <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting || !formData.item_number.trim() || !formData.item_name.trim()}>
+            <Button type="submit" disabled={isSubmitting || !formData.item_name.trim()}>
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {uploadingImage ? 'Uploading...' : duplicates.length > 0 ? 'Add Anyway' : 'Add Item'}
             </Button>

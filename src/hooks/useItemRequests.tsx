@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { clearInventoryCache } from '@/hooks/useInventory';
 
 export interface ItemRequestApprover {
   id: string;
@@ -12,6 +13,14 @@ export interface ItemRequestApprover {
   updated_at: string;
 }
 
+export interface RequestedItem {
+  item_id: string;
+  item_name: string;
+  quantity: number;
+  previous_quantity: number;
+  new_quantity: number;
+}
+
 export interface ItemRequest {
   id: string;
   department_id: string;
@@ -19,6 +28,7 @@ export interface ItemRequest {
   requester_id: string;
   requester_name: string;
   requester_department_id: string | null;
+  requester_department_text: string | null;
   item_description: string;
   quantity_requested: number;
   previous_quantity: number;
@@ -31,6 +41,7 @@ export interface ItemRequest {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  requested_items: RequestedItem[] | null;
   // Joined fields
   approver_name?: string;
   requester_department_name?: string;
@@ -74,7 +85,7 @@ export function useItemRequests(departmentId: string | undefined) {
       const formattedRequests: ItemRequest[] = (data || []).map((r: any) => ({
         ...r,
         approver_name: r.item_request_approvers?.full_name || null,
-        requester_department_name: r.departments?.name || null,
+        requester_department_name: r.departments?.name || r.requester_department_text || null,
       }));
 
       setRequests(formattedRequests);
@@ -95,6 +106,7 @@ export function useItemRequests(departmentId: string | undefined) {
     inventory_item_id?: string | null;
     requester_name: string;
     requester_department_id?: string | null;
+    requester_department_text?: string | null;
     item_description: string;
     quantity_requested: number;
     previous_quantity: number;
@@ -137,20 +149,133 @@ export function useItemRequests(departmentId: string | undefined) {
     }
   };
 
+  const deleteRequest = async (requestId: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('item_requests')
+        .delete()
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Deleted',
+        description: 'Item request deleted successfully',
+      });
+
+      await fetchRequests();
+      return true;
+    } catch (error: any) {
+      console.error('Error deleting item request:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete item request',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
   return {
     requests,
     loading,
     createRequest,
+    deleteRequest,
     refetch: fetchRequests,
   };
 }
 
-export function useItemRequestApprovers() {
+// Lightweight hook for creating item requests without fetching all requests
+export function useCreateItemRequest() {
+  const { toast } = useToast();
+
+  const createRequest = async (data: {
+    department_id: string;
+    inventory_item_id?: string | null;
+    requester_name: string;
+    requester_department_id?: string | null;
+    item_description: string;
+    quantity_requested: number;
+    previous_quantity: number;
+    new_quantity: number;
+    usage_purpose?: string;
+    approved_by_id: string;
+    approval_proof_url: string;
+    notes?: string;
+    requested_items?: Array<{
+      id: string;
+      item_number: string;
+      item_name: string;
+      quantity: number;
+      previous_quantity: number;
+      new_quantity: number;
+    }>;
+  }) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Not authenticated');
+
+      // Extract requested_items for separate handling
+      const { requested_items, ...requestData } = data;
+
+      // Insert the item request record
+      const { error: requestError } = await (supabase as any)
+        .from('item_requests')
+        .insert({
+          ...requestData,
+          requested_items: requested_items || null,
+          requester_id: userData.user.id,
+          status: 'completed',
+          approval_date: new Date().toISOString(),
+        });
+
+      if (requestError) throw requestError;
+
+      // For multi-item requests, reduce each item's inventory
+      if (requested_items && requested_items.length > 0) {
+        for (const item of requested_items) {
+          await (supabase as any)
+            .rpc('reduce_item_quantity', {
+              p_item_id: item.id,
+              p_new_quantity: item.new_quantity
+            });
+        }
+      }
+      
+      // Clear the inventory cache so the UI refreshes with new quantity
+      clearInventoryCache();
+
+      toast({
+        title: 'Success',
+        description: `Item request recorded (${requested_items?.length || 1} items)`,
+      });
+
+      return true;
+    } catch (error: any) {
+      console.error('Error creating item request:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create item request',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
+  return { createRequest };
+}
+
+export function useItemRequestApprovers(enabled: boolean = true) {
   const [approvers, setApprovers] = useState<ItemRequestApprover[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   const fetchApprovers = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+    
     try {
       setLoading(true);
       
@@ -177,7 +302,7 @@ export function useItemRequestApprovers() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     fetchApprovers();

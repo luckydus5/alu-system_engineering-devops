@@ -32,12 +32,22 @@ import {
   Download,
   Image as ImageIcon,
   Loader2,
+  FileSpreadsheet,
+  AlertTriangle,
+  ChevronRight,
+  ChevronDown,
+  Trash2,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
+import { useDepartments } from '@/hooks/useDepartments';
 import { useItemRequests, ItemRequest } from '@/hooks/useItemRequests';
+import { useInventory } from '@/hooks/useInventory';
+import { useWarehouseClassifications } from '@/hooks/useWarehouseClassifications';
 import { CreateItemRequestDialog } from './CreateItemRequestDialog';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { exportLowStockToExcel } from '@/lib/excelExport';
+import { useToast } from '@/hooks/use-toast';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
 interface ItemRequestHistoryPageProps {
@@ -48,12 +58,40 @@ interface ItemRequestHistoryPageProps {
 
 export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRequestHistoryPageProps) {
   const navigate = useNavigate();
-  const { requests, loading, refetch } = useItemRequests(department.id);
+  const { toast } = useToast();
+  const { requests, loading, refetch, deleteRequest } = useItemRequests(department.id);
+  const { items, refetch: refetchInventory } = useInventory(department.id);
+  const { classifications } = useWarehouseClassifications(department.id);
+  const { departments } = useDepartments();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [proofDialogOpen, setProofDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<ItemRequest | null>(null);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const handleDeleteRequest = async (requestId: string) => {
+    if (!confirm('Are you sure you want to delete this item request? This action cannot be undone.')) {
+      return;
+    }
+    
+    const success = await deleteRequest(requestId);
+    if (success) {
+      refetchInventory();
+    }
+  };
+
+  const toggleRowExpanded = (requestId: string) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(requestId)) {
+        newSet.delete(requestId);
+      } else {
+        newSet.add(requestId);
+      }
+      return newSet;
+    });
+  };
 
   // Filter requests based on search
   const filteredRequests = useMemo(() => {
@@ -70,6 +108,15 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
 
   // Calculate stats
   const stats = useMemo(() => {
+    // Low stock: quantity > 0 AND has min_quantity set AND quantity <= min_quantity
+    const lowStockItems = items.filter(i => 
+      i.quantity > 0 && 
+      i.min_quantity && 
+      i.min_quantity > 0 && 
+      i.quantity <= i.min_quantity
+    );
+    // Out of stock: quantity === 0
+    const outOfStockItems = items.filter(i => i.quantity === 0);
     return {
       totalRequests: requests.length,
       totalQuantity: requests.reduce((sum, r) => sum + r.quantity_requested, 0),
@@ -78,8 +125,30 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         const now = new Date();
         return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
       }).length,
+      lowStockCount: lowStockItems.length,
+      outOfStockCount: outOfStockItems.length,
     };
-  }, [requests]);
+  }, [requests, items]);
+
+  const handleExportLowStock = () => {
+    const result = exportLowStockToExcel(
+      items,
+      classifications.map(c => ({ id: c.id, name: c.name })),
+      department.name
+    );
+    if (result.success) {
+      toast({
+        title: 'Export Successful',
+        description: result.message,
+      });
+    } else {
+      toast({
+        title: 'No Data',
+        description: result.message,
+        variant: 'destructive',
+      });
+    }
+  };
 
   const openProofDialog = (request: ItemRequest) => {
     setSelectedRequest(request);
@@ -153,7 +222,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
       {/* Main Content */}
       <div className="p-4 space-y-4">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
@@ -172,7 +241,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                 <Package className="h-8 w-8 opacity-80" />
                 <div>
                   <p className="text-2xl font-bold">{stats.totalQuantity}</p>
-                  <p className="text-emerald-100 text-sm">Total Items Issued</p>
+                  <p className="text-emerald-100 text-sm">Items Issued</p>
                 </div>
               </div>
             </CardContent>
@@ -185,6 +254,30 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                 <div>
                   <p className="text-2xl font-bold">{stats.thisMonth}</p>
                   <p className="text-purple-100 text-sm">This Month</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-8 w-8 opacity-80" />
+                <div>
+                  <p className="text-2xl font-bold">{stats.lowStockCount}</p>
+                  <p className="text-amber-100 text-sm">Low Stock</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <Package className="h-8 w-8 opacity-80" />
+                <div>
+                  <p className="text-2xl font-bold">{stats.outOfStockCount}</p>
+                  <p className="text-red-100 text-sm">Out of Stock</p>
                 </div>
               </div>
             </CardContent>
@@ -202,10 +295,20 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
               className="pl-9"
             />
           </div>
-          <Button variant="outline" onClick={exportToCSV} className="gap-2">
-            <Download className="h-4 w-4" />
-            Export CSV
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handleExportLowStock} 
+              className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Low Stock Report
+            </Button>
+            <Button variant="outline" onClick={exportToCSV} className="gap-2">
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
         </div>
 
         {/* Table */}
@@ -239,81 +342,156 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
               ) : (
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-[100px]">Date</TableHead>
-                      <TableHead>Requester</TableHead>
-                      <TableHead>Item Description</TableHead>
-                      <TableHead className="text-center">Qty</TableHead>
-                      <TableHead className="text-center">RE-QTY</TableHead>
-                      <TableHead>Usage</TableHead>
-                      <TableHead>Approved By</TableHead>
-                      <TableHead className="text-center">Proof</TableHead>
+                    <TableRow className="bg-slate-900 dark:bg-slate-950">
+                      <TableHead className="w-[40px]"></TableHead>
+                      <TableHead className="w-[100px] text-white font-bold">Date</TableHead>
+                      <TableHead className="text-white font-bold">Requester</TableHead>
+                      <TableHead className="text-white font-bold">Items</TableHead>
+                      <TableHead className="text-center text-white font-bold">Total Qty</TableHead>
+                      <TableHead className="text-white font-bold">Usage</TableHead>
+                      <TableHead className="text-white font-bold">Approved By</TableHead>
+                      <TableHead className="text-center text-white font-bold">Proof</TableHead>
+                      <TableHead className="text-center text-white font-bold">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredRequests.map((request) => (
-                      <TableRow key={request.id} className="hover:bg-muted/30">
-                        <TableCell className="text-xs text-muted-foreground">
-                          {format(new Date(request.created_at), 'dd/MM/yyyy')}
-                          <br />
-                          <span className="text-xs opacity-70">
-                            {format(new Date(request.created_at), 'HH:mm')}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">{request.requester_name}</span>
-                          </div>
-                          {request.requester_department_name && (
-                            <span className="text-xs text-muted-foreground">
-                              {request.requester_department_name}
-                            </span>
+                    {filteredRequests.map((request) => {
+                      const hasMultipleItems = request.requested_items && request.requested_items.length > 1;
+                      const isExpanded = expandedRows.has(request.id);
+                      const itemCount = request.requested_items?.length || 1;
+                      const totalQty = request.requested_items
+                        ? request.requested_items.reduce((sum, item) => sum + item.quantity, 0)
+                        : request.quantity_requested;
+                      
+                      return (
+                        <>
+                          <TableRow key={request.id} className="hover:bg-muted/30">
+                            <TableCell className="p-2">
+                              {hasMultipleItems && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0"
+                                  onClick={() => toggleRowExpanded(request.id)}
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-4 w-4" />
+                                  ) : (
+                                    <ChevronRight className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {format(new Date(request.created_at), 'dd/MM/yyyy')}
+                              <br />
+                              <span className="text-xs opacity-70">
+                                {format(new Date(request.created_at), 'HH:mm')}
+                              </span>
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-muted-foreground" />
+                                <span className="font-medium">{request.requester_name}</span>
+                              </div>
+                              {(request.requester_department_text || request.requester_department_name) && (
+                                <span className="text-xs text-muted-foreground">
+                                  {request.requester_department_text || request.requester_department_name}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="max-w-[250px]">
+                              {request.requested_items && request.requested_items.length > 0 ? (
+                                <div className="space-y-1">
+                                  {request.requested_items.slice(0, hasMultipleItems && !isExpanded ? 1 : undefined).map((item, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-300 dark:border-slate-600">
+                                      <span className="font-bold text-slate-900 dark:text-white truncate">{item.item_name}</span>
+                                      <Badge variant="outline" className="font-mono text-xs shrink-0">
+                                        x{item.quantity}
+                                      </Badge>
+                                    </div>
+                                  ))}
+                                  {hasMultipleItems && !isExpanded && (
+                                    <span className="text-xs text-muted-foreground">+{itemCount - 1} more items</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-300 dark:border-slate-600">
+                                  <span className="font-bold text-slate-900 dark:text-white">{request.item_description}</span>
+                                </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant="outline" className="font-mono">
+                                {totalQty}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[150px]">
+                              <p className="text-sm text-muted-foreground truncate">
+                                {request.usage_purpose || '-'}
+                              </p>
+                            </TableCell>
+                            <TableCell>
+                              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                                {request.approver_name || '-'}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {request.approval_proof_url ? (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openProofDialog(request)}
+                                  className="gap-1 text-blue-600 hover:text-blue-700"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                  View
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteRequest(request.id)}
+                                className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                          
+                          {/* Expanded Items Row */}
+                          {hasMultipleItems && isExpanded && (
+                            <TableRow className="bg-slate-50 dark:bg-slate-800/50">
+                              <TableCell colSpan={9} className="p-0">
+                                <div className="px-6 py-3 ml-10 border-l-2 border-amber-400">
+                                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                                    Items in this request:
+                                  </div>
+                                  <div className="space-y-1">
+                                    {request.requested_items?.map((item, idx) => (
+                                      <div key={idx} className="flex items-center gap-4 text-sm py-1 px-2 rounded bg-white dark:bg-slate-700/50">
+                                        <Package className="h-4 w-4 text-amber-500" />
+                                        <span className="flex-1 font-medium">{item.item_name}</span>
+                                        <Badge variant="outline" className="font-mono text-xs">
+                                          Qty: {item.quantity}
+                                        </Badge>
+                                        <span className="text-muted-foreground text-xs">
+                                          {item.previous_quantity} → {item.new_quantity}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </TableCell>
+                            </TableRow>
                           )}
-                        </TableCell>
-                        <TableCell className="max-w-[200px]">
-                          <p className="truncate font-medium">{request.item_description}</p>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="outline" className="font-mono">
-                            {request.quantity_requested}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge 
-                            variant={request.new_quantity <= 0 ? 'destructive' : request.new_quantity < 10 ? 'outline' : 'secondary'}
-                            className="font-mono"
-                          >
-                            {request.new_quantity}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="max-w-[150px]">
-                          <p className="text-sm text-muted-foreground truncate">
-                            {request.usage_purpose || '-'}
-                          </p>
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                            {request.approver_name || '-'}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          {request.approval_proof_url ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openProofDialog(request)}
-                              className="gap-1 text-blue-600 hover:text-blue-700"
-                            >
-                              <Eye className="h-4 w-4" />
-                              View
-                            </Button>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">-</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                        </>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -327,7 +505,12 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         departmentId={department.id}
-        onSuccess={refetch}
+        items={items}
+        departments={departments}
+        onSuccess={() => {
+          refetch();
+          refetchInventory();
+        }}
       />
 
       {/* Proof View Dialog */}
