@@ -362,6 +362,131 @@ export type Database = {
           },
         ]
       }
+      item_request_approvers: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          full_name: string
+          id: string
+          is_active: boolean
+          position: string | null
+          signature_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          full_name: string
+          id?: string
+          is_active?: boolean
+          position?: string | null
+          signature_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          full_name?: string
+          id?: string
+          is_active?: boolean
+          position?: string | null
+          signature_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      item_requests: {
+        Row: {
+          approval_date: string | null
+          approval_proof_url: string | null
+          approved_by_id: string | null
+          created_at: string
+          department_id: string
+          id: string
+          inventory_item_id: string | null
+          item_description: string
+          new_quantity: number
+          notes: string | null
+          previous_quantity: number
+          quantity_requested: number
+          requester_department_id: string | null
+          requester_id: string
+          requester_name: string
+          status: string
+          updated_at: string
+          usage_purpose: string | null
+        }
+        Insert: {
+          approval_date?: string | null
+          approval_proof_url?: string | null
+          approved_by_id?: string | null
+          created_at?: string
+          department_id: string
+          id?: string
+          inventory_item_id?: string | null
+          item_description: string
+          new_quantity?: number
+          notes?: string | null
+          previous_quantity?: number
+          quantity_requested?: number
+          requester_department_id?: string | null
+          requester_id: string
+          requester_name: string
+          status?: string
+          updated_at?: string
+          usage_purpose?: string | null
+        }
+        Update: {
+          approval_date?: string | null
+          approval_proof_url?: string | null
+          approved_by_id?: string | null
+          created_at?: string
+          department_id?: string
+          id?: string
+          inventory_item_id?: string | null
+          item_description?: string
+          new_quantity?: number
+          notes?: string | null
+          previous_quantity?: number
+          quantity_requested?: number
+          requester_department_id?: string | null
+          requester_id?: string
+          requester_name?: string
+          status?: string
+          updated_at?: string
+          usage_purpose?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "item_requests_approved_by_id_fkey"
+            columns: ["approved_by_id"]
+            isOneToOne: false
+            referencedRelation: "item_request_approvers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_requests_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_requests_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "item_requests_requester_department_id_fkey"
+            columns: ["requester_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_records: {
         Row: {
           checked_by: string | null

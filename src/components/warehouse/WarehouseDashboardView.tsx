@@ -40,6 +40,7 @@ import {
   Square,
   ChevronLeft,
   ChevronRight,
+  FileText,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useWarehouseClassifications, WarehouseClassification } from '@/hooks/useWarehouseClassifications';
@@ -59,6 +60,7 @@ import { MoveItemsDialog } from './MoveItemsDialog';
 import { StockTransactionDialog, StockTransaction } from './StockTransactionDialog';
 import { ItemDetailDialog } from './ItemDetailDialog';
 import { ImagePreviewDialog } from './ImagePreviewDialog';
+import { ItemRequestHistoryPage } from './ItemRequestHistoryPage';
 import { cn } from '@/lib/utils';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
@@ -118,7 +120,9 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   // Image preview dialog states
   const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-
+  
+  // Item request history page state
+  const [showRequestHistory, setShowRequestHistory] = useState(false);
   // Data hooks
   const { 
     classifications, 
@@ -580,6 +584,15 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
 
             {/* Actions */}
             <div className="flex items-center gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setShowRequestHistory(true)} 
+                className="gap-2 border-amber-300 text-amber-600 hover:bg-amber-50"
+              >
+                <FileText className="h-4 w-4" />
+                <span className="hidden sm:inline">Item Requests</span>
+              </Button>
               <Button variant="outline" size="sm" onClick={() => navigate('/')} className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Back</span>
