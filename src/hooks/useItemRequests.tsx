@@ -115,6 +115,7 @@ export function useItemRequests(departmentId: string | undefined) {
     approved_by_id: string;
     approval_proof_url: string;
     notes?: string;
+    requested_items?: { item_id: string; item_name: string; quantity: number }[];
   }) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
@@ -194,6 +195,7 @@ export function useCreateItemRequest() {
     inventory_item_id?: string | null;
     requester_name: string;
     requester_department_id?: string | null;
+    requester_department_text?: string | null;
     item_description: string;
     quantity_requested: number;
     previous_quantity: number;

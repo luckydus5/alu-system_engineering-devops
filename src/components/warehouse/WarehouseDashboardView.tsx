@@ -62,6 +62,7 @@ import { StockTransactionDialog, StockTransaction } from './StockTransactionDial
 import { ItemDetailDialog } from './ItemDetailDialog';
 import { ImagePreviewDialog } from './ImagePreviewDialog';
 import { ItemRequestHistoryPage } from './ItemRequestHistoryPage';
+import { LowStockReportPage } from './LowStockReportPage';
 import { cn } from '@/lib/utils';
 import { exportLowStockToExcel } from '@/lib/excelExport';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
@@ -125,6 +126,9 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   
   // Item request history page state
   const [showRequestHistory, setShowRequestHistory] = useState(false);
+  // Low stock report page state
+  const [showLowStockReport, setShowLowStockReport] = useState(false);
+  
   // Data hooks
   const { 
     classifications, 
@@ -575,6 +579,16 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     );
   }
 
+  // Show Low Stock Report Page when showLowStockReport is true
+  if (showLowStockReport) {
+    return (
+      <LowStockReportPage
+        department={department}
+        onBack={() => setShowLowStockReport(false)}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
@@ -609,25 +623,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => {
-                  const result = exportLowStockToExcel(
-                    items, 
-                    classifications.map(c => ({ id: c.id, name: c.name })),
-                    department.name
-                  );
-                  if (result.success) {
-                    toast({
-                      title: 'Export Successful',
-                      description: result.message,
-                    });
-                  } else {
-                    toast({
-                      title: 'No Data',
-                      description: result.message,
-                      variant: 'destructive',
-                    });
-                  }
-                }} 
+                onClick={() => setShowLowStockReport(true)} 
                 className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
               >
                 <FileSpreadsheet className="h-4 w-4" />

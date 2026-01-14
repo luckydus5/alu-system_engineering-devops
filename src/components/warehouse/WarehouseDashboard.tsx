@@ -76,10 +76,17 @@ export function WarehouseDashboard({ department, canManage }: WarehouseDashboard
     return success;
   };
 
-  // Calculate stock status counts
+  // Calculate stock status counts using accurate logic:
+  // Out of Stock = quantity === 0
+  // Low Stock = quantity > 0 AND quantity <= min_quantity (only if min_quantity is set and > 0)
+  // In Stock = everything else
   const outOfStockCount = items.filter((i) => i.quantity === 0).length;
-  const lowStockCount = items.filter((i) => i.quantity > 0 && i.quantity < 10).length;
-  const inStockCount = items.filter((i) => i.quantity >= 10).length;
+  const lowStockCount = items.filter((i) => i.quantity > 0 && i.min_quantity && i.min_quantity > 0 && i.quantity <= i.min_quantity).length;
+  const inStockCount = items.filter((i) => {
+    if (i.quantity === 0) return false;
+    if (i.min_quantity && i.min_quantity > 0 && i.quantity <= i.min_quantity) return false;
+    return true;
+  }).length;
 
   return (
     <div className="space-y-6 animate-fade-in">
