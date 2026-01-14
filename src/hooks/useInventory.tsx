@@ -161,25 +161,31 @@ export function useInventory(departmentId: string | undefined) {
   }, [departmentId, fetchItems, items.length]);
 
   const generateUniqueItemNumber = async (): Promise<string> => {
-    // Generate a unique item number using timestamp and random suffix
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const itemNumber = `ITM-${timestamp}-${randomSuffix}`;
-    
-    // Verify it's unique in this department
+    // Get the highest existing item number in this department
     const { data } = await supabase
       .from('inventory_items')
-      .select('id')
+      .select('item_number')
       .eq('department_id', departmentId)
-      .eq('item_number', itemNumber)
-      .maybeSingle();
+      .like('item_number', 'IT-%')
+      .order('item_number', { ascending: false })
+      .limit(100);
     
-    // If exists (very unlikely), recursively generate another
-    if (data) {
-      return generateUniqueItemNumber();
+    let nextNumber = 1;
+    
+    if (data && data.length > 0) {
+      // Find the highest number from IT-XXX format
+      for (const item of data) {
+        const match = item.item_number.match(/^IT-(\d+)$/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          if (num >= nextNumber) {
+            nextNumber = num + 1;
+          }
+        }
+      }
     }
     
-    return itemNumber;
+    return `IT-${nextNumber.toString().padStart(3, '0')}`;
   };
 
   const createItem = async (data: Omit<InventoryItem, 'id' | 'created_at' | 'updated_at' | 'created_by'>) => {
