@@ -409,7 +409,9 @@ export type Database = {
           notes: string | null
           previous_quantity: number
           quantity_requested: number
+          requested_items: Json | null
           requester_department_id: string | null
+          requester_department_text: string | null
           requester_id: string
           requester_name: string
           status: string
@@ -429,7 +431,9 @@ export type Database = {
           notes?: string | null
           previous_quantity?: number
           quantity_requested?: number
+          requested_items?: Json | null
           requester_department_id?: string | null
+          requester_department_text?: string | null
           requester_id: string
           requester_name: string
           status?: string
@@ -449,7 +453,9 @@ export type Database = {
           notes?: string | null
           previous_quantity?: number
           quantity_requested?: number
+          requested_items?: Json | null
           requester_department_id?: string | null
+          requester_department_text?: string | null
           requester_id?: string
           requester_name?: string
           status?: string
@@ -1234,6 +1240,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      reduce_item_quantity: {
+        Args: { p_item_id: string; p_new_quantity: number }
         Returns: boolean
       }
       user_in_department: {

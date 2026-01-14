@@ -76,11 +76,13 @@ export function InventoryTable({
       item.location.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getStockBadge = (quantity: number) => {
-    if (quantity === 0) {
+  // Get stock badge using accurate logic based on item's min_quantity
+  const getStockBadge = (item: { quantity: number; min_quantity?: number | null }) => {
+    if (item.quantity === 0) {
       return <Badge variant="destructive">Out of Stock</Badge>;
     }
-    if (quantity < 10) {
+    // Low stock if quantity > 0 AND min_quantity is set AND quantity <= min_quantity
+    if (item.min_quantity && item.min_quantity > 0 && item.quantity <= item.min_quantity) {
       return <Badge variant="outline" className="border-amber-500 text-amber-500">Low Stock</Badge>;
     }
     return <Badge variant="outline" className="border-green-500 text-green-500">In Stock</Badge>;
@@ -188,7 +190,7 @@ export function InventoryTable({
                         <span className="text-muted-foreground">{item.location}</span>
                       )}
                     </TableCell>
-                    <TableCell>{getStockBadge(item.quantity)}</TableCell>
+                    <TableCell>{getStockBadge(item)}</TableCell>
                     {canManage && (
                       <TableCell className="text-right">
                         {editingId === item.id ? (
