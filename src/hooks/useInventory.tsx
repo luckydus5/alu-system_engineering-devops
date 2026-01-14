@@ -160,14 +160,43 @@ export function useInventory(departmentId: string | undefined) {
     }
   }, [departmentId, fetchItems, items.length]);
 
+  const generateUniqueItemNumber = async (): Promise<string> => {
+    // Generate a unique item number using timestamp and random suffix
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const itemNumber = `ITM-${timestamp}-${randomSuffix}`;
+    
+    // Verify it's unique in this department
+    const { data } = await supabase
+      .from('inventory_items')
+      .select('id')
+      .eq('department_id', departmentId)
+      .eq('item_number', itemNumber)
+      .maybeSingle();
+    
+    // If exists (very unlikely), recursively generate another
+    if (data) {
+      return generateUniqueItemNumber();
+    }
+    
+    return itemNumber;
+  };
+
   const createItem = async (data: Omit<InventoryItem, 'id' | 'created_at' | 'updated_at' | 'created_by'>) => {
     try {
       const { data: userData } = await supabase.auth.getUser();
+      
+      // Auto-generate item_number if empty
+      let itemNumber = data.item_number?.trim();
+      if (!itemNumber) {
+        itemNumber = await generateUniqueItemNumber();
+      }
       
       const { error } = await supabase
         .from('inventory_items')
         .insert({
           ...data,
+          item_number: itemNumber,
           created_by: userData.user?.id,
         });
 
