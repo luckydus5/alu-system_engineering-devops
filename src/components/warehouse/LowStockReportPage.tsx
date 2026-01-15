@@ -1,3 +1,4 @@
+// Low Stock Report Page with separate export options
 import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
