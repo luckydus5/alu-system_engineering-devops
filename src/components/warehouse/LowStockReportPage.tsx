@@ -21,7 +21,14 @@ import {
   Download,
   RefreshCw,
   Loader2,
+  ChevronDown,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Department } from '@/hooks/useDepartments';
 import { useInventory, InventoryItem } from '@/hooks/useInventory';
 import { useWarehouseClassifications } from '@/hooks/useWarehouseClassifications';
@@ -101,11 +108,12 @@ export function LowStockReportPage({ department, onBack }: LowStockReportPagePro
     return location || 'Unknown';
   };
 
-  const handleExport = () => {
+  const handleExport = (exportType: 'all' | 'outOfStock' | 'lowStock' = 'all') => {
     const result = exportLowStockToExcel(
       items,
       classifications.map(c => ({ id: c.id, name: c.name })),
-      department.name
+      department.name,
+      exportType
     );
     
     if (result.success) {
@@ -213,15 +221,29 @@ export function LowStockReportPage({ department, onBack }: LowStockReportPagePro
 
             {/* Actions */}
             <div className="flex items-center gap-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleExport}
-                className="gap-2"
-              >
-                <Download className="h-4 w-4" />
-                <span className="hidden sm:inline">Export Excel</span>
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Download className="h-4 w-4" />
+                    <span className="hidden sm:inline">Export</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => handleExport('all')} className="gap-2">
+                    <Package className="h-4 w-4" />
+                    Export All (Low + Out of Stock)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('outOfStock')} className="gap-2">
+                    <PackageX className="h-4 w-4 text-red-500" />
+                    Export Out of Stock Only
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExport('lowStock')} className="gap-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    Export Low Stock Only
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="outline" size="sm" onClick={onBack} className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Back</span>

@@ -9,28 +9,38 @@ interface LowStockItem {
   status: 'OUT OF STOCK' | 'LOW STOCK';
 }
 
+type ExportType = 'all' | 'outOfStock' | 'lowStock';
+
 /**
  * Export low stock and out of stock items to Excel
  * Simple format: Item Number, Item Name, Remaining Quantity
  * 
  * Low Stock = quantity > 0 AND quantity <= min_quantity (uses item's actual min_quantity, NOT a default)
  * Out of Stock = quantity === 0
+ * 
+ * @param exportType - 'all' exports both, 'outOfStock' only out of stock, 'lowStock' only low stock
  */
 export function exportLowStockToExcel(
   items: InventoryItem[],
   classifications?: { id: string; name: string }[],
-  departmentName?: string
+  departmentName?: string,
+  exportType: ExportType = 'all'
 ) {
-  // Filter ONLY items that are truly low stock or out of stock
-  // Low stock: quantity > 0 AND quantity <= min_quantity (only if min_quantity is set and > 0)
-  // Out of stock: quantity === 0
+  // Filter items based on exportType
   const lowStockItems: LowStockItem[] = items
     .filter(item => {
-      // Out of stock
-      if (item.quantity === 0) return true;
-      // Low stock: only if min_quantity is actually set and quantity is at or below it
-      if (item.min_quantity && item.min_quantity > 0 && item.quantity <= item.min_quantity) return true;
-      return false;
+      const isOutOfStock = item.quantity === 0;
+      const isLowStock = item.min_quantity && item.min_quantity > 0 && item.quantity > 0 && item.quantity <= item.min_quantity;
+      
+      switch (exportType) {
+        case 'outOfStock':
+          return isOutOfStock;
+        case 'lowStock':
+          return isLowStock;
+        case 'all':
+        default:
+          return isOutOfStock || isLowStock;
+      }
     })
     .map(item => ({
       item_number: item.item_number || 'N/A',
@@ -40,34 +50,43 @@ export function exportLowStockToExcel(
     }))
     .sort((a, b) => a.quantity - b.quantity); // Sort by quantity ascending (0 first)
 
+  const exportTypeLabel = exportType === 'outOfStock' ? 'Out of Stock' : 
+                          exportType === 'lowStock' ? 'Low Stock' : 'Low Stock';
+
   if (lowStockItems.length === 0) {
-    return { success: false, message: 'No low stock or out of stock items found' };
+    return { success: false, message: `No ${exportTypeLabel.toLowerCase()} items found` };
   }
 
   // Create workbook
   const wb = XLSX.utils.book_new();
 
+  // Determine title based on export type
+  const title = exportType === 'outOfStock' ? 'OUT OF STOCK ITEMS' :
+                exportType === 'lowStock' ? 'LOW STOCK ITEMS' : 'LOW STOCK REQUEST FORM';
+
   // Prepare data for worksheet - Simple format
   const wsData = [
     // Title row
-    ['LOW STOCK REQUEST FORM'],
+    [title],
     [`Date: ${format(new Date(), 'dd/MM/yyyy')}`],
     [departmentName ? `Department: ${departmentName}` : ''],
     [], // Empty row
     // Header row
-    ['#', 'Item Number', 'Item Name', 'Remaining Qty', 'Status'],
+    ['#', 'Item Number', 'Item Name', 'Remaining Qty', ...(exportType === 'all' ? ['Status'] : [])],
     // Data rows
     ...lowStockItems.map((item, index) => [
       index + 1,
       item.item_number,
       item.item_name,
       item.quantity,
-      item.status,
+      ...(exportType === 'all' ? [item.status] : []),
     ]),
     [], // Empty row
     // Summary
-    [`Out of Stock: ${lowStockItems.filter(i => i.status === 'OUT OF STOCK').length}`],
-    [`Low Stock: ${lowStockItems.filter(i => i.status === 'LOW STOCK').length}`],
+    ...(exportType === 'all' ? [
+      [`Out of Stock: ${lowStockItems.filter(i => i.status === 'OUT OF STOCK').length}`],
+      [`Low Stock: ${lowStockItems.filter(i => i.status === 'LOW STOCK').length}`],
+    ] : []),
     [`Total Items: ${lowStockItems.length}`],
   ];
 
@@ -80,21 +99,25 @@ export function exportLowStockToExcel(
     { wch: 20 },  // Item Number
     { wch: 40 },  // Item Name
     { wch: 15 },  // Remaining Qty
-    { wch: 15 },  // Status
+    ...(exportType === 'all' ? [{ wch: 15 }] : []),  // Status
   ];
 
   // Add worksheet to workbook
-  XLSX.utils.book_append_sheet(wb, ws, 'Low Stock Request');
+  const sheetName = exportType === 'outOfStock' ? 'Out of Stock' : 
+                    exportType === 'lowStock' ? 'Low Stock' : 'Low Stock Request';
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
 
   // Generate filename
-  const filename = `Low_Stock_Request_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+  const filePrefix = exportType === 'outOfStock' ? 'Out_of_Stock' : 
+                     exportType === 'lowStock' ? 'Low_Stock' : 'Low_Stock_Request';
+  const filename = `${filePrefix}_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
 
   // Write file and trigger download
   XLSX.writeFile(wb, filename);
 
   return { 
     success: true, 
-    message: `Exported ${lowStockItems.length} items to ${filename}`,
+    message: `Exported ${lowStockItems.length} ${exportTypeLabel.toLowerCase()} items to ${filename}`,
     filename,
     itemCount: lowStockItems.length,
   };
