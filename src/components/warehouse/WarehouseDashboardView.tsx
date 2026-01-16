@@ -633,9 +633,10 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  // If at classifications level, go to homepage. Otherwise use internal navigation.
+                  // Always use internal goBack for warehouse navigation
+                  // Only exit to department page when at top-level classifications
                   if (navState.level === 'classifications') {
-                    navigate('/');
+                    navigate(`/department/${department.code}`);
                   } else {
                     goBack();
                   }
