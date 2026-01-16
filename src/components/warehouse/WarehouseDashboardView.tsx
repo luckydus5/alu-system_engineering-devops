@@ -629,7 +629,19 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 <FileSpreadsheet className="h-4 w-4" />
                 <span className="hidden sm:inline">Low Stock Report</span>
               </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate('/')} className="gap-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  // If at classifications level, go to homepage. Otherwise use internal navigation.
+                  if (navState.level === 'classifications') {
+                    navigate('/');
+                  } else {
+                    goBack();
+                  }
+                }} 
+                className="gap-2"
+              >
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Back</span>
               </Button>
