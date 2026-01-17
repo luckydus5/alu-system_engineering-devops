@@ -2,6 +2,7 @@ import { Camera, X, RotateCcw, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCameraCapture } from '@/hooks/useCameraCapture';
 import { cn } from '@/lib/utils';
+import { useEffect } from 'react';
 
 interface CameraCaptureProps {
   onCapture: (file: File, preview: string) => void;
@@ -22,10 +23,18 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
     error
   } = useCameraCapture();
 
-  // Start camera on mount
-  const handleStartCamera = async () => {
-    await startCamera();
-  };
+  // Auto-start camera on mount
+  useEffect(() => {
+    const initCamera = async () => {
+      await startCamera();
+    };
+    initCamera();
+    
+    // Cleanup on unmount
+    return () => {
+      stopCamera();
+    };
+  }, [startCamera, stopCamera]);
 
   const handleRetake = async () => {
     clearCapture();
@@ -48,7 +57,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 bg-black/80">
+      <div className="flex items-center justify-between p-4 bg-black/80 safe-area-top">
         <Button variant="ghost" size="icon" onClick={handleClose} className="text-white">
           <X className="h-6 w-6" />
         </Button>
@@ -57,12 +66,12 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
       </div>
 
       {/* Camera View or Captured Image */}
-      <div className="flex-1 relative overflow-hidden">
+      <div className="flex-1 relative overflow-hidden bg-black">
         {error ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
             <Camera className="h-16 w-16 text-white/50 mb-4" />
             <p className="text-white/80 mb-4">{error}</p>
-            <Button variant="secondary" onClick={handleStartCamera}>
+            <Button variant="secondary" onClick={() => startCamera()}>
               Try Again
             </Button>
           </div>
@@ -72,22 +81,23 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
             alt="Captured" 
             className="w-full h-full object-contain"
           />
-        ) : isCapturing ? (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            autoPlay
-            playsInline
-            muted
-          />
         ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
-            <Camera className="h-16 w-16 text-white/50 mb-4" />
-            <p className="text-white/80 mb-4">Ready to take a photo</p>
-            <Button variant="secondary" onClick={handleStartCamera}>
-              Open Camera
-            </Button>
-          </div>
+          <>
+            <video
+              ref={videoRef}
+              className="w-full h-full object-cover"
+              autoPlay
+              playsInline
+              muted
+              style={{ display: isCapturing ? 'block' : 'none' }}
+            />
+            {!isCapturing && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mb-4" />
+                <p className="text-white/80">Starting camera...</p>
+              </div>
+            )}
+          </>
         )}
         
         {/* Hidden canvas for capture */}
@@ -95,7 +105,7 @@ export function CameraCapture({ onCapture, onClose }: CameraCaptureProps) {
       </div>
 
       {/* Controls */}
-      <div className="p-6 bg-black/80">
+      <div className="p-6 bg-black/80 safe-area-bottom">
         {capturedImage ? (
           <div className="flex items-center justify-center gap-6">
             <Button
