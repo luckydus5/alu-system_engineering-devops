@@ -15,7 +15,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'robots.txt'],
+      includeAssets: ['favicon.png', 'robots.txt', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'HQ Power Management',
         short_name: 'HQ Power',
@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => ({
         orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
+        id: 'hq-power-pwa',
         icons: [
           {
             src: '/favicon.png',
@@ -57,10 +58,26 @@ export default defineConfig(({ mode }) => ({
             purpose: 'maskable'
           }
         ],
-        categories: ['business', 'productivity']
+        categories: ['business', 'productivity'],
+        screenshots: [
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            form_factor: 'wide'
+          },
+          {
+            src: '/pwa-512x512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            form_factor: 'narrow'
+          }
+        ]
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
@@ -70,6 +87,18 @@ export default defineConfig(({ mode }) => ({
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24 // 24 hours
+              },
+              networkTimeoutSeconds: 10
+            }
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'image-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
               }
             }
           }

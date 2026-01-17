@@ -12,9 +12,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Upload, X, Image as ImageIcon, AlertTriangle } from 'lucide-react';
+import { Loader2, Upload, X, Image as ImageIcon, AlertTriangle, Camera } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { CameraCapture } from '@/components/shared/CameraCapture';
 
 interface DuplicateItem {
   id: string;
@@ -59,6 +60,7 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
   const [uploadingImage, setUploadingImage] = useState(false);
   const [duplicates, setDuplicates] = useState<DuplicateItem[]>([]);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
 
   // Check for duplicates when item_name changes
   useEffect(() => {
@@ -120,6 +122,12 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const handleCameraCapture = (file: File, preview: string) => {
+    setImageFile(file);
+    setImagePreview(preview);
+    setShowCamera(false);
   };
 
   const uploadImage = async (file: File): Promise<string | null> => {
@@ -253,18 +261,32 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
                   className="hidden"
                   onChange={handleImageSelect}
                 />
-                <div className="flex-1">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingImage}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    {imageFile ? 'Change Photo' : 'Upload Photo'}
-                  </Button>
-                  <p className="text-xs text-muted-foreground mt-1">
+                <div className="flex-1 space-y-2">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCamera(true)}
+                      disabled={uploadingImage}
+                      className="flex-1"
+                    >
+                      <Camera className="h-4 w-4 mr-2" />
+                      Camera
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="flex-1"
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
                     JPG, PNG up to 5MB
                   </p>
                 </div>
@@ -368,6 +390,14 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
             </Button>
           </DialogFooter>
         </form>
+
+        {/* Camera Capture Modal */}
+        {showCamera && (
+          <CameraCapture
+            onCapture={handleCameraCapture}
+            onClose={() => setShowCamera(false)}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -1,13 +1,31 @@
+import { useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DepartmentAccessCards } from '@/components/dashboard/DepartmentAccessCards';
 import { MobileDepartmentGrid } from '@/components/dashboard/MobileDepartmentGrid';
+import { PullToRefreshIndicator } from '@/components/shared/PullToRefreshIndicator';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useQueryClient } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
 
 export default function Dashboard() {
-  const { profile } = useUserRole();
+  const { profile, refetch } = useUserRole();
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
+
+  const handleRefresh = useCallback(async () => {
+    // Invalidate all queries to refresh data
+    await queryClient.invalidateQueries();
+    await refetch?.();
+    // Small delay for visual feedback
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }, [queryClient, refetch]);
+
+  const { containerRef, isRefreshing, pullProgress } = usePullToRefresh({
+    onRefresh: handleRefresh,
+    disabled: !isMobile
+  });
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -18,7 +36,18 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout title="Dashboard">
-      <div className="animate-fade-in">
+      <div 
+        ref={containerRef as React.RefObject<HTMLDivElement>}
+        className="animate-fade-in relative min-h-[calc(100vh-8rem)]"
+      >
+        {/* Pull to Refresh Indicator */}
+        {isMobile && (
+          <PullToRefreshIndicator 
+            pullProgress={pullProgress} 
+            isRefreshing={isRefreshing} 
+          />
+        )}
+
         {/* Mobile View - Compact grid without heavy welcome section */}
         {isMobile ? (
           <div className="space-y-4">
@@ -27,6 +56,9 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground">
                 {getGreeting()}, <span className="font-semibold text-foreground">{profile?.full_name?.split(' ')[0] || 'User'}</span>
               </p>
+              {isRefreshing && (
+                <p className="text-xs text-primary mt-1">Refreshing...</p>
+              )}
             </div>
             
             {/* Compact Department Grid */}
