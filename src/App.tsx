@@ -17,6 +17,7 @@ import Admin from "./pages/Admin";
 import SuperAdmin from "./pages/SuperAdmin";
 import SystemHealth from "./pages/SystemHealth";
 import Notifications from "./pages/Notifications";
+import InstallApp from "./pages/InstallApp";
 import NotFound from "./pages/NotFound";
 
 
@@ -51,6 +52,7 @@ const App = () => (
               <Route path="/super-admin" element={<SuperAdmin />} />
               <Route path="/system-health" element={<SystemHealth />} />
               <Route path="/notifications" element={<Notifications />} />
+              <Route path="/install" element={<InstallApp />} />
               {/* Catch-all route for 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>
