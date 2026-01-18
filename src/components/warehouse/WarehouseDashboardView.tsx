@@ -803,34 +803,6 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
           </div>
         )}
 
-        {/* Low Stock Alert */}
-        {!isSearching && navState.level === 'classifications' && lowStockItems.length > 0 && (
-          <Card className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/20">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-amber-700 dark:text-amber-400 flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
-                Low Stock Alert
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-amber-600 dark:text-amber-500 mb-3">
-                {lowStockItems.length} item(s) are below minimum stock level
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {lowStockItems.slice(0, 5).map((item) => (
-                  <Badge key={item.id} variant="outline" className="border-amber-500 text-amber-700">
-                    {item.item_name} ({item.quantity})
-                  </Badge>
-                ))}
-                {lowStockItems.length > 5 && (
-                  <Badge variant="outline" className="border-amber-500 text-amber-700">
-                    +{lowStockItems.length - 5} more
-                  </Badge>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Classifications View */}
         {!isSearching && navState.level === 'classifications' && (
