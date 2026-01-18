@@ -27,10 +27,10 @@ export function MobileBottomNav() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden safe-area-left safe-area-right">
       {/* Background with blur */}
       <div className="bg-background/95 backdrop-blur-lg border-t border-border shadow-lg">
-        <div className="flex items-center justify-around px-2 py-2 safe-area-bottom">
+        <div className="flex items-center justify-around px-1 xs:px-2 py-1.5 xs:py-2 safe-area-bottom">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path || 
               (item.path !== '/' && location.pathname.startsWith(item.path));
@@ -40,8 +40,8 @@ export function MobileBottomNav() {
                 key={item.path}
                 to={item.path}
                 className={cn(
-                  'flex flex-col items-center gap-1 px-4 py-2 rounded-xl transition-all relative',
-                  'min-w-[64px]',
+                  'flex flex-col items-center gap-0.5 xs:gap-1 px-2 xs:px-4 py-1.5 xs:py-2 rounded-xl transition-all relative',
+                  'min-w-[48px] xs:min-w-[64px]',
                   isActive 
                     ? 'text-primary bg-primary/10' 
                     : 'text-muted-foreground hover:text-foreground active:bg-muted/50'
@@ -49,18 +49,18 @@ export function MobileBottomNav() {
               >
                 <div className="relative">
                   <item.icon className={cn(
-                    'h-5 w-5 transition-transform',
+                    'h-4 w-4 xs:h-5 xs:w-5 transition-transform',
                     isActive && 'scale-110'
                   )} />
                   {/* Badge */}
                   {item.badge && item.badge > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 xs:-top-1.5 xs:-right-1.5 min-w-[14px] xs:min-w-[16px] h-3.5 xs:h-4 px-0.5 xs:px-1 rounded-full bg-destructive text-destructive-foreground text-[8px] xs:text-[10px] font-bold flex items-center justify-center">
                       {item.badge > 99 ? '99+' : item.badge}
                     </span>
                   )}
                 </div>
                 <span className={cn(
-                  'text-[10px] font-medium',
+                  'text-[9px] xs:text-[10px] font-medium truncate max-w-full',
                   isActive && 'font-semibold'
                 )}>
                   {item.label}

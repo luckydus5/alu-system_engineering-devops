@@ -180,35 +180,35 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
       {/* Header */}
       <div className="bg-white dark:bg-slate-800 border-b shadow-sm sticky top-0 z-40">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
+        <div className="px-3 sm:px-4 py-2 sm:py-3">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Logo and Title */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               <div 
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => navigate('/')}
               >
-                <img src={hqPowerLogo} alt="HQ Power" className="h-10 w-auto" />
+                <img src={hqPowerLogo} alt="HQ Power" className="h-8 sm:h-10 w-auto" />
               </div>
-              <div className="border-l-2 border-amber-500 pl-4">
-                <h1 className="text-lg font-bold text-foreground">Item Request History</h1>
-                <p className="text-xs text-muted-foreground">Track approved item requests</p>
+              <div className="border-l-2 border-amber-500 pl-2 sm:pl-4 min-w-0">
+                <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Item Request History</h1>
+                <p className="text-[10px] sm:text-xs text-muted-foreground hidden xs:block">Track approved item requests</p>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={onBack} className="gap-2">
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+              <Button variant="outline" size="sm" onClick={onBack} className="gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3">
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Back to Warehouse</span>
               </Button>
-              <Button variant="outline" size="icon" onClick={refetch} disabled={loading}>
+              <Button variant="outline" size="icon" onClick={refetch} disabled={loading} className="h-8 w-8 sm:h-9 sm:w-9">
                 <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
               </Button>
               {canManage && (
                 <Button 
                   onClick={() => setCreateDialogOpen(true)} 
-                  className="bg-amber-500 hover:bg-amber-600 gap-2"
+                  className="bg-amber-500 hover:bg-amber-600 gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
                 >
                   <Plus className="h-4 w-4" />
                   <span className="hidden sm:inline">New Request</span>
@@ -220,64 +220,64 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
       </div>
 
       {/* Main Content */}
-      <div className="p-4 space-y-4">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="p-2 sm:p-4 space-y-3 sm:space-y-4 pb-24 md:pb-4">
+        {/* Stats Cards - Responsive grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <FileText className="h-8 w-8 opacity-80" />
-                <div>
-                  <p className="text-2xl font-bold">{stats.totalRequests}</p>
-                  <p className="text-blue-100 text-sm">Total Requests</p>
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <FileText className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.totalRequests}</p>
+                  <p className="text-blue-100 text-[10px] sm:text-sm truncate">Total Requests</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Package className="h-8 w-8 opacity-80" />
-                <div>
-                  <p className="text-2xl font-bold">{stats.totalQuantity}</p>
-                  <p className="text-emerald-100 text-sm">Items Issued</p>
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Package className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.totalQuantity}</p>
+                  <p className="text-emerald-100 text-[10px] sm:text-sm truncate">Items Issued</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           
           <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-8 w-8 opacity-80" />
-                <div>
-                  <p className="text-2xl font-bold">{stats.thisMonth}</p>
-                  <p className="text-purple-100 text-sm">This Month</p>
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Calendar className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.thisMonth}</p>
+                  <p className="text-purple-100 text-[10px] sm:text-sm truncate">This Month</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
           <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <AlertTriangle className="h-8 w-8 opacity-80" />
-                <div>
-                  <p className="text-2xl font-bold">{stats.lowStockCount}</p>
-                  <p className="text-amber-100 text-sm">Low Stock</p>
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <AlertTriangle className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.lowStockCount}</p>
+                  <p className="text-amber-100 text-[10px] sm:text-sm truncate">Low Stock</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Package className="h-8 w-8 opacity-80" />
-                <div>
-                  <p className="text-2xl font-bold">{stats.outOfStockCount}</p>
-                  <p className="text-red-100 text-sm">Out of Stock</p>
+          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0 col-span-2 sm:col-span-1">
+            <CardContent className="p-2 sm:p-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Package className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-lg sm:text-2xl font-bold">{stats.outOfStockCount}</p>
+                  <p className="text-red-100 text-[10px] sm:text-sm truncate">Out of Stock</p>
                 </div>
               </div>
             </CardContent>
@@ -285,7 +285,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         </div>
 
         {/* Search and Export */}
-        <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:gap-3 sm:items-center justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -295,32 +295,33 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
               className="pl-9"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto overflow-x-auto mobile-scroll-x">
             <Button 
               variant="outline" 
+              size="sm"
               onClick={handleExportLowStock} 
-              className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+              className="gap-1 sm:gap-2 border-red-300 text-red-600 hover:bg-red-50 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 whitespace-nowrap flex-shrink-0"
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              Low Stock Report
+              <FileSpreadsheet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Low Stock</span>
             </Button>
-            <Button variant="outline" onClick={exportToCSV} className="gap-2">
-              <Download className="h-4 w-4" />
-              Export CSV
+            <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-1 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 whitespace-nowrap flex-shrink-0">
+              <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden xs:inline">Export</span> CSV
             </Button>
           </div>
         </div>
 
         {/* Table */}
-        <Card>
-          <CardHeader className="py-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-5 w-5 text-amber-500" />
+        <Card className="overflow-hidden">
+          <CardHeader className="py-2 sm:py-3 px-3 sm:px-6">
+            <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
               Request History ({filteredRequests.length} records)
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
-            <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
+            <ScrollArea className="h-[calc(100vh-480px)] sm:h-[calc(100vh-400px)] min-h-[250px] sm:min-h-[300px]">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
