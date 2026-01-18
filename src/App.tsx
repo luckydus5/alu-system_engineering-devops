@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SessionTracker } from "@/components/SessionTracker";
 import { PasswordResetEnforcer } from "@/components/auth/PasswordResetEnforcer";
+import { PWAInstallPrompt } from "@/components/shared/PWAInstallPrompt";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { RouteErrorFallback } from "@/components/RouteErrorFallback";
 import Index from "./pages/Index";
@@ -42,6 +43,7 @@ const App = () => (
           <BrowserRouter>
             <SessionTracker />
             <PasswordResetEnforcer />
+            <PWAInstallPrompt />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
