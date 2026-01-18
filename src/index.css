@@ -361,3 +361,159 @@ input[type="number"] {
 .safe-area-top {
   padding-top: env(safe-area-inset-top, 0px);
 }
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.safe-area-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Mobile touch optimizations */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets on mobile */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Disable hover effects on touch devices */
+  .hover\:bg-muted:hover {
+    background-color: inherit;
+  }
+  
+  /* Active state for touch feedback */
+  button:active, a:active, [role="button"]:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+}
+
+/* Prevent text selection on mobile UI elements */
+.no-select {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Smooth scrolling on mobile */
+.scroll-smooth {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Mobile viewport height fix */
+.min-h-screen-mobile {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Responsive text utilities */
+@media (max-width: 374px) {
+  .text-responsive-xs {
+    font-size: 0.65rem;
+    line-height: 1rem;
+  }
+  .text-responsive-sm {
+    font-size: 0.75rem;
+    line-height: 1.1rem;
+  }
+  .text-responsive-base {
+    font-size: 0.8rem;
+    line-height: 1.25rem;
+  }
+}
+
+@media (min-width: 375px) and (max-width: 413px) {
+  .text-responsive-xs {
+    font-size: 0.7rem;
+    line-height: 1rem;
+  }
+  .text-responsive-sm {
+    font-size: 0.8rem;
+    line-height: 1.15rem;
+  }
+  .text-responsive-base {
+    font-size: 0.875rem;
+    line-height: 1.35rem;
+  }
+}
+
+@media (min-width: 414px) {
+  .text-responsive-xs {
+    font-size: 0.75rem;
+    line-height: 1.1rem;
+  }
+  .text-responsive-sm {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+  .text-responsive-base {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+}
+
+/* Fix for iOS input zoom */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="number"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Mobile horizontal scroll container */
+.mobile-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.mobile-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+/* Mobile card grid responsive */
+@media (max-width: 374px) {
+  .mobile-card-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+}
+
+@media (min-width: 375px) and (max-width: 413px) {
+  .mobile-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.625rem;
+  }
+}
+
+@media (min-width: 414px) and (max-width: 767px) {
+  .mobile-card-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+/* Prevent overscroll bounce on iOS */
+html, body {
+  overscroll-behavior: none;
+}
+
+/* Keyboard push fix for mobile */
+@supports (-webkit-touch-callout: none) {
+  .keyboard-fix {
+    height: -webkit-fill-available;
+  }
+}

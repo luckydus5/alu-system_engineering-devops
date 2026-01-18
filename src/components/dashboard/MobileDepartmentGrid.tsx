@@ -120,8 +120,8 @@ export function MobileDepartmentGrid() {
         )}
       </div>
 
-      {/* Compact Grid - 3 columns for mobile */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Compact Grid - Responsive columns for all mobile sizes */}
+      <div className="grid grid-cols-2 xs:grid-cols-3 gap-2 sm:gap-3">
         {accessibleDepts.map((dept) => {
           const isPrimary = dept.id === primaryDeptId;
           const gradient = departmentGradients[dept.code] || 'from-primary to-primary/80';
@@ -135,9 +135,10 @@ export function MobileDepartmentGrid() {
               className="group"
             >
               <div className={`
-                relative rounded-xl border p-3 
+                relative rounded-xl border p-2 sm:p-3 
                 flex flex-col items-center text-center
                 transition-all duration-200 active:scale-95
+                min-h-[80px] sm:min-h-[96px]
                 ${bgColor}
               `}>
                 {/* Primary indicator */}
@@ -151,22 +152,22 @@ export function MobileDepartmentGrid() {
 
                 {/* Icon */}
                 <div className={`
-                  w-12 h-12 rounded-xl bg-gradient-to-br ${gradient} 
-                  flex items-center justify-center mb-2 shadow-md
+                  w-10 h-10 sm:w-12 sm:h-12 rounded-lg sm:rounded-xl bg-gradient-to-br ${gradient} 
+                  flex items-center justify-center mb-1.5 sm:mb-2 shadow-md
                 `}>
                   {iconUrl ? (
                     <img 
                       src={iconUrl} 
                       alt={dept.name} 
-                      className="w-8 h-8 object-contain"
+                      className="w-6 h-6 sm:w-8 sm:h-8 object-contain"
                     />
                   ) : (
-                    <Building2 className="h-6 w-6 text-white" />
+                    <Building2 className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
                   )}
                 </div>
 
                 {/* Name - Truncated */}
-                <span className="text-xs font-semibold text-foreground line-clamp-2 leading-tight">
+                <span className="text-[10px] sm:text-xs font-semibold text-foreground line-clamp-2 leading-tight px-0.5">
                   {dept.name}
                 </span>
               </div>

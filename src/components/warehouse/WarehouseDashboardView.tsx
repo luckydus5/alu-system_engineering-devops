@@ -590,63 +590,61 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 pb-20 md:pb-0">
       {/* Header */}
-      <div className="bg-white dark:bg-slate-800 border-b shadow-sm sticky top-0 z-40">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-800 border-b shadow-sm sticky top-0 z-40 safe-area-top">
+        <div className="px-2 sm:px-4 py-2 sm:py-3">
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Logo and Title */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
               <div 
-                className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                className="flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => navigate('/')}
               >
-                <img src={hqPowerLogo} alt="HQ Power" className="h-10 w-auto" />
+                <img src={hqPowerLogo} alt="HQ Power" className="h-8 sm:h-10 w-auto" />
               </div>
-              <div className="border-l-2 border-amber-500 pl-4">
-                <h1 className="text-lg font-bold text-foreground">Warehouse</h1>
-                <p className="text-xs text-muted-foreground">All Stores</p>
+              <div className="border-l-2 border-amber-500 pl-2 sm:pl-4 min-w-0">
+                <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Warehouse</h1>
+                <p className="text-[10px] sm:text-xs text-muted-foreground">All Stores</p>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
+            {/* Actions - Compact on mobile */}
+            <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={() => setShowRequestHistory(true)} 
-                className="gap-2 border-amber-300 text-amber-600 hover:bg-amber-50"
+                className="gap-1 sm:gap-2 border-amber-300 text-amber-600 hover:bg-amber-50 h-8 sm:h-9 px-1.5 sm:px-3"
               >
                 <FileText className="h-4 w-4" />
-                <span className="hidden sm:inline">Item Requests</span>
+                <span className="hidden md:inline">Item Requests</span>
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={() => setShowLowStockReport(true)} 
-                className="gap-2 border-red-300 text-red-600 hover:bg-red-50"
+                className="gap-1 sm:gap-2 border-red-300 text-red-600 hover:bg-red-50 h-8 sm:h-9 px-1.5 sm:px-3"
               >
                 <FileSpreadsheet className="h-4 w-4" />
-                <span className="hidden sm:inline">Low Stock Report</span>
+                <span className="hidden md:inline">Low Stock</span>
               </Button>
               <Button 
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
-                  // Always use internal goBack for warehouse navigation
-                  // Only exit to department page when at top-level classifications
                   if (navState.level === 'classifications') {
                     navigate(`/department/${department.code}`);
                   } else {
                     goBack();
                   }
                 }} 
-                className="gap-2"
+                className="gap-1 sm:gap-2 h-8 sm:h-9 px-1.5 sm:px-3"
               >
                 <ArrowLeft className="h-4 w-4" />
                 <span className="hidden sm:inline">Back</span>
               </Button>
-              <Button variant="outline" size="icon" onClick={handleRefresh} disabled={loading}>
+              <Button variant="outline" size="icon" onClick={handleRefresh} disabled={loading} className="h-8 w-8 sm:h-9 sm:w-9">
                 <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
               </Button>
             </div>
