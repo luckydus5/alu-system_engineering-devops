@@ -319,8 +319,8 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
               Request History ({filteredRequests.length} records)
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-0">
-            <ScrollArea className="h-[calc(100vh-400px)]">
+          <CardContent className="p-0 overflow-x-auto">
+            <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
               {loading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
@@ -340,18 +340,19 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                   )}
                 </div>
               ) : (
-                <Table>
+                <Table className="min-w-[900px]">
                   <TableHeader>
                     <TableRow className="bg-slate-900 dark:bg-slate-950">
-                      <TableHead className="w-[40px]"></TableHead>
-                      <TableHead className="w-[100px] text-white font-bold">Date</TableHead>
-                      <TableHead className="text-white font-bold">Requester</TableHead>
-                      <TableHead className="text-white font-bold">Items</TableHead>
-                      <TableHead className="text-center text-white font-bold">Total Qty</TableHead>
-                      <TableHead className="text-white font-bold">Usage</TableHead>
-                      <TableHead className="text-white font-bold">Approved By</TableHead>
-                      <TableHead className="text-center text-white font-bold">Proof</TableHead>
-                      <TableHead className="text-center text-white font-bold">Action</TableHead>
+                      <TableHead className="w-[30px] px-1"></TableHead>
+                      <TableHead className="w-[70px] text-white font-bold text-xs px-2">Date</TableHead>
+                      <TableHead className="text-white font-bold text-xs px-2">Requester</TableHead>
+                      <TableHead className="text-white font-bold text-xs px-2">Items</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[60px]">Total Qty</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[70px]">Remaining</TableHead>
+                      <TableHead className="text-white font-bold text-xs px-2">Usage</TableHead>
+                      <TableHead className="text-white font-bold text-xs px-2">Approved By</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[50px]">Proof</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[50px]">Action</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -362,6 +363,11 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                       const totalQty = request.requested_items
                         ? request.requested_items.reduce((sum, item) => sum + item.quantity, 0)
                         : request.quantity_requested;
+                      
+                      // Calculate remaining quantity (sum of new_quantity from all items or single item)
+                      const remainingQty = request.requested_items && request.requested_items.length > 0
+                        ? request.requested_items.reduce((sum, item) => sum + (item.new_quantity || 0), 0)
+                        : request.new_quantity;
                       
                       return (
                         <>
@@ -421,13 +427,26 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                                 </div>
                               )}
                             </TableCell>
-                            <TableCell className="text-center">
-                              <Badge variant="outline" className="font-mono">
+                            <TableCell className="text-center px-1">
+                              <Badge variant="outline" className="font-mono text-xs">
                                 {totalQty}
                               </Badge>
                             </TableCell>
-                            <TableCell className="max-w-[150px]">
-                              <p className="text-sm text-muted-foreground truncate">
+                            <TableCell className="text-center px-1">
+                              <Badge 
+                                variant="secondary" 
+                                className={cn(
+                                  "font-mono text-xs",
+                                  remainingQty === 0 && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+                                  remainingQty > 0 && remainingQty <= 10 && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+                                  remainingQty > 10 && "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                )}
+                              >
+                                {remainingQty}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="max-w-[120px] px-2">
+                              <p className="text-xs text-muted-foreground truncate">
                                 {request.usage_purpose || '-'}
                               </p>
                             </TableCell>
@@ -465,22 +484,22 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                           
                           {/* Expanded Items Row */}
                           {hasMultipleItems && isExpanded && (
-                            <TableRow className="bg-slate-50 dark:bg-slate-800/50">
-                              <TableCell colSpan={9} className="p-0">
-                                <div className="px-6 py-3 ml-10 border-l-2 border-amber-400">
+                            <TableRow key={`${request.id}-expanded`} className="bg-slate-50 dark:bg-slate-800/50">
+                              <TableCell colSpan={10} className="p-0">
+                                <div className="px-4 py-3 ml-6 border-l-2 border-amber-400">
                                   <div className="text-xs font-medium text-muted-foreground mb-2">
                                     Items in this request:
                                   </div>
                                   <div className="space-y-1">
                                     {request.requested_items?.map((item, idx) => (
-                                      <div key={idx} className="flex items-center gap-4 text-sm py-1 px-2 rounded bg-white dark:bg-slate-700/50">
-                                        <Package className="h-4 w-4 text-amber-500" />
-                                        <span className="flex-1 font-medium">{item.item_name}</span>
-                                        <Badge variant="outline" className="font-mono text-xs">
+                                      <div key={idx} className="flex flex-wrap items-center gap-2 text-xs py-1 px-2 rounded bg-white dark:bg-slate-700/50">
+                                        <Package className="h-3 w-3 text-amber-500 shrink-0" />
+                                        <span className="font-medium truncate max-w-[150px]">{item.item_name}</span>
+                                        <Badge variant="outline" className="font-mono text-[10px] shrink-0">
                                           Qty: {item.quantity}
                                         </Badge>
-                                        <span className="text-muted-foreground text-xs">
-                                          {item.previous_quantity} → {item.new_quantity}
+                                        <span className="text-muted-foreground text-[10px] shrink-0">
+                                          Stock: {item.previous_quantity} → {item.new_quantity}
                                         </span>
                                       </div>
                                     ))}
