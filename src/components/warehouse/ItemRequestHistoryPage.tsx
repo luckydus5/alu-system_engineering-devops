@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -393,8 +393,8 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                         : request.new_quantity;
                       
                       return (
-                        <>
-                          <TableRow key={request.id} className="hover:bg-muted/30">
+                        <React.Fragment key={request.id}>
+                          <TableRow className="hover:bg-muted/30">
                             <TableCell className="p-2">
                               {hasMultipleItems && (
                                 <Button
@@ -538,7 +538,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                               </TableCell>
                             </TableRow>
                           )}
-                        </>
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>
