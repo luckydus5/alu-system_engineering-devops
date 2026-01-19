@@ -12,12 +12,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ArrowLeft,
@@ -30,20 +24,24 @@ import {
   User,
   Calendar,
   Download,
-  Image as ImageIcon,
   Loader2,
   FileSpreadsheet,
   AlertTriangle,
   ChevronRight,
   ChevronDown,
   Trash2,
+  Edit2,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useDepartments } from '@/hooks/useDepartments';
-import { useItemRequests, ItemRequest } from '@/hooks/useItemRequests';
+import { useItemRequests, useItemRequestApprovers, ItemRequest } from '@/hooks/useItemRequests';
 import { useInventory } from '@/hooks/useInventory';
 import { useWarehouseClassifications } from '@/hooks/useWarehouseClassifications';
 import { CreateItemRequestDialog } from './CreateItemRequestDialog';
+import { ItemRequestDetailDialog } from './ItemRequestDetailDialog';
+import { EditItemRequestDialog } from './EditItemRequestDialog';
+import { MobileRequestCard } from './MobileRequestCard';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { exportLowStockToExcel } from '@/lib/excelExport';
@@ -59,14 +57,17 @@ interface ItemRequestHistoryPageProps {
 export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRequestHistoryPageProps) {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const { requests, loading, refetch, deleteRequest } = useItemRequests(department.id);
   const { items, refetch: refetchInventory } = useInventory(department.id);
   const { classifications } = useWarehouseClassifications(department.id);
   const { departments } = useDepartments();
+  const { approvers } = useItemRequestApprovers(true);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [proofDialogOpen, setProofDialogOpen] = useState(false);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<ItemRequest | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -93,6 +94,16 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
     });
   };
 
+  const handleViewRequest = (request: ItemRequest) => {
+    setSelectedRequest(request);
+    setDetailDialogOpen(true);
+  };
+
+  const handleEditRequest = (request: ItemRequest) => {
+    setSelectedRequest(request);
+    setEditDialogOpen(true);
+  };
+
   // Filter requests based on search
   const filteredRequests = useMemo(() => {
     if (!searchQuery.trim()) return requests;
@@ -108,14 +119,12 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
 
   // Calculate stats
   const stats = useMemo(() => {
-    // Low stock: quantity > 0 AND has min_quantity set AND quantity <= min_quantity
     const lowStockItems = items.filter(i => 
       i.quantity > 0 && 
       i.min_quantity && 
       i.min_quantity > 0 && 
       i.quantity <= i.min_quantity
     );
-    // Out of stock: quantity === 0
     const outOfStockItems = items.filter(i => i.quantity === 0);
     return {
       totalRequests: requests.length,
@@ -148,11 +157,6 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         variant: 'destructive',
       });
     }
-  };
-
-  const openProofDialog = (request: ItemRequest) => {
-    setSelectedRequest(request);
-    setProofDialogOpen(true);
   };
 
   const exportToCSV = () => {
@@ -191,8 +195,8 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                 <img src={hqPowerLogo} alt="HQ Power" className="h-8 sm:h-10 w-auto" />
               </div>
               <div className="border-l-2 border-amber-500 pl-2 sm:pl-4 min-w-0">
-                <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Item Request History</h1>
-                <p className="text-[10px] sm:text-xs text-muted-foreground hidden xs:block">Track approved item requests</p>
+                <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Item Requests</h1>
+                <p className="text-[10px] sm:text-xs text-muted-foreground hidden xs:block">Track approved requests</p>
               </div>
             </div>
 
@@ -200,7 +204,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
             <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
               <Button variant="outline" size="sm" onClick={onBack} className="gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3">
                 <ArrowLeft className="h-4 w-4" />
-                <span className="hidden sm:inline">Back to Warehouse</span>
+                <span className="hidden sm:inline">Back</span>
               </Button>
               <Button variant="outline" size="icon" onClick={refetch} disabled={loading} className="h-8 w-8 sm:h-9 sm:w-9">
                 <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
@@ -211,7 +215,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                   className="bg-amber-500 hover:bg-amber-600 gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-3"
                 >
                   <Plus className="h-4 w-4" />
-                  <span className="hidden sm:inline">New Request</span>
+                  <span className="hidden sm:inline">New</span>
                 </Button>
               )}
             </div>
@@ -221,15 +225,15 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
 
       {/* Main Content */}
       <div className="p-2 sm:p-4 space-y-3 sm:space-y-4 pb-24 md:pb-4">
-        {/* Stats Cards - Responsive grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
+        {/* Stats Cards - More compact on mobile */}
+        <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-4">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
             <CardContent className="p-2 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <FileText className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+              <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                <FileText className="h-4 w-4 sm:h-8 sm:w-8 opacity-80 hidden sm:block" />
                 <div className="min-w-0">
-                  <p className="text-lg sm:text-2xl font-bold">{stats.totalRequests}</p>
-                  <p className="text-blue-100 text-[10px] sm:text-sm truncate">Total Requests</p>
+                  <p className="text-base sm:text-2xl font-bold">{stats.totalRequests}</p>
+                  <p className="text-blue-100 text-[9px] sm:text-sm truncate">Requests</p>
                 </div>
               </div>
             </CardContent>
@@ -237,11 +241,11 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
           
           <Card className="bg-gradient-to-br from-emerald-500 to-emerald-600 text-white border-0">
             <CardContent className="p-2 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <Package className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+              <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                <Package className="h-4 w-4 sm:h-8 sm:w-8 opacity-80 hidden sm:block" />
                 <div className="min-w-0">
-                  <p className="text-lg sm:text-2xl font-bold">{stats.totalQuantity}</p>
-                  <p className="text-emerald-100 text-[10px] sm:text-sm truncate">Items Issued</p>
+                  <p className="text-base sm:text-2xl font-bold">{stats.totalQuantity}</p>
+                  <p className="text-emerald-100 text-[9px] sm:text-sm truncate">Issued</p>
                 </div>
               </div>
             </CardContent>
@@ -249,35 +253,35 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
           
           <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white border-0">
             <CardContent className="p-2 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <Calendar className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+              <div className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3 text-center sm:text-left">
+                <Calendar className="h-4 w-4 sm:h-8 sm:w-8 opacity-80 hidden sm:block" />
                 <div className="min-w-0">
-                  <p className="text-lg sm:text-2xl font-bold">{stats.thisMonth}</p>
-                  <p className="text-purple-100 text-[10px] sm:text-sm truncate">This Month</p>
+                  <p className="text-base sm:text-2xl font-bold">{stats.thisMonth}</p>
+                  <p className="text-purple-100 text-[9px] sm:text-sm truncate">This Mo.</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0">
-            <CardContent className="p-2 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <AlertTriangle className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+          <Card className="bg-gradient-to-br from-amber-500 to-amber-600 text-white border-0 hidden lg:block">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-8 w-8 opacity-80 flex-shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-lg sm:text-2xl font-bold">{stats.lowStockCount}</p>
-                  <p className="text-amber-100 text-[10px] sm:text-sm truncate">Low Stock</p>
+                  <p className="text-2xl font-bold">{stats.lowStockCount}</p>
+                  <p className="text-amber-100 text-sm truncate">Low Stock</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0 col-span-2 sm:col-span-1">
-            <CardContent className="p-2 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <Package className="h-5 w-5 sm:h-8 sm:w-8 opacity-80 flex-shrink-0" />
+          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white border-0 hidden lg:block">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <Package className="h-8 w-8 opacity-80 flex-shrink-0" />
                 <div className="min-w-0">
-                  <p className="text-lg sm:text-2xl font-bold">{stats.outOfStockCount}</p>
-                  <p className="text-red-100 text-[10px] sm:text-sm truncate">Out of Stock</p>
+                  <p className="text-2xl font-bold">{stats.outOfStockCount}</p>
+                  <p className="text-red-100 text-sm truncate">Out of Stock</p>
                 </div>
               </div>
             </CardContent>
@@ -289,71 +293,90 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by requester, item, approver..."
+              placeholder="Search requests..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
+              className="pl-9 h-9"
             />
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto overflow-x-auto mobile-scroll-x">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <Button 
               variant="outline" 
               size="sm"
               onClick={handleExportLowStock} 
-              className="gap-1 sm:gap-2 border-red-300 text-red-600 hover:bg-red-50 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 whitespace-nowrap flex-shrink-0"
+              className="gap-1 sm:gap-2 border-red-300 text-red-600 hover:bg-red-50 text-xs h-8 sm:h-9 px-2 sm:px-3 flex-1 sm:flex-none"
             >
               <FileSpreadsheet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Low Stock</span>
+              Low Stock
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-1 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 px-2 sm:px-3 whitespace-nowrap flex-shrink-0">
+            <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-1 sm:gap-2 text-xs h-8 sm:h-9 px-2 sm:px-3 flex-1 sm:flex-none">
               <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-              <span className="hidden xs:inline">Export</span> CSV
+              Export
             </Button>
           </div>
         </div>
 
-        {/* Table */}
-        <Card className="overflow-hidden">
-          <CardHeader className="py-2 sm:py-3 px-3 sm:px-6">
-            <CardTitle className="text-sm sm:text-base flex items-center gap-2">
-              <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
-              Request History ({filteredRequests.length} records)
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <ScrollArea className="h-[calc(100vh-480px)] sm:h-[calc(100vh-400px)] min-h-[250px] sm:min-h-[300px]">
-              {loading ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-                </div>
-              ) : filteredRequests.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>No item requests found</p>
-                  {canManage && (
-                    <Button 
-                      variant="outline" 
-                      className="mt-4"
-                      onClick={() => setCreateDialogOpen(true)}
-                    >
-                      Create First Request
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <Table className="min-w-[900px]">
+        {/* Content - Mobile Cards or Desktop Table */}
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
+          </div>
+        ) : filteredRequests.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
+              <p>No item requests found</p>
+              {canManage && (
+                <Button 
+                  variant="outline" 
+                  className="mt-4"
+                  onClick={() => setCreateDialogOpen(true)}
+                >
+                  Create First Request
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : isMobile ? (
+          /* Mobile Card View */
+          <div className="space-y-3">
+            <p className="text-xs text-muted-foreground px-1">
+              {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''}
+            </p>
+            {filteredRequests.map((request) => (
+              <MobileRequestCard
+                key={request.id}
+                request={request}
+                onView={handleViewRequest}
+                onEdit={canManage ? handleEditRequest : undefined}
+                onDelete={canManage ? handleDeleteRequest : undefined}
+                canManage={canManage}
+              />
+            ))}
+          </div>
+        ) : (
+          /* Desktop Table View */
+          <Card className="overflow-hidden">
+            <CardHeader className="py-2 sm:py-3 px-3 sm:px-6">
+              <CardTitle className="text-sm sm:text-base flex items-center gap-2">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
+                Request History ({filteredRequests.length} records)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 overflow-x-auto">
+              <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
+                <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-900 dark:bg-slate-950">
                       <TableHead className="w-[30px] px-1"></TableHead>
-                      <TableHead className="w-[70px] text-white font-bold text-xs px-2">Date</TableHead>
+                      <TableHead className="w-[90px] text-white font-bold text-xs px-2">Date</TableHead>
                       <TableHead className="text-white font-bold text-xs px-2">Requester</TableHead>
                       <TableHead className="text-white font-bold text-xs px-2">Items</TableHead>
-                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[60px]">Total Qty</TableHead>
-                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[70px]">Remaining</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[60px]">Qty</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[70px]">Stock</TableHead>
                       <TableHead className="text-white font-bold text-xs px-2">Usage</TableHead>
                       <TableHead className="text-white font-bold text-xs px-2">Approved By</TableHead>
-                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[50px]">Proof</TableHead>
-                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[50px]">Action</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[80px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -365,7 +388,6 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                         ? request.requested_items.reduce((sum, item) => sum + item.quantity, 0)
                         : request.quantity_requested;
                       
-                      // Calculate remaining quantity (sum of new_quantity from all items or single item)
                       const remainingQty = request.requested_items && request.requested_items.length > 0
                         ? request.requested_items.reduce((sum, item) => sum + (item.new_quantity || 0), 0)
                         : request.new_quantity;
@@ -457,36 +479,43 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                               </span>
                             </TableCell>
                             <TableCell className="text-center">
-                              {request.approval_proof_url ? (
+                              <div className="flex items-center justify-center gap-1">
                                 <Button
                                   variant="ghost"
                                   size="sm"
-                                  onClick={() => openProofDialog(request)}
-                                  className="gap-1 text-blue-600 hover:text-blue-700"
+                                  onClick={() => handleViewRequest(request)}
+                                  className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700"
                                 >
                                   <Eye className="h-4 w-4" />
-                                  View
                                 </Button>
-                              ) : (
-                                <span className="text-xs text-muted-foreground">-</span>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteRequest(request.id)}
-                                className="gap-1 text-red-600 hover:text-red-700 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                                {canManage && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleEditRequest(request)}
+                                      className="h-7 w-7 p-0 text-amber-600 hover:text-amber-700"
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteRequest(request.id)}
+                                      className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
                             </TableCell>
                           </TableRow>
                           
                           {/* Expanded Items Row */}
                           {hasMultipleItems && isExpanded && (
                             <TableRow key={`${request.id}-expanded`} className="bg-slate-50 dark:bg-slate-800/50">
-                              <TableCell colSpan={10} className="p-0">
+                              <TableCell colSpan={9} className="p-0">
                                 <div className="px-4 py-3 ml-6 border-l-2 border-amber-400">
                                   <div className="text-xs font-medium text-muted-foreground mb-2">
                                     Items in this request:
@@ -514,10 +543,10 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                     })}
                   </TableBody>
                 </Table>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Create Request Dialog */}
@@ -533,64 +562,27 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         }}
       />
 
-      {/* Proof View Dialog */}
-      <Dialog open={proofDialogOpen} onOpenChange={setProofDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <ImageIcon className="h-5 w-5 text-amber-500" />
-              Approval Proof
-            </DialogTitle>
-          </DialogHeader>
-          {selectedRequest && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Requester:</span>
-                  <p className="font-medium">{selectedRequest.requester_name}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Approved By:</span>
-                  <p className="font-medium text-emerald-600">{selectedRequest.approver_name}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Item:</span>
-                  <p className="font-medium">{selectedRequest.item_description}</p>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Quantity:</span>
-                  <p className="font-medium">{selectedRequest.quantity_requested}</p>
-                </div>
-              </div>
-              
-              {selectedRequest.approval_proof_url && (
-                <div className="border rounded-lg overflow-hidden">
-                  <img
-                    src={selectedRequest.approval_proof_url}
-                    alt="Approval proof"
-                    className="w-full h-auto max-h-[400px] object-contain bg-slate-100 dark:bg-slate-800"
-                  />
-                </div>
-              )}
-              
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    if (selectedRequest.approval_proof_url) {
-                      window.open(selectedRequest.approval_proof_url, '_blank');
-                    }
-                  }}
-                  className="gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  Download Image
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Detail View Dialog */}
+      <ItemRequestDetailDialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+        request={selectedRequest}
+        onEdit={canManage ? handleEditRequest : undefined}
+        canEdit={canManage}
+      />
+
+      {/* Edit Request Dialog */}
+      <EditItemRequestDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        request={selectedRequest}
+        approvers={approvers}
+        departments={departments}
+        onSuccess={() => {
+          refetch();
+          setEditDialogOpen(false);
+        }}
+      />
     </div>
   );
 }
