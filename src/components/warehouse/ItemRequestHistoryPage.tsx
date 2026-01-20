@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -13,6 +14,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import {
   ArrowLeft,
   RefreshCw,
@@ -31,20 +44,26 @@ import {
   ChevronDown,
   Trash2,
   Edit2,
+  Filter,
+  X,
+  PlusCircle,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useItemRequests, useItemRequestApprovers, ItemRequest } from '@/hooks/useItemRequests';
 import { useInventory } from '@/hooks/useInventory';
 import { useWarehouseClassifications } from '@/hooks/useWarehouseClassifications';
+import { useUserRole } from '@/hooks/useUserRole';
 import { CreateItemRequestDialog } from './CreateItemRequestDialog';
 import { ItemRequestDetailDialog } from './ItemRequestDetailDialog';
 import { EditItemRequestDialog } from './EditItemRequestDialog';
+import { AddItemsToRequestDialog } from './AddItemsToRequestDialog';
 import { MobileRequestCard } from './MobileRequestCard';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { exportLowStockToExcel } from '@/lib/excelExport';
+import { exportItemRequestsWithSummary } from '@/lib/exportItemRequests';
 import { useToast } from '@/hooks/use-toast';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
@@ -58,6 +77,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { highestRole } = useUserRole();
   const { requests, loading, refetch, deleteRequest } = useItemRequests(department.id);
   const { items, refetch: refetchInventory } = useInventory(department.id);
   const { classifications } = useWarehouseClassifications(department.id);
@@ -68,8 +88,30 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [addItemsDialogOpen, setAddItemsDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<ItemRequest | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  
+  // Filter states
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [requesterFilter, setRequesterFilter] = useState('');
+  const [approverFilter, setApproverFilter] = useState('');
+
+  // Check if user can add items to requests (admin or super_admin)
+  const canAddItemsToRequest = highestRole === 'admin' || highestRole === 'super_admin';
+
+  // Get unique requesters and approvers for filter dropdowns
+  const uniqueRequesters = useMemo(() => {
+    const names = new Set(requests.map(r => r.requester_name).filter(Boolean));
+    return Array.from(names).sort();
+  }, [requests]);
+
+  const uniqueApprovers = useMemo(() => {
+    const names = new Set(requests.map(r => r.approver_name).filter(Boolean));
+    return Array.from(names).sort();
+  }, [requests]);
 
   const handleDeleteRequest = async (requestId: string) => {
     if (!confirm('Are you sure you want to delete this item request? This action cannot be undone.')) {
@@ -104,18 +146,66 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
     setEditDialogOpen(true);
   };
 
-  // Filter requests based on search
+  const handleAddItems = (request: ItemRequest) => {
+    setSelectedRequest(request);
+    setAddItemsDialogOpen(true);
+  };
+
+  const clearFilters = () => {
+    setDateFrom('');
+    setDateTo('');
+    setRequesterFilter('');
+    setApproverFilter('');
+  };
+
+  const hasActiveFilters = dateFrom || dateTo || requesterFilter || approverFilter;
+
+  // Filter requests based on search and filters
   const filteredRequests = useMemo(() => {
-    if (!searchQuery.trim()) return requests;
-    
-    const query = searchQuery.toLowerCase();
-    return requests.filter(r => 
-      r.requester_name.toLowerCase().includes(query) ||
-      r.item_description.toLowerCase().includes(query) ||
-      r.approver_name?.toLowerCase().includes(query) ||
-      r.usage_purpose?.toLowerCase().includes(query)
-    );
-  }, [requests, searchQuery]);
+    let filtered = requests;
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(r => 
+        r.requester_name.toLowerCase().includes(query) ||
+        r.item_description.toLowerCase().includes(query) ||
+        r.approver_name?.toLowerCase().includes(query) ||
+        r.usage_purpose?.toLowerCase().includes(query)
+      );
+    }
+
+    // Date range filter
+    if (dateFrom || dateTo) {
+      filtered = filtered.filter(r => {
+        const requestDate = new Date(r.created_at);
+        
+        if (dateFrom && dateTo) {
+          return isWithinInterval(requestDate, {
+            start: startOfDay(parseISO(dateFrom)),
+            end: endOfDay(parseISO(dateTo)),
+          });
+        } else if (dateFrom) {
+          return requestDate >= startOfDay(parseISO(dateFrom));
+        } else if (dateTo) {
+          return requestDate <= endOfDay(parseISO(dateTo));
+        }
+        return true;
+      });
+    }
+
+    // Requester filter
+    if (requesterFilter) {
+      filtered = filtered.filter(r => r.requester_name === requesterFilter);
+    }
+
+    // Approver filter
+    if (approverFilter) {
+      filtered = filtered.filter(r => r.approver_name === approverFilter);
+    }
+
+    return filtered;
+  }, [requests, searchQuery, dateFrom, dateTo, requesterFilter, approverFilter]);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -159,25 +249,29 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
     }
   };
 
-  const exportToCSV = () => {
-    const headers = ['Date', 'Requester', 'Item Description', 'Quantity', 'Previous Qty', 'Remaining Qty', 'Usage', 'Approved By'];
-    const rows = filteredRequests.map(r => [
-      format(new Date(r.created_at), 'yyyy-MM-dd HH:mm'),
-      r.requester_name,
-      r.item_description,
-      r.quantity_requested.toString(),
-      r.previous_quantity.toString(),
-      r.new_quantity.toString(),
-      r.usage_purpose || '',
-      r.approver_name || '',
-    ]);
-
-    const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${cell}"`).join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `item-requests-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    link.click();
+  const handleExportRequests = () => {
+    const result = exportItemRequestsWithSummary(
+      filteredRequests,
+      department.name,
+      {
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+        requester: requesterFilter || undefined,
+        approver: approverFilter || undefined,
+      }
+    );
+    if (result.success) {
+      toast({
+        title: 'Export Successful',
+        description: result.message,
+      });
+    } else {
+      toast({
+        title: 'No Data',
+        description: result.message,
+        variant: 'destructive',
+      });
+    }
   };
 
   return (
@@ -288,17 +382,116 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
           </Card>
         </div>
 
-        {/* Search and Export */}
+        {/* Search, Filters and Export */}
         <div className="flex flex-col gap-2 sm:flex-row sm:gap-3 sm:items-center justify-between">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search requests..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9"
-            />
+          <div className="flex items-center gap-2 flex-1">
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search requests..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9"
+              />
+            </div>
+            
+            {/* Filter Popover */}
+            <Popover open={filterOpen} onOpenChange={setFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className={cn(
+                    "gap-1 h-9",
+                    hasActiveFilters && "border-amber-500 bg-amber-50 dark:bg-amber-900/20"
+                  )}
+                >
+                  <Filter className="h-4 w-4" />
+                  <span className="hidden sm:inline">Filter</span>
+                  {hasActiveFilters && (
+                    <Badge variant="secondary" className="h-5 w-5 p-0 flex items-center justify-center text-[10px]">
+                      !
+                    </Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80" align="start">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-medium text-sm">Filters</h4>
+                    {hasActiveFilters && (
+                      <Button variant="ghost" size="sm" onClick={clearFilters} className="h-7 text-xs">
+                        <X className="h-3 w-3 mr-1" />
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {/* Date Range */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">Date Range</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="h-8 text-xs"
+                        placeholder="From"
+                      />
+                      <Input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="h-8 text-xs"
+                        placeholder="To"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Requester Filter */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">Requester</Label>
+                    <Select value={requesterFilter} onValueChange={setRequesterFilter}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All requesters" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All requesters</SelectItem>
+                        {uniqueRequesters.map((name) => (
+                          <SelectItem key={name} value={name}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Approver Filter */}
+                  <div className="space-y-2">
+                    <Label className="text-xs">Approver</Label>
+                    <Select value={approverFilter} onValueChange={setApproverFilter}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue placeholder="All approvers" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">All approvers</SelectItem>
+                        {uniqueApprovers.map((name) => (
+                          <SelectItem key={name} value={name as string}>{name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button 
+                    size="sm" 
+                    className="w-full" 
+                    onClick={() => setFilterOpen(false)}
+                  >
+                    Apply Filters
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
+          
           <div className="flex items-center gap-1.5 sm:gap-2">
             <Button 
               variant="outline" 
@@ -309,12 +502,48 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
               <FileSpreadsheet className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Low Stock
             </Button>
-            <Button variant="outline" size="sm" onClick={exportToCSV} className="gap-1 sm:gap-2 text-xs h-8 sm:h-9 px-2 sm:px-3 flex-1 sm:flex-none">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleExportRequests} 
+              className="gap-1 sm:gap-2 text-xs h-8 sm:h-9 px-2 sm:px-3 flex-1 sm:flex-none"
+            >
               <Download className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               Export
             </Button>
           </div>
         </div>
+
+        {/* Active Filters Display */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted-foreground">Active filters:</span>
+            {dateFrom && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                From: {dateFrom}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setDateFrom('')} />
+              </Badge>
+            )}
+            {dateTo && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                To: {dateTo}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setDateTo('')} />
+              </Badge>
+            )}
+            {requesterFilter && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                Requester: {requesterFilter}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setRequesterFilter('')} />
+              </Badge>
+            )}
+            {approverFilter && (
+              <Badge variant="secondary" className="text-xs gap-1">
+                Approver: {approverFilter}
+                <X className="h-3 w-3 cursor-pointer" onClick={() => setApproverFilter('')} />
+              </Badge>
+            )}
+          </div>
+        )}
 
         {/* Content - Mobile Cards or Desktop Table */}
         {loading ? (
@@ -326,7 +555,16 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
             <CardContent className="py-12 text-center text-muted-foreground">
               <FileText className="h-12 w-12 mx-auto mb-3 opacity-50" />
               <p>No item requests found</p>
-              {canManage && (
+              {hasActiveFilters && (
+                <Button 
+                  variant="outline" 
+                  className="mt-4"
+                  onClick={clearFilters}
+                >
+                  Clear Filters
+                </Button>
+              )}
+              {canManage && !hasActiveFilters && (
                 <Button 
                   variant="outline" 
                   className="mt-4"
@@ -342,6 +580,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground px-1">
               {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''}
+              {hasActiveFilters && ' (filtered)'}
             </p>
             {filteredRequests.map((request) => (
               <MobileRequestCard
@@ -360,11 +599,11 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
             <CardHeader className="py-2 sm:py-3 px-3 sm:px-6">
               <CardTitle className="text-sm sm:text-base flex items-center gap-2">
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-amber-500" />
-                Request History ({filteredRequests.length} records)
+                Request History ({filteredRequests.length} records{hasActiveFilters ? ' filtered' : ''})
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <ScrollArea className="h-[calc(100vh-400px)] min-h-[300px]">
+              <ScrollArea className="h-[calc(100vh-450px)] min-h-[300px]">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-slate-900 dark:bg-slate-950">
@@ -376,7 +615,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                       <TableHead className="text-center text-white font-bold text-xs px-1 w-[70px]">Stock</TableHead>
                       <TableHead className="text-white font-bold text-xs px-2">Usage</TableHead>
                       <TableHead className="text-white font-bold text-xs px-2">Approved By</TableHead>
-                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[80px]">Actions</TableHead>
+                      <TableHead className="text-center text-white font-bold text-xs px-1 w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -485,9 +724,21 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                                   size="sm"
                                   onClick={() => handleViewRequest(request)}
                                   className="h-7 w-7 p-0 text-blue-600 hover:text-blue-700"
+                                  title="View details"
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
+                                {canAddItemsToRequest && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleAddItems(request)}
+                                    className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700"
+                                    title="Add items"
+                                  >
+                                    <PlusCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
                                 {canManage && (
                                   <>
                                     <Button
@@ -495,6 +746,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                                       size="sm"
                                       onClick={() => handleEditRequest(request)}
                                       className="h-7 w-7 p-0 text-amber-600 hover:text-amber-700"
+                                      title="Edit request"
                                     >
                                       <Edit2 className="h-4 w-4" />
                                     </Button>
@@ -503,6 +755,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                                       size="sm"
                                       onClick={() => handleDeleteRequest(request.id)}
                                       className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
+                                      title="Delete request"
                                     >
                                       <Trash2 className="h-4 w-4" />
                                     </Button>
@@ -581,6 +834,18 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         onSuccess={() => {
           refetch();
           setEditDialogOpen(false);
+        }}
+      />
+
+      {/* Add Items to Request Dialog */}
+      <AddItemsToRequestDialog
+        open={addItemsDialogOpen}
+        onOpenChange={setAddItemsDialogOpen}
+        request={selectedRequest}
+        inventoryItems={items}
+        onSuccess={() => {
+          refetch();
+          refetchInventory();
         }}
       />
     </div>
