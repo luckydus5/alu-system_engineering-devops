@@ -46,7 +46,6 @@ import {
   Edit2,
   Filter,
   X,
-  PlusCircle,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -57,7 +56,6 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { CreateItemRequestDialog } from './CreateItemRequestDialog';
 import { ItemRequestDetailDialog } from './ItemRequestDetailDialog';
 import { EditItemRequestDialog } from './EditItemRequestDialog';
-import { AddItemsToRequestDialog } from './AddItemsToRequestDialog';
 import { MobileRequestCard } from './MobileRequestCard';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -88,7 +86,6 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [addItemsDialogOpen, setAddItemsDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<ItemRequest | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
@@ -144,11 +141,6 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const handleEditRequest = (request: ItemRequest) => {
     setSelectedRequest(request);
     setEditDialogOpen(true);
-  };
-
-  const handleAddItems = (request: ItemRequest) => {
-    setSelectedRequest(request);
-    setAddItemsDialogOpen(true);
   };
 
   const clearFilters = () => {
@@ -728,17 +720,6 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                                 >
                                   <Eye className="h-4 w-4" />
                                 </Button>
-                                {canAddItemsToRequest && (
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleAddItems(request)}
-                                    className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700"
-                                    title="Add items"
-                                  >
-                                    <PlusCircle className="h-4 w-4" />
-                                  </Button>
-                                )}
                                 {canManage && (
                                   <>
                                     <Button
@@ -824,28 +805,19 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         canEdit={canManage}
       />
 
-      {/* Edit Request Dialog */}
+      {/* Edit Request Dialog - with Add Items tab for admins */}
       <EditItemRequestDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
         request={selectedRequest}
         approvers={approvers}
         departments={departments}
-        onSuccess={() => {
-          refetch();
-          setEditDialogOpen(false);
-        }}
-      />
-
-      {/* Add Items to Request Dialog */}
-      <AddItemsToRequestDialog
-        open={addItemsDialogOpen}
-        onOpenChange={setAddItemsDialogOpen}
-        request={selectedRequest}
         inventoryItems={items}
+        canAddItems={canAddItemsToRequest}
         onSuccess={() => {
           refetch();
           refetchInventory();
+          setEditDialogOpen(false);
         }}
       />
     </div>
