@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -21,13 +20,13 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Save, X, Plus, Minus, Package, Search, PlusCircle } from 'lucide-react';
+import { Loader2, Save, X, Search, PlusCircle } from 'lucide-react';
 import { ItemRequest, ItemRequestApprover } from '@/hooks/useItemRequests';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Department } from '@/hooks/useDepartments';
 import { clearInventoryCache } from '@/hooks/useInventory';
-import { cn } from '@/lib/utils';
+import { VirtualizedInventoryPicker } from './VirtualizedInventoryPicker';
 
 interface InventoryItem {
   id: string;
@@ -108,8 +107,6 @@ export function EditItemRequestDialog({
     });
   }, [inventoryItems, existingItemIds, deferredSearchQuery, canAddItems, activeTab]);
 
-  const MAX_RENDERED_ITEMS = 200;
-
   // Populate form when request changes
   useEffect(() => {
     if (request) {
@@ -125,7 +122,7 @@ export function EditItemRequestDialog({
     }
   }, [request]);
 
-  const toggleItem = (item: InventoryItem, checked: boolean) => {
+  const toggleItem = useCallback((item: InventoryItem, checked: boolean) => {
     if (checked) {
       setSelectedItems(prev => [...prev, {
         id: item.id,
@@ -137,9 +134,9 @@ export function EditItemRequestDialog({
     } else {
       setSelectedItems(prev => prev.filter(i => i.id !== item.id));
     }
-  };
+  }, []);
 
-  const updateQuantity = (itemId: string, delta: number) => {
+  const updateQuantity = useCallback((itemId: string, delta: number) => {
     setSelectedItems(prev => prev.map(item => {
       if (item.id === itemId) {
         const newQty = Math.max(1, Math.min(item.maxQuantity, item.quantity + delta));
@@ -147,7 +144,7 @@ export function EditItemRequestDialog({
       }
       return item;
     }));
-  };
+  }, []);
 
   const handleSave = async () => {
     if (!request) return;
@@ -342,76 +339,14 @@ export function EditItemRequestDialog({
                   </div>
                 )}
 
-                {/* Items list */}
-                <ScrollArea className="h-[calc(90vh-380px)]">
-                  <div className="space-y-2">
-                    {availableItems.length > MAX_RENDERED_ITEMS && (
-                      <div className="rounded-lg border p-2 text-xs text-muted-foreground">
-                        Showing first {MAX_RENDERED_ITEMS} of {availableItems.length} items. Use search to narrow results.
-                      </div>
-                    )}
-
-                    {availableItems.length === 0 ? (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">No items available to add</p>
-                      </div>
-                    ) : (
-                      availableItems.slice(0, MAX_RENDERED_ITEMS).map((item) => {
-                        const isSelected = selectedItems.some(s => s.id === item.id);
-                        const selectedItem = selectedItems.find(s => s.id === item.id);
-                        
-                        return (
-                          <div
-                            key={item.id}
-                            className={cn(
-                              "flex items-center gap-3 p-3 rounded-lg border transition-colors",
-                              isSelected 
-                                ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20" 
-                                : "border-border hover:bg-muted/50"
-                            )}
-                          >
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={(checked) => toggleItem(item, !!checked)}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm truncate">{item.item_name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {item.item_number} • Stock: {item.quantity}
-                              </p>
-                            </div>
-                            {isSelected && selectedItem && (
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => updateQuantity(item.id, -1)}
-                                  disabled={selectedItem.quantity <= 1}
-                                >
-                                  <Minus className="h-3 w-3" />
-                                </Button>
-                                <span className="w-8 text-center font-mono text-sm">
-                                  {selectedItem.quantity}
-                                </span>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={() => updateQuantity(item.id, 1)}
-                                  disabled={selectedItem.quantity >= selectedItem.maxQuantity}
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </ScrollArea>
+                {/* Virtualized items list */}
+                <VirtualizedInventoryPicker
+                  items={availableItems}
+                  selectedItems={selectedItems}
+                  onToggleItem={toggleItem}
+                  onUpdateQuantity={updateQuantity}
+                  height={Math.min(400, window.innerHeight * 0.4)}
+                />
               </div>
             </TabsContent>
           </Tabs>
