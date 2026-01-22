@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -81,6 +81,7 @@ export function EditItemRequestDialog({
   // States for adding items
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItems, setSelectedItems] = useState<SelectedItem[]>([]);
+  const deferredSearchQuery = useDeferredValue(searchQuery);
 
   // Get existing item IDs from request to filter them out
   const existingItemIds = useMemo(() => {
@@ -90,14 +91,24 @@ export function EditItemRequestDialog({
 
   // Filter available items (exclude already requested items and items with 0 stock)
   const availableItems = useMemo(() => {
-    return inventoryItems.filter(item => 
-      !existingItemIds.has(item.id) && 
-      item.quantity > 0 &&
-      (searchQuery === '' || 
-        item.item_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.item_number.toLowerCase().includes(searchQuery.toLowerCase()))
-    );
-  }, [inventoryItems, existingItemIds, searchQuery]);
+    // Important for performance: only filter the (potentially huge) inventory list
+    // when the user is actually on the "Add Items" tab.
+    if (!canAddItems || activeTab !== 'add-items') return [];
+
+    const q = deferredSearchQuery.trim().toLowerCase();
+
+    return inventoryItems.filter((item) => {
+      if (existingItemIds.has(item.id)) return false;
+      if (item.quantity <= 0) return false;
+      if (!q) return true;
+      return (
+        item.item_name.toLowerCase().includes(q) ||
+        item.item_number.toLowerCase().includes(q)
+      );
+    });
+  }, [inventoryItems, existingItemIds, deferredSearchQuery, canAddItems, activeTab]);
+
+  const MAX_RENDERED_ITEMS = 200;
 
   // Populate form when request changes
   useEffect(() => {
@@ -334,13 +345,19 @@ export function EditItemRequestDialog({
                 {/* Items list */}
                 <ScrollArea className="h-[calc(90vh-380px)]">
                   <div className="space-y-2">
+                    {availableItems.length > MAX_RENDERED_ITEMS && (
+                      <div className="rounded-lg border p-2 text-xs text-muted-foreground">
+                        Showing first {MAX_RENDERED_ITEMS} of {availableItems.length} items. Use search to narrow results.
+                      </div>
+                    )}
+
                     {availableItems.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
                         <p className="text-sm">No items available to add</p>
                       </div>
                     ) : (
-                      availableItems.map((item) => {
+                      availableItems.slice(0, MAX_RENDERED_ITEMS).map((item) => {
                         const isSelected = selectedItems.some(s => s.id === item.id);
                         const selectedItem = selectedItems.find(s => s.id === item.id);
                         
