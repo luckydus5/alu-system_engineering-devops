@@ -64,6 +64,7 @@ import { exportLowStockToExcel } from '@/lib/excelExport';
 import { exportItemRequestsWithSummary } from '@/lib/exportItemRequests';
 import { useToast } from '@/hooks/use-toast';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
+import { DeleteItemRequestConfirmDialog } from './DeleteItemRequestConfirmDialog';
 
 interface ItemRequestHistoryPageProps {
   department: Department;
@@ -88,6 +89,10 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<ItemRequest | null>(null);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [requestToDelete, setRequestToDelete] = useState<ItemRequest | null>(null);
+  const [deleting, setDeleting] = useState(false);
   
   // Filter states
   const [filterOpen, setFilterOpen] = useState(false);
@@ -110,14 +115,23 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
     return Array.from(names).sort();
   }, [requests]);
 
-  const handleDeleteRequest = async (requestId: string) => {
-    if (!confirm('Are you sure you want to delete this item request? This action cannot be undone.')) {
-      return;
-    }
-    
-    const success = await deleteRequest(requestId);
-    if (success) {
-      refetchInventory();
+  const openDeleteDialog = (request: ItemRequest) => {
+    setRequestToDelete(request);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!requestToDelete) return;
+    try {
+      setDeleting(true);
+      const success = await deleteRequest(requestToDelete.id);
+      if (success) {
+        refetchInventory();
+      }
+    } finally {
+      setDeleting(false);
+      setDeleteDialogOpen(false);
+      setRequestToDelete(null);
     }
   };
 
@@ -580,7 +594,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                 request={request}
                 onView={handleViewRequest}
                 onEdit={canManage ? handleEditRequest : undefined}
-                onDelete={canManage ? handleDeleteRequest : undefined}
+                onDelete={canManage ? (_requestId: string) => openDeleteDialog(request) : undefined}
                 canManage={canManage}
               />
             ))}
@@ -734,7 +748,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                                     <Button
                                       variant="ghost"
                                       size="sm"
-                                      onClick={() => handleDeleteRequest(request.id)}
+                                      onClick={() => openDeleteDialog(request)}
                                       className="h-7 w-7 p-0 text-red-600 hover:text-red-700"
                                       title="Delete request"
                                     >
@@ -819,6 +833,17 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
           refetchInventory();
           setEditDialogOpen(false);
         }}
+      />
+
+      <DeleteItemRequestConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => {
+          setDeleteDialogOpen(open);
+          if (!open) setRequestToDelete(null);
+        }}
+        request={requestToDelete}
+        deleting={deleting}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );
