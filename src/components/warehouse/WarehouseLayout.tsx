@@ -61,6 +61,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ExcelInventoryTable } from './ExcelInventoryTable';
 import { StockTransaction } from './StockTransactionDialog';
 import { WarehouseDashboardView } from './WarehouseDashboardView';
+import { IncomingPurchasesPage } from './IncomingPurchasesPage';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 
 interface WarehouseLayoutProps {
@@ -68,7 +69,7 @@ interface WarehouseLayoutProps {
   canManage: boolean;
 }
 
-type TabType = 'stores' | 'dashboard' | 'inventory' | 'stock-in' | 'stock-out' | 'low-stock';
+type TabType = 'stores' | 'dashboard' | 'inventory' | 'stock-in' | 'stock-out' | 'low-stock' | 'incoming';
 type ViewMode = 'table' | 'grid' | 'list';
 
 export function WarehouseLayout({ department, canManage }: WarehouseLayoutProps) {
@@ -100,6 +101,15 @@ export function WarehouseLayout({ department, canManage }: WarehouseLayoutProps)
   // If stores tab is active, render the new folder-based view
   if (activeTab === 'stores') {
     return <WarehouseDashboardView department={department} canManage={canManage} />;
+  }
+
+  // If incoming tab is active, render the incoming purchases page
+  if (activeTab === 'incoming') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
+        <IncomingPurchasesPage department={department} onBack={() => setActiveTab('stores')} />
+      </div>
+    );
   }
 
   // Handle stock transaction from ExcelInventoryTable
@@ -348,6 +358,7 @@ export function WarehouseLayout({ department, canManage }: WarehouseLayoutProps)
     { id: 'stores' as TabType, label: 'All Stores', icon: FolderOpen, color: 'text-amber-600' },
     { id: 'dashboard' as TabType, label: 'Dashboard', icon: LayoutDashboard, color: 'text-blue-600' },
     { id: 'inventory' as TabType, label: 'All Items', icon: ClipboardList, color: 'text-emerald-600' },
+    { id: 'incoming' as TabType, label: 'Receiving', icon: PackagePlus, color: 'text-cyan-600' },
     { id: 'stock-in' as TabType, label: 'Stock In', icon: ArrowDownToLine, color: 'text-green-600' },
     { id: 'stock-out' as TabType, label: 'Stock Out', icon: ArrowUpFromLine, color: 'text-orange-600' },
     { id: 'low-stock' as TabType, label: 'Low Stock', icon: AlertTriangle, color: 'text-red-600', badge: lowStockItems.length + outOfStockItems.length },

@@ -63,6 +63,7 @@ import { ItemDetailDialog } from './ItemDetailDialog';
 import { ImagePreviewDialog } from './ImagePreviewDialog';
 import { ItemRequestHistoryPage } from './ItemRequestHistoryPage';
 import { LowStockReportPage } from './LowStockReportPage';
+import { IncomingPurchasesPage } from './IncomingPurchasesPage';
 import { cn } from '@/lib/utils';
 import { exportLowStockToExcel } from '@/lib/excelExport';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
@@ -128,6 +129,8 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   const [showRequestHistory, setShowRequestHistory] = useState(false);
   // Low stock report page state
   const [showLowStockReport, setShowLowStockReport] = useState(false);
+  // Incoming purchases page state
+  const [showIncomingPurchases, setShowIncomingPurchases] = useState(false);
   
   // Data hooks
   const { 
@@ -589,6 +592,18 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     );
   }
 
+  // Show Incoming Purchases Page when showIncomingPurchases is true
+  if (showIncomingPurchases) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 p-4">
+        <IncomingPurchasesPage
+          department={department}
+          onBack={() => setShowIncomingPurchases(false)}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 pb-20 md:pb-0">
       {/* Header */}
@@ -623,13 +638,22 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
               <Button 
                 variant="outline" 
                 size="sm" 
+                onClick={() => setShowIncomingPurchases(true)} 
+                className="gap-1 sm:gap-2 border-cyan-300 text-cyan-600 hover:bg-cyan-50 h-8 sm:h-9 px-1.5 sm:px-3"
+              >
+                <Package className="h-4 w-4" />
+                <span className="hidden md:inline">Receiving</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
                 onClick={() => setShowLowStockReport(true)} 
                 className="gap-1 sm:gap-2 border-red-300 text-red-600 hover:bg-red-50 h-8 sm:h-9 px-1.5 sm:px-3"
               >
                 <FileSpreadsheet className="h-4 w-4" />
                 <span className="hidden md:inline">Low Stock</span>
               </Button>
-              <Button 
+              <Button
                 variant="outline" 
                 size="sm" 
                 onClick={() => {
