@@ -46,6 +46,7 @@ import {
   Edit2,
   Filter,
   X,
+  ChevronLeft,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -59,7 +60,7 @@ import { EditItemRequestDialog } from './EditItemRequestDialog';
 import { MobileRequestCard } from './MobileRequestCard';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { format, isWithinInterval, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { format, isWithinInterval, parseISO, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
 import { exportLowStockToExcel } from '@/lib/excelExport';
 import { exportItemRequestsWithSummary } from '@/lib/exportItemRequests';
 import { useToast } from '@/hooks/use-toast';
@@ -94,12 +95,35 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const [requestToDelete, setRequestToDelete] = useState<ItemRequest | null>(null);
   const [deleting, setDeleting] = useState(false);
   
+  // Monthly filter - default to current month
+  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  
   // Filter states
   const [filterOpen, setFilterOpen] = useState(false);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [requesterFilter, setRequesterFilter] = useState('');
   const [approverFilter, setApproverFilter] = useState('');
+  
+  // Navigate to previous month
+  const goToPreviousMonth = () => {
+    setSelectedMonth(prev => subMonths(prev, 1));
+  };
+  
+  // Navigate to next month
+  const goToNextMonth = () => {
+    const nextMonth = addMonths(selectedMonth, 1);
+    // Don't allow going beyond current month
+    if (nextMonth <= new Date()) {
+      setSelectedMonth(nextMonth);
+    }
+  };
+  
+  // Check if we can go to next month
+  const canGoNext = addMonths(selectedMonth, 1) <= new Date();
+  
+  // Get month label
+  const monthLabel = format(selectedMonth, 'MMMM yyyy');
 
   // Check if user can add items to requests (admin or super_admin)
   const canAddItemsToRequest = highestRole === 'admin' || highestRole === 'super_admin';
@@ -166,9 +190,17 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
 
   const hasActiveFilters = dateFrom || dateTo || requesterFilter || approverFilter;
 
-  // Filter requests based on search and filters
+  // Filter requests based on selected month, search and filters
   const filteredRequests = useMemo(() => {
     let filtered = requests;
+    
+    // FIRST: Filter by selected month (primary filter)
+    const monthStart = startOfMonth(selectedMonth);
+    const monthEnd = endOfMonth(selectedMonth);
+    filtered = filtered.filter(r => {
+      const requestDate = new Date(r.created_at);
+      return isWithinInterval(requestDate, { start: monthStart, end: monthEnd });
+    });
 
     // Search filter
     if (searchQuery.trim()) {
@@ -181,7 +213,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
       );
     }
 
-    // Date range filter
+    // Additional date range filter (within selected month)
     if (dateFrom || dateTo) {
       filtered = filtered.filter(r => {
         const requestDate = new Date(r.created_at);
@@ -211,9 +243,9 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
     }
 
     return filtered;
-  }, [requests, searchQuery, dateFrom, dateTo, requesterFilter, approverFilter]);
+  }, [requests, selectedMonth, searchQuery, dateFrom, dateTo, requesterFilter, approverFilter]);
 
-  // Calculate stats
+  // Calculate stats based on selected month's filtered data
   const stats = useMemo(() => {
     const lowStockItems = items.filter(i => 
       i.quantity > 0 && 
@@ -222,18 +254,18 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
       i.quantity <= i.min_quantity
     );
     const outOfStockItems = items.filter(i => i.quantity === 0);
+    
+    // Stats for the selected month (filteredRequests already filtered by month)
+    const monthlyQuantity = filteredRequests.reduce((sum, r) => sum + r.quantity_requested, 0);
+    
     return {
-      totalRequests: requests.length,
-      totalQuantity: requests.reduce((sum, r) => sum + r.quantity_requested, 0),
-      thisMonth: requests.filter(r => {
-        const date = new Date(r.created_at);
-        const now = new Date();
-        return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-      }).length,
+      totalRequests: filteredRequests.length,
+      totalQuantity: monthlyQuantity,
+      thisMonth: filteredRequests.length,
       lowStockCount: lowStockItems.length,
       outOfStockCount: outOfStockItems.length,
     };
-  }, [requests, items]);
+  }, [filteredRequests, items]);
 
   const handleExportLowStock = () => {
     const result = exportLowStockToExcel(
@@ -357,7 +389,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                 <Calendar className="h-4 w-4 sm:h-8 sm:w-8 opacity-80 hidden sm:block" />
                 <div className="min-w-0">
                   <p className="text-base sm:text-2xl font-bold">{stats.thisMonth}</p>
-                  <p className="text-purple-100 text-[9px] sm:text-sm truncate">This Mo.</p>
+                  <p className="text-purple-100 text-[9px] sm:text-sm truncate">{format(selectedMonth, 'MMM')}</p>
                 </div>
               </div>
             </CardContent>
@@ -387,6 +419,43 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
             </CardContent>
           </Card>
         </div>
+
+        {/* Month Selector */}
+        <Card className="border-2 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-amber-600" />
+                <span className="font-medium text-sm sm:text-base">Monthly View</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 sm:h-9 sm:w-9"
+                  onClick={goToPreviousMonth}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <div className="min-w-[120px] sm:min-w-[150px] text-center">
+                  <span className="font-bold text-sm sm:text-base">{monthLabel}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8 sm:h-9 sm:w-9"
+                  onClick={goToNextMonth}
+                  disabled={!canGoNext}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="hidden sm:block text-sm text-muted-foreground">
+                {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''} in {format(selectedMonth, 'MMMM')}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Search, Filters and Export */}
         <div className="flex flex-col gap-2 sm:flex-row sm:gap-3 sm:items-center justify-between">

@@ -1,11 +1,8 @@
-import { useState, useMemo, useCallback, useDeferredValue } from 'react';
+import { useState, useMemo, useCallback, useDeferredValue, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
@@ -15,10 +12,7 @@ import {
   CalendarIcon,
   Loader2,
   CheckCircle2,
-  Image as ImageIcon,
   ArrowLeft,
-  Plus,
-  Minus,
 } from 'lucide-react';
 import { useInventory, InventoryItem } from '@/hooks/useInventory';
 import { Department } from '@/hooks/useDepartments';
@@ -26,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { generateReceivingPdf } from '@/lib/generateReceivingPdf';
 import { useToast } from '@/hooks/use-toast';
+import { VirtualizedReceivingGrid } from './VirtualizedReceivingGrid';
 
 interface IncomingPurchasesPageProps {
   department: Department;
@@ -42,9 +37,25 @@ export function IncomingPurchasesPage({ department, onBack }: IncomingPurchasesP
   const [selectedItems, setSelectedItems] = useState<Map<string, SelectedItemData>>(new Map());
   const [receivingDate, setReceivingDate] = useState<Date>(new Date());
   const [isExporting, setIsExporting] = useState(false);
+  const [containerHeight, setContainerHeight] = useState(500);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   
   const { items, loading } = useInventory(department.id);
+  
+  // Calculate dynamic height for virtualized container
+  useEffect(() => {
+    const updateHeight = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        const availableHeight = window.innerHeight - rect.top - 40;
+        setContainerHeight(Math.max(300, availableHeight));
+      }
+    };
+    updateHeight();
+    window.addEventListener('resize', updateHeight);
+    return () => window.removeEventListener('resize', updateHeight);
+  }, []);
   
   // Filter items based on search
   const filteredItems = useMemo(() => {
@@ -83,12 +94,6 @@ export function IncomingPurchasesPage({ department, onBack }: IncomingPurchasesP
       return next;
     });
   }, []);
-  
-  // Check if item is selected
-  const isSelected = useCallback((itemId: string) => selectedItems.has(itemId), [selectedItems]);
-  
-  // Get quantity for selected item
-  const getQuantity = useCallback((itemId: string) => selectedItems.get(itemId)?.quantity || 1, [selectedItems]);
   
   // Select all filtered items
   const selectAll = useCallback(() => {
@@ -251,110 +256,19 @@ export function IncomingPurchasesPage({ department, onBack }: IncomingPurchasesP
             Inventory Items ({filteredItems.length})
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent ref={containerRef}>
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
             </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <Package className="h-12 w-12 mx-auto mb-3 opacity-50" />
-              <p>No items found</p>
-            </div>
           ) : (
-            <ScrollArea className="h-[500px]">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {filteredItems.map((item) => {
-                  const selected = isSelected(item.id);
-                  const quantity = getQuantity(item.id);
-                  
-                  return (
-                    <div
-                      key={item.id}
-                      className={cn(
-                        'relative border rounded-lg p-3 transition-all cursor-pointer hover:shadow-md',
-                        selected
-                          ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/20 ring-1 ring-amber-500'
-                          : 'border-border hover:border-amber-300'
-                      )}
-                      onClick={() => toggleItem(item)}
-                    >
-                      {/* Selection Indicator */}
-                      <div className="absolute top-2 right-2">
-                        <Checkbox
-                          checked={selected}
-                          onCheckedChange={() => toggleItem(item)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      
-                      {/* Item Image */}
-                      <div className="aspect-square w-full mb-2 rounded-md overflow-hidden bg-muted flex items-center justify-center">
-                        {item.image_url ? (
-                          <img
-                            src={item.image_url}
-                            alt={item.item_name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <ImageIcon className="h-12 w-12 text-muted-foreground/30" />
-                        )}
-                      </div>
-                      
-                      {/* Item Info */}
-                      <div className="space-y-1">
-                        <p className="font-medium text-sm line-clamp-2" title={item.item_name}>
-                          {item.item_name}
-                        </p>
-                        <p className="text-xs text-muted-foreground">{item.item_number}</p>
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline" className="text-xs">
-                            {item.unit || 'pcs'}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            Stock: {item.quantity}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Quantity Control (when selected) */}
-                      {selected && (
-                        <div 
-                          className="mt-3 flex items-center justify-center gap-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateQuantity(item.id, quantity - 1)}
-                            disabled={quantity <= 1}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          <Input
-                            type="number"
-                            min={1}
-                            value={quantity}
-                            onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 1)}
-                            className="w-16 h-7 text-center"
-                          />
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => updateQuantity(item.id, quantity + 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </ScrollArea>
+            <VirtualizedReceivingGrid
+              items={filteredItems}
+              selectedItems={selectedItems}
+              onToggleItem={toggleItem}
+              onUpdateQuantity={updateQuantity}
+              height={containerHeight}
+            />
           )}
         </CardContent>
       </Card>
