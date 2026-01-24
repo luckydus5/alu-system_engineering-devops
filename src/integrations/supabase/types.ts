@@ -707,6 +707,56 @@ export type Database = {
           },
         ]
       }
+      receiving_records: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          department_id: string
+          id: string
+          items: Json
+          notes: string | null
+          receiving_date: string
+          record_name: string
+          status: string
+          total_items: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          department_id: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          receiving_date?: string
+          record_name: string
+          status?: string
+          total_items?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          department_id?: string
+          id?: string
+          items?: Json
+          notes?: string | null
+          receiving_date?: string
+          record_name?: string
+          status?: string
+          total_items?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receiving_records_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_comments: {
         Row: {
           action: string | null
