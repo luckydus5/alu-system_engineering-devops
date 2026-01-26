@@ -120,29 +120,6 @@ export function FolderCard({
           )}
         </div>
 
-        {/* Low stock warning badge */}
-        {hasLowStock && (
-          <div className="absolute -top-1 -right-1 z-10">
-            <Badge 
-              variant="destructive" 
-              className="h-6 w-6 p-0 flex items-center justify-center rounded-full animate-pulse"
-            >
-              <AlertTriangle className="h-3 w-3" />
-            </Badge>
-          </div>
-        )}
-
-        {/* Below minimum warning for locations */}
-        {isBelowMinimum && !hasLowStock && (
-          <div className="absolute -top-1 -right-1 z-10">
-            <Badge 
-              className="h-6 w-6 p-0 flex items-center justify-center rounded-full bg-amber-500"
-            >
-              <AlertTriangle className="h-3 w-3" />
-            </Badge>
-          </div>
-        )}
-
         {/* Edit/Delete menu */}
         {canManage && (onEdit || onDelete || onOpenFolder || onViewItems) && (
           <div 
