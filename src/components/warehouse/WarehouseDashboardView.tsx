@@ -971,12 +971,10 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                         <FolderPlus className="h-4 w-4 mr-2" />
                         Add Folder
                       </Button>
-                      {(navState.currentLocation || locationItems.length > 0) && (
-                        <Button onClick={() => setItemDialogOpen(true)} size="sm">
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add Item
-                        </Button>
-                      )}
+                      <Button onClick={() => setItemDialogOpen(true)} size="sm">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
+                      </Button>
                     </>
                   )}
                 </div>
@@ -1015,13 +1013,19 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                       <MapPin className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
                       <h3 className="text-lg font-medium mb-2">No Folders Yet</h3>
                       <p className="text-muted-foreground mb-4">
-                        Create folders like Shelf A, Cabinet 1, etc. to organize items
+                        Create folders to organize items, or add items directly to this classification
                       </p>
                       {canManage && (
-                        <Button onClick={() => setLocationDialogOpen(true)}>
-                          <FolderPlus className="h-4 w-4 mr-2" />
-                          Add Folder
-                        </Button>
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          <Button onClick={() => setItemDialogOpen(true)}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Item
+                          </Button>
+                          <Button variant="outline" onClick={() => setLocationDialogOpen(true)}>
+                            <FolderPlus className="h-4 w-4 mr-2" />
+                            Add Folder
+                          </Button>
+                        </div>
                       )}
                     </>
                   )}
