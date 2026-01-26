@@ -46,7 +46,6 @@ import {
   Edit2,
   Filter,
   X,
-  ChevronLeft,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -60,12 +59,17 @@ import { EditItemRequestDialog } from './EditItemRequestDialog';
 import { MobileRequestCard } from './MobileRequestCard';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
-import { format, isWithinInterval, parseISO, startOfDay, endOfDay, startOfMonth, endOfMonth, subMonths, addMonths } from 'date-fns';
+import { format, isWithinInterval, parseISO, startOfDay, endOfDay, startOfMonth, endOfMonth, getYear, setYear, setMonth, getMonth } from 'date-fns';
 import { exportLowStockToExcel } from '@/lib/excelExport';
-import { exportItemRequestsWithSummary } from '@/lib/exportItemRequests';
 import { useToast } from '@/hooks/use-toast';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 import { DeleteItemRequestConfirmDialog } from './DeleteItemRequestConfirmDialog';
+import { ExportRequestsDialog } from './ExportRequestsDialog';
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
 
 interface ItemRequestHistoryPageProps {
   department: Department;
@@ -95,8 +99,15 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const [requestToDelete, setRequestToDelete] = useState<ItemRequest | null>(null);
   const [deleting, setDeleting] = useState(false);
   
-  // Monthly filter - default to current month
-  const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  // Year/Month filter - default to current month
+  const currentYear = getYear(new Date());
+  const currentMonthIndex = getMonth(new Date());
+  
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(currentMonthIndex);
+  
+  // Export dialog state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   
   // Filter states
   const [filterOpen, setFilterOpen] = useState(false);
@@ -105,22 +116,14 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const [requesterFilter, setRequesterFilter] = useState('');
   const [approverFilter, setApproverFilter] = useState('');
   
-  // Navigate to previous month
-  const goToPreviousMonth = () => {
-    setSelectedMonth(prev => subMonths(prev, 1));
-  };
+  // Generate available years (current year and 5 years back)
+  const availableYears = Array.from({ length: 6 }, (_, i) => currentYear - i);
   
-  // Navigate to next month
-  const goToNextMonth = () => {
-    const nextMonth = addMonths(selectedMonth, 1);
-    // Don't allow going beyond current month
-    if (nextMonth <= new Date()) {
-      setSelectedMonth(nextMonth);
-    }
-  };
+  // Get maximum selectable month for the selected year
+  const maxSelectableMonth = selectedYear === currentYear ? currentMonthIndex : 11;
   
-  // Check if we can go to next month
-  const canGoNext = addMonths(selectedMonth, 1) <= new Date();
+  // Get the selected month as a Date object
+  const selectedMonth = setMonth(setYear(new Date(), selectedYear), selectedMonthIndex);
   
   // Get month label
   const monthLabel = format(selectedMonth, 'MMMM yyyy');
@@ -288,28 +291,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   };
 
   const handleExportRequests = () => {
-    const result = exportItemRequestsWithSummary(
-      filteredRequests,
-      department.name,
-      {
-        dateFrom: dateFrom || undefined,
-        dateTo: dateTo || undefined,
-        requester: requesterFilter || undefined,
-        approver: approverFilter || undefined,
-      }
-    );
-    if (result.success) {
-      toast({
-        title: 'Export Successful',
-        description: result.message,
-      });
-    } else {
-      toast({
-        title: 'No Data',
-        description: result.message,
-        variant: 'destructive',
-      });
-    }
+    setExportDialogOpen(true);
   };
 
   return (
@@ -356,7 +338,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
       </div>
 
       {/* Main Content */}
-      <div className="p-2 sm:p-4 space-y-3 sm:space-y-4 pb-24 md:pb-4">
+      <div className="p-2 sm:p-4 space-y-3 sm:space-y-4 pb-28 md:pb-8">
         {/* Stats Cards - More compact on mobile */}
         <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-5 gap-1.5 sm:gap-4">
           <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white border-0">
@@ -389,7 +371,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
                 <Calendar className="h-4 w-4 sm:h-8 sm:w-8 opacity-80 hidden sm:block" />
                 <div className="min-w-0">
                   <p className="text-base sm:text-2xl font-bold">{stats.thisMonth}</p>
-                  <p className="text-purple-100 text-[9px] sm:text-sm truncate">{format(selectedMonth, 'MMM')}</p>
+                  <p className="text-purple-100 text-[9px] sm:text-sm truncate">{MONTHS[selectedMonthIndex].slice(0, 3)}</p>
                 </div>
               </div>
             </CardContent>
@@ -420,38 +402,62 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
           </Card>
         </div>
 
-        {/* Month Selector */}
+        {/* Year/Month Selector */}
         <Card className="border-2 border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
           <CardContent className="p-3 sm:p-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-amber-600" />
                 <span className="font-medium text-sm sm:text-base">Monthly View</span>
               </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9"
-                  onClick={goToPreviousMonth}
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {/* Year Dropdown */}
+                <Select
+                  value={selectedYear.toString()}
+                  onValueChange={(value) => {
+                    const year = parseInt(value);
+                    setSelectedYear(year);
+                    // Reset month if switching to current year and current selection is in the future
+                    if (year === currentYear && selectedMonthIndex > currentMonthIndex) {
+                      setSelectedMonthIndex(currentMonthIndex);
+                    }
+                  }}
                 >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <div className="min-w-[120px] sm:min-w-[150px] text-center">
-                  <span className="font-bold text-sm sm:text-base">{monthLabel}</span>
-                </div>
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="h-8 w-8 sm:h-9 sm:w-9"
-                  onClick={goToNextMonth}
-                  disabled={!canGoNext}
+                  <SelectTrigger className="w-[90px] h-9">
+                    <SelectValue placeholder="Year" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableYears.map((year) => (
+                      <SelectItem key={year} value={year.toString()}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                
+                {/* Month Dropdown */}
+                <Select
+                  value={selectedMonthIndex.toString()}
+                  onValueChange={(value) => setSelectedMonthIndex(parseInt(value))}
                 >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+                  <SelectTrigger className="w-[130px] h-9">
+                    <SelectValue placeholder="Month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map((month, index) => (
+                      <SelectItem 
+                        key={month} 
+                        value={index.toString()}
+                        disabled={selectedYear === currentYear && index > maxSelectableMonth}
+                      >
+                        {month}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="hidden sm:block text-sm text-muted-foreground">
-                {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''} in {format(selectedMonth, 'MMMM')}
+                {filteredRequests.length} request{filteredRequests.length !== 1 ? 's' : ''} in {MONTHS[selectedMonthIndex]}
               </div>
             </div>
           </CardContent>
@@ -913,6 +919,14 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
         request={requestToDelete}
         deleting={deleting}
         onConfirm={handleConfirmDelete}
+      />
+
+      {/* Export Requests Dialog */}
+      <ExportRequestsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        requests={requests}
+        departmentName={department.name}
       />
     </div>
   );
