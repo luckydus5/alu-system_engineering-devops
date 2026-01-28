@@ -343,7 +343,7 @@ export function MoveItemsDialog({
           )}
 
           {/* Same Destination Warning */}
-          {isSameDestination && selectedClassificationId && selectedLocationId && (
+          {isSameDestination && selectedClassificationId && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3">
               <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" />
