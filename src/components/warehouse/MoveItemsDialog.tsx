@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -18,12 +18,13 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, FolderInput, MapPin, Package, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Progress } from '@/components/ui/progress';
+import { Loader2, FolderInput, MapPin, Package, ChevronRight, AlertTriangle, FolderOpen } from 'lucide-react';
 import { WarehouseClassification } from '@/hooks/useWarehouseClassifications';
 import { WarehouseLocation } from '@/hooks/useWarehouseLocations';
 import { InventoryItem } from '@/hooks/useInventory';
 import { supabase } from '@/integrations/supabase/client';
-import { cn } from '@/lib/utils';
 
 interface MoveItemsDialogProps {
   open: boolean;
@@ -32,7 +33,7 @@ interface MoveItemsDialogProps {
   departmentId: string;
   currentClassificationId?: string;
   currentLocationId?: string;
-  onMove: (classificationId: string, locationId: string) => Promise<boolean>;
+  onMove: (classificationId: string, locationId: string | null) => Promise<boolean>;
 }
 
 export function MoveItemsDialog({
@@ -52,6 +53,12 @@ export function MoveItemsDialog({
   
   const [selectedClassificationId, setSelectedClassificationId] = useState<string>('');
   const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  
+  // New: Allow transfer to classification level (no folder)
+  const [transferToClassificationOnly, setTransferToClassificationOnly] = useState(false);
+  
+  // Progress tracking for bulk transfers
+  const [transferProgress, setTransferProgress] = useState(0);
 
   // Fetch classifications when dialog opens
   useEffect(() => {
@@ -76,6 +83,8 @@ export function MoveItemsDialog({
       setSelectedClassificationId('');
       setSelectedLocationId('');
       setLocations([]);
+      setTransferToClassificationOnly(false);
+      setTransferProgress(0);
     }
   }, [open]);
 
@@ -117,23 +126,46 @@ export function MoveItemsDialog({
   };
 
   const handleSubmit = async () => {
-    if (!selectedClassificationId || !selectedLocationId) return;
+    if (!selectedClassificationId) return;
+    if (!transferToClassificationOnly && !selectedLocationId) return;
     
     setLoading(true);
-    const success = await onMove(selectedClassificationId, selectedLocationId);
-    setLoading(false);
+    setTransferProgress(10);
     
-    if (success) {
-      onOpenChange(false);
-    }
+    // Simulate progress for better UX on large transfers
+    const progressInterval = setInterval(() => {
+      setTransferProgress(prev => Math.min(prev + 10, 90));
+    }, 200);
+    
+    const success = await onMove(
+      selectedClassificationId, 
+      transferToClassificationOnly ? null : selectedLocationId
+    );
+    
+    clearInterval(progressInterval);
+    setTransferProgress(100);
+    
+    setTimeout(() => {
+      setLoading(false);
+      setTransferProgress(0);
+      if (success) {
+        onOpenChange(false);
+      }
+    }, 300);
   };
 
-  const isSameDestination = 
-    selectedClassificationId === currentClassificationId && 
-    selectedLocationId === currentLocationId;
+  // Check if destination is the same as current
+  const isSameDestination = transferToClassificationOnly
+    ? (selectedClassificationId === currentClassificationId && !currentLocationId)
+    : (selectedClassificationId === currentClassificationId && selectedLocationId === currentLocationId);
 
   const selectedClassification = classifications.find(c => c.id === selectedClassificationId);
   const selectedLocation = locations.find(l => l.id === selectedLocationId);
+  
+  // Check if items can be transferred (classification selected, and either location selected OR classification-only mode)
+  const canTransfer = selectedClassificationId && 
+    (transferToClassificationOnly || selectedLocationId) && 
+    !isSameDestination;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -201,67 +233,112 @@ export function MoveItemsDialog({
             </Select>
           </div>
 
-          {/* Location Selection */}
-          <div className="space-y-2">
-            <Label htmlFor="location">Destination Location</Label>
-            <Select
-              value={selectedLocationId}
-              onValueChange={setSelectedLocationId}
-              disabled={!selectedClassificationId || loadingLocations}
-            >
-              <SelectTrigger id="location">
-                <SelectValue 
-                  placeholder={
-                    !selectedClassificationId 
-                      ? 'Select a classification first'
-                      : loadingLocations 
-                        ? 'Loading...' 
-                        : locations.length === 0 
-                          ? 'No locations available'
-                          : 'Select a location'
-                  } 
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {locations.map((location) => (
-                  <SelectItem key={location.id} value={location.id}>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-3 w-3 text-muted-foreground" />
-                      {location.name}
-                      {location.id === currentLocationId && (
-                        <span className="text-xs text-muted-foreground">(current)</span>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {selectedClassificationId && !loadingLocations && locations.length === 0 && (
-              <p className="text-xs text-amber-600 flex items-center gap-1">
-                <AlertTriangle className="h-3 w-3" />
-                No locations in this classification. Create one first.
+          {/* Transfer Mode Toggle */}
+          <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+            <div className="space-y-0.5">
+              <Label htmlFor="classification-only" className="text-sm font-medium">
+                Transfer to Classification Only
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Move items without assigning to a specific folder
               </p>
-            )}
+            </div>
+            <Switch
+              id="classification-only"
+              checked={transferToClassificationOnly}
+              onCheckedChange={(checked) => {
+                setTransferToClassificationOnly(checked);
+                if (checked) setSelectedLocationId('');
+              }}
+            />
           </div>
 
+          {/* Location Selection - Only show if not in classification-only mode */}
+          {!transferToClassificationOnly && (
+            <div className="space-y-2">
+              <Label htmlFor="location">Destination Folder</Label>
+              <Select
+                value={selectedLocationId}
+                onValueChange={setSelectedLocationId}
+                disabled={!selectedClassificationId || loadingLocations}
+              >
+                <SelectTrigger id="location">
+                  <SelectValue 
+                    placeholder={
+                      !selectedClassificationId 
+                        ? 'Select a classification first'
+                        : loadingLocations 
+                          ? 'Loading...' 
+                          : locations.length === 0 
+                            ? 'No folders available'
+                            : 'Select a folder'
+                    } 
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {locations.map((location) => (
+                    <SelectItem key={location.id} value={location.id}>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-3 w-3 text-muted-foreground" />
+                        {location.name}
+                        {location.id === currentLocationId && (
+                          <span className="text-xs text-muted-foreground">(current)</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedClassificationId && !loadingLocations && locations.length === 0 && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <FolderOpen className="h-3 w-3" />
+                  No folders in this classification. Enable "Classification Only" mode above, or create a folder first.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Destination Preview */}
-          {selectedClassification && selectedLocation && (
+          {selectedClassification && (transferToClassificationOnly || selectedLocation) && (
             <div className="rounded-lg border bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 p-3">
               <Label className="text-xs font-medium text-muted-foreground mb-2 block">
                 Destination Path
               </Label>
-              <div className="flex items-center gap-1 text-sm font-medium">
+              <div className="flex items-center gap-1 text-sm font-medium flex-wrap">
                 <span 
                   className="px-2 py-1 rounded"
                   style={{ backgroundColor: selectedClassification.color || '#FFA500', color: '#fff' }}
                 >
                   {selectedClassification.name}
                 </span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                <span className="px-2 py-1 rounded bg-slate-200 dark:bg-slate-700">
-                  {selectedLocation.name}
-                </span>
+                {!transferToClassificationOnly && selectedLocation && (
+                  <>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <span className="px-2 py-1 rounded bg-slate-200 dark:bg-slate-700">
+                      {selectedLocation.name}
+                    </span>
+                  </>
+                )}
+                {transferToClassificationOnly && (
+                  <>
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <span className="px-2 py-1 rounded bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 italic">
+                      Unassigned (No Folder)
+                    </span>
+                  </>
+                )}
               </div>
+            </div>
+          )}
+          
+          {/* Progress Bar for Bulk Transfers */}
+          {loading && selectedItems.length > 5 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Transferring {selectedItems.length} items...</span>
+                <span>{transferProgress}%</span>
+              </div>
+              <Progress value={transferProgress} className="h-2" />
             </div>
           )}
 
@@ -282,18 +359,18 @@ export function MoveItemsDialog({
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={loading || !selectedClassificationId || !selectedLocationId || isSameDestination}
+            disabled={loading || !canTransfer}
             className="gap-2"
           >
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                Moving...
+                Transferring...
               </>
             ) : (
               <>
                 <FolderInput className="h-4 w-4" />
-                Move {selectedItems.length} Item(s)
+                Transfer {selectedItems.length} Item(s)
               </>
             )}
           </Button>

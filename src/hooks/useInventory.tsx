@@ -289,22 +289,24 @@ export function useInventory(departmentId: string | undefined) {
   const moveItems = async (
     itemIds: string[],
     targetClassificationId: string,
-    targetLocationId: string
+    targetLocationId: string | null
   ) => {
     try {
+      const updateData: { classification_id: string; location_id: string | null } = {
+        classification_id: targetClassificationId,
+        location_id: targetLocationId, // Can be null for classification-level items
+      };
+
       const { error } = await supabase
         .from('inventory_items')
-        .update({
-          classification_id: targetClassificationId,
-          location_id: targetLocationId,
-        })
+        .update(updateData)
         .in('id', itemIds);
 
       if (error) throw error;
 
       toast({
         title: 'Success',
-        description: `${itemIds.length} item(s) moved successfully`,
+        description: `${itemIds.length} item(s) transferred successfully`,
       });
 
       // Invalidate cache and refetch
@@ -312,10 +314,10 @@ export function useInventory(departmentId: string | undefined) {
       await fetchItems(true);
       return true;
     } catch (error: any) {
-      console.error('Error moving inventory items:', error);
+      console.error('Error transferring inventory items:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to move inventory items',
+        description: error.message || 'Failed to transfer inventory items',
         variant: 'destructive',
       });
       return false;

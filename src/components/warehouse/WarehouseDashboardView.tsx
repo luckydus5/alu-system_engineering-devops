@@ -327,8 +327,8 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     }
   };
 
-  // Move handlers
-  const handleMoveItems = async (classificationId: string, locationId: string) => {
+  // Move handlers - supports null locationId for classification-level transfers
+  const handleMoveItems = async (classificationId: string, locationId: string | null) => {
     const itemIds = singleItemToMove ? [singleItemToMove.id] : Array.from(selectedItemIds);
     const success = await moveItems(itemIds, classificationId, locationId);
     
