@@ -36,71 +36,76 @@ export default function Dashboard() {
   };
 
   return (
-    <DashboardLayout title="Dashboard">
-      <div 
-        ref={containerRef as React.RefObject<HTMLDivElement>}
-        className="animate-fade-in relative min-h-[calc(100vh-8rem)]"
-      >
-        {/* Pull to Refresh Indicator */}
-        {isMobile && (
-          <PullToRefreshIndicator 
-            pullProgress={pullProgress} 
-            isRefreshing={isRefreshing} 
-          />
-        )}
+    <div 
+      className="min-h-screen w-full fixed inset-0"
+      style={{
+        backgroundImage: `url(${heroBackground})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/40" />
+      
+      <div className="relative z-10">
+        <DashboardLayout title="Dashboard">
+          <div 
+            ref={containerRef as React.RefObject<HTMLDivElement>}
+            className="animate-fade-in relative min-h-[calc(100vh-8rem)]"
+          >
+            {/* Pull to Refresh Indicator */}
+            {isMobile && (
+              <PullToRefreshIndicator 
+                pullProgress={pullProgress} 
+                isRefreshing={isRefreshing} 
+              />
+            )}
 
-        {/* Mobile View - Compact grid without heavy welcome section */}
-        {isMobile ? (
-          <div className="space-y-4">
-            {/* Simple mobile greeting */}
-            <div className="px-0">
-              <p className="text-sm text-muted-foreground">
-                {getGreeting()}, <span className="font-semibold text-foreground">{profile?.full_name?.split(' ')[0] || 'User'}</span>
-              </p>
-              {isRefreshing && (
-                <p className="text-xs text-primary mt-1">Refreshing...</p>
-              )}
-            </div>
-            
-            {/* Compact Department Grid */}
-            <MobileDepartmentGrid />
-          </div>
-        ) : (
-          /* Desktop View - Full layout */
-          <div className="space-y-8">
-            {/* Welcome Section - Enhanced */}
-            <div 
-              className="relative overflow-hidden rounded-2xl border border-primary/20 p-6 md:p-8"
-              style={{
-                backgroundImage: `linear-gradient(to bottom right, rgba(0,0,0,0.5), rgba(0,0,0,0.3)), url(${heroBackground})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
-            >
-              {/* Background overlay for text readability */}
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-secondary/20" />
-              
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-white/80">
-                    <Sparkles className="h-4 w-4 text-secondary" />
-                    <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                  </div>
-                  <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-lg">
-                    {getGreeting()}, <span className="text-secondary">{profile?.full_name?.split(' ')[0] || 'User'}</span>!
-                  </h1>
-                  <p className="text-white/90 text-lg max-w-xl drop-shadow">
-                    Here's your operations overview. Monitor field updates and track department activities in real-time.
+            {/* Mobile View - Compact grid without heavy welcome section */}
+            {isMobile ? (
+              <div className="space-y-4">
+                {/* Simple mobile greeting */}
+                <div className="px-0">
+                  <p className="text-sm text-white/80">
+                    {getGreeting()}, <span className="font-semibold text-white">{profile?.full_name?.split(' ')[0] || 'User'}</span>
                   </p>
+                  {isRefreshing && (
+                    <p className="text-xs text-secondary mt-1">Refreshing...</p>
+                  )}
                 </div>
+                
+                {/* Compact Department Grid */}
+                <MobileDepartmentGrid />
               </div>
-            </div>
+            ) : (
+              /* Desktop View - Full layout */
+              <div className="space-y-8">
+                {/* Welcome Section - Enhanced */}
+                <div className="relative overflow-hidden rounded-2xl bg-white/10 backdrop-blur-sm border border-white/20 p-6 md:p-8">
+                  <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-white/80">
+                        <Sparkles className="h-4 w-4 text-secondary" />
+                        <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                      </div>
+                      <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-lg">
+                        {getGreeting()}, <span className="text-secondary">{profile?.full_name?.split(' ')[0] || 'User'}</span>!
+                      </h1>
+                      <p className="text-white/90 text-lg max-w-xl drop-shadow">
+                        Here's your operations overview. Monitor field updates and track department activities in real-time.
+                      </p>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Department Access Cards - Main Feature */}
-            <DepartmentAccessCards />
+                {/* Department Access Cards - Main Feature */}
+                <DepartmentAccessCards />
+              </div>
+            )}
           </div>
-        )}
+        </DashboardLayout>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
