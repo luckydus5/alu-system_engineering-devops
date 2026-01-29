@@ -174,9 +174,9 @@ export function FolderCard({
       </div>
 
       {/* Folder label */}
-      <div className="mt-2 text-center px-1">
-        <p className="font-medium text-sm truncate text-foreground">{name}</p>
-        <div className="flex items-center justify-center gap-2 mt-1 flex-wrap">
+      <div className="mt-1 sm:mt-2 text-center px-0.5 sm:px-1">
+        <p className="font-medium text-xs sm:text-sm truncate text-foreground">{name}</p>
+        <div className="hidden sm:flex items-center justify-center gap-2 mt-1 flex-wrap">
           {hasSubFolders && (
             <span className="text-xs text-muted-foreground">
               {subFolderCount} folder{subFolderCount > 1 ? 's' : ''}
@@ -208,6 +208,10 @@ export function FolderCard({
             </>
           )}
         </div>
+        {/* Mobile: Show only item count */}
+        <span className="sm:hidden text-[10px] text-muted-foreground">
+          {itemCount.toLocaleString()} items
+        </span>
       </div>
     </div>
   );

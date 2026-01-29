@@ -815,7 +815,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4">
                 {searchResults.map((item) => (
                   <ItemCard
                     key={item.id}
@@ -871,7 +871,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4">
                 {classifications.map((classification) => {
                   const cStats = classificationStatsById.get(classification.id);
 
@@ -1064,7 +1064,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                       <FolderPlus className="h-4 w-4" />
                       Folders ({locations.length})
                     </h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4">
                       {locations.map((location) => {
                         const lStats = locationStatsById.get(location.id);
 
@@ -1138,7 +1138,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                         </div>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4">
                       {paginatedLocationItems.map((item) => {
                         const { classification, location } = getItemLocationInfo(item);
                         return (
