@@ -309,8 +309,19 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     });
   };
 
+  // All items in the current classification (across all folders) for bulk operations
+  const classificationItems = useMemo(() => {
+    if (!navState.classification) return [];
+    return items.filter(item => item.classification_id === navState.classification?.id);
+  }, [items, navState.classification]);
+
   const selectAllInLocation = () => {
     const allIds = locationItems.map(item => item.id);
+    setSelectedItemIds(new Set(allIds));
+  };
+
+  const selectAllInClassification = () => {
+    const allIds = classificationItems.map(item => item.id);
     setSelectedItemIds(new Set(allIds));
   };
 
@@ -933,6 +944,19 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                           >
                             Select All
                           </Button>
+                          {classificationItems.length > locationItems.length && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={selectAllInClassification}
+                              disabled={selectedItemIds.size === classificationItems.length}
+                              className="gap-1 text-xs"
+                              title={`Select all ${classificationItems.length} items in ${navState.classification?.name}`}
+                            >
+                              <Package className="h-3 w-3" />
+                              All in Classification ({classificationItems.length})
+                            </Button>
+                          )}
                           <Button
                             variant="default"
                             size="sm"
