@@ -10,7 +10,6 @@ import {
   Crown,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import departmentsBackground from '@/assets/departments-background.png';
 
 // Icons8 Fluency style icon URLs
 const departmentIconUrls: Record<string, string> = {
@@ -122,38 +121,28 @@ export function DepartmentAccessCards() {
   }
 
   return (
-    <div 
-      className="relative space-y-6 rounded-2xl p-6 md:p-8 overflow-hidden"
-      style={{
-        backgroundImage: `linear-gradient(to bottom right, rgba(0,0,0,0.4), rgba(0,0,0,0.2)), url(${departmentsBackground})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
-    >
-      {/* Additional overlay for better card visibility */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background/30 via-transparent to-background/20" />
-      
-      <div className="relative z-10 flex items-center justify-between">
+    <div className="space-y-6 rounded-2xl p-6 md:p-8 bg-card border border-border shadow-sm">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-premium">
             <Building2 className="h-5 w-5 text-primary-foreground" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white drop-shadow-lg">Your Departments</h2>
-            <p className="text-sm text-white/80 drop-shadow">
+            <h2 className="text-xl font-bold text-foreground">Your Departments</h2>
+            <p className="text-sm text-muted-foreground">
               {accessibleDepts.length} department{accessibleDepts.length !== 1 ? 's' : ''} available
             </p>
           </div>
         </div>
         {hasFullAccess && (
-          <Badge variant="secondary" className="bg-secondary/90 text-secondary-foreground border border-secondary/30 shadow-md">
+          <Badge variant="secondary" className="bg-secondary/20 text-secondary-foreground border border-secondary/30">
             <Crown className="h-3 w-3 mr-1" />
             Full Access
           </Badge>
         )}
       </div>
 
-      <div className="relative z-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {accessibleDepts.map((dept) => {
           const isPrimary = dept.id === primaryDeptId;
           const gradient = departmentGradients[dept.code] || 'from-primary to-primary/80';
