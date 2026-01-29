@@ -8,6 +8,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
+import heroBackground from '@/assets/hero-background.jpg';
 
 export default function Dashboard() {
   const { profile, refetch } = useUserRole();
@@ -68,21 +69,27 @@ export default function Dashboard() {
           /* Desktop View - Full layout */
           <div className="space-y-8">
             {/* Welcome Section - Enhanced */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/20 p-6 md:p-8">
-              {/* Background decorations */}
-              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-secondary/20 to-transparent rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-primary/10 to-transparent rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+            <div 
+              className="relative overflow-hidden rounded-2xl border border-primary/20 p-6 md:p-8"
+              style={{
+                backgroundImage: `linear-gradient(to bottom right, rgba(0,0,0,0.5), rgba(0,0,0,0.3)), url(${heroBackground})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              }}
+            >
+              {/* Background overlay for text readability */}
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/30 via-transparent to-secondary/20" />
               
               <div className="relative z-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2 text-sm text-white/80">
                     <Sparkles className="h-4 w-4 text-secondary" />
                     <span>{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
                   </div>
-                  <h1 className="text-3xl md:text-4xl font-bold text-foreground tracking-tight">
-                    {getGreeting()}, <span className="text-gradient">{profile?.full_name?.split(' ')[0] || 'User'}</span>!
+                  <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight drop-shadow-lg">
+                    {getGreeting()}, <span className="text-secondary">{profile?.full_name?.split(' ')[0] || 'User'}</span>!
                   </h1>
-                  <p className="text-muted-foreground text-lg max-w-xl">
+                  <p className="text-white/90 text-lg max-w-xl drop-shadow">
                     Here's your operations overview. Monitor field updates and track department activities in real-time.
                   </p>
                 </div>
