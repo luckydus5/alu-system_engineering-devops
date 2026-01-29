@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { TopNavbar } from './TopNavbar';
 import { BackButton } from './BackButton';
 import { MobileBottomNav } from './MobileBottomNav';
-import departmentsBackground from '@/assets/departments-background.png';
+import { BackgroundSlideshow } from './BackgroundSlideshow';
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -16,15 +16,10 @@ export function DashboardLayout({ children, title, showBackButton = true }: Dash
   const isHomePage = location.pathname === '/';
 
   return (
-    <div 
-      className="min-h-screen w-full"
-      style={{
-        backgroundImage: `linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0.35)), url(${departmentsBackground})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'fixed',
-      }}
-    >
+    <div className="min-h-screen w-full relative">
+      {/* Sliding Background */}
+      <BackgroundSlideshow />
+      
       <TopNavbar />
       
       {/* Main Content - Add padding bottom for mobile nav */}
