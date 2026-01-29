@@ -19,7 +19,7 @@ export function DashboardLayout({ children, title, showBackButton = true }: Dash
     <div 
       className="min-h-screen w-full"
       style={{
-        backgroundImage: `linear-gradient(to bottom, rgba(255,255,255,0.85), rgba(255,255,255,0.80)), url(${departmentsBackground})`,
+        backgroundImage: `linear-gradient(to bottom, rgba(255,255,255,0.25), rgba(255,255,255,0.35)), url(${departmentsBackground})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'fixed',
