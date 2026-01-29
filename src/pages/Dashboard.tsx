@@ -9,7 +9,6 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useQueryClient } from '@tanstack/react-query';
 import { Sparkles } from 'lucide-react';
 import heroBackground from '@/assets/hero-background.jpg';
-import departmentsBackground from '@/assets/departments-background.png';
 
 export default function Dashboard() {
   const { profile, refetch } = useUserRole();
@@ -40,13 +39,7 @@ export default function Dashboard() {
     <DashboardLayout title="Dashboard">
       <div 
         ref={containerRef as React.RefObject<HTMLDivElement>}
-        className="animate-fade-in relative min-h-[calc(100vh-8rem)] rounded-2xl p-4 md:p-6"
-        style={{
-          backgroundImage: `linear-gradient(to bottom, rgba(255,255,255,0.85), rgba(255,255,255,0.75)), url(${departmentsBackground})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundAttachment: 'fixed',
-        }}
+        className="animate-fade-in relative min-h-[calc(100vh-8rem)]"
       >
         {/* Pull to Refresh Indicator */}
         {isMobile && (
