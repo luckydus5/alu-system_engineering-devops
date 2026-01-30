@@ -816,21 +816,27 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
               </Card>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2 sm:gap-4">
-                {searchResults.map((item) => (
-                  <ItemCard
-                    key={item.id}
-                    item={item}
-                    canManage={canManage}
-                    onEdit={() => {
-                      setEditingItem(item);
-                      setEditItemDialogOpen(true);
-                    }}
-                    onDelete={() => deleteItem(item.id)}
-                    onStockIn={() => {}}
-                    onStockOut={() => {}}
-                    onMove={() => openMoveDialogForSingleItem(item)}
-                  />
-                ))}
+                {searchResults.map((item) => {
+                  const { classification, location } = getItemLocationInfo(item);
+                  return (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      canManage={canManage}
+                      onEdit={() => {
+                        setEditingItem(item);
+                        setEditItemDialogOpen(true);
+                      }}
+                      onDelete={() => deleteItem(item.id)}
+                      onStockIn={() => openStockIn(item)}
+                      onStockOut={() => openStockOut(item)}
+                      onViewDetails={() => openItemDetail(item)}
+                      onMove={() => openMoveDialogForSingleItem(item)}
+                      locationName={location?.name}
+                      classificationName={classification?.name}
+                    />
+                  );
+                })}
               </div>
             )}
           </div>
