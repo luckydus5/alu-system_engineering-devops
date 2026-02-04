@@ -1,3 +1,4 @@
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { AlertTriangle, MoreVertical, Edit, Trash2, FolderOpen, Package } from 'lucide-react';
@@ -28,6 +29,8 @@ interface FolderCardProps {
   variant?: 'classification' | 'location';
 }
 
+const LONG_PRESS_DURATION = 500; // ms
+
 export function FolderCard({
   name,
   itemCount = 0,
@@ -49,6 +52,73 @@ export function FolderCard({
   const isBelowMinimum = variant === 'location' && itemCount < minItems;
   const hasSubFolders = subFolderCount > 0;
 
+  // Long-press detection for mobile menu
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPress = useRef(false);
+  const touchStartPos = useRef<{ x: number; y: number } | null>(null);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (!canManage || (!onEdit && !onDelete)) return;
+    
+    const touch = e.touches[0];
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY };
+    isLongPress.current = false;
+    
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+      setShowMobileMenu(true);
+    }, LONG_PRESS_DURATION);
+  }, [canManage, onEdit, onDelete]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartPos.current) return;
+    
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartPos.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartPos.current.y);
+    
+    // Cancel long-press if finger moved too much
+    if (deltaX > 10 || deltaY > 10) {
+      clearLongPressTimer();
+    }
+  }, [clearLongPressTimer]);
+
+  const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+    clearLongPressTimer();
+    
+    // If it was a long press, prevent the click
+    if (isLongPress.current) {
+      e.preventDefault();
+    }
+    touchStartPos.current = null;
+  }, [clearLongPressTimer]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // Don't navigate if long-press menu is showing
+    if (showMobileMenu) {
+      e.preventDefault();
+      return;
+    }
+    onClick?.();
+  }, [onClick, showMobileMenu]);
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    if (showMobileMenu) {
+      const handleClickOutside = () => setShowMobileMenu(false);
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showMobileMenu]);
+
   return (
     <div
       className={cn(
@@ -56,7 +126,10 @@ export function FolderCard({
         'hover:scale-[1.02] active:scale-[0.98]',
         className
       )}
-      onClick={onClick}
+      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
     >
       {/* Folder SVG */}
       <div className="relative">
@@ -120,13 +193,20 @@ export function FolderCard({
           )}
         </div>
 
-        {/* Edit/Delete menu */}
+        {/* Edit/Delete menu - Desktop: show on hover, Mobile: show on long-press */}
         {canManage && (onEdit || onDelete || onOpenFolder || onViewItems) && (
           <div 
-            className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity"
+            className={cn(
+              "absolute top-2 left-2 z-10 transition-opacity",
+              // Desktop: show on hover
+              "md:opacity-0 md:group-hover:opacity-100",
+              // Mobile: show via long-press state
+              showMobileMenu ? "opacity-100" : "opacity-0 pointer-events-none md:pointer-events-auto"
+            )}
             onClick={(e) => e.stopPropagation()}
+            onTouchEnd={(e) => e.stopPropagation()}
           >
-            <DropdownMenu>
+            <DropdownMenu open={showMobileMenu} onOpenChange={setShowMobileMenu}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="secondary"
@@ -138,13 +218,13 @@ export function FolderCard({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start">
                 {onOpenFolder && (
-                  <DropdownMenuItem onClick={onOpenFolder}>
+                  <DropdownMenuItem onClick={() => { setShowMobileMenu(false); onOpenFolder(); }}>
                     <FolderOpen className="h-4 w-4 mr-2 text-amber-600" />
                     Open Folder
                   </DropdownMenuItem>
                 )}
                 {onViewItems && (
-                  <DropdownMenuItem onClick={onViewItems}>
+                  <DropdownMenuItem onClick={() => { setShowMobileMenu(false); onViewItems(); }}>
                     <Package className="h-4 w-4 mr-2 text-blue-600" />
                     View Items
                   </DropdownMenuItem>
@@ -153,14 +233,14 @@ export function FolderCard({
                   <DropdownMenuSeparator />
                 )}
                 {onEdit && (
-                  <DropdownMenuItem onClick={onEdit}>
+                  <DropdownMenuItem onClick={() => { setShowMobileMenu(false); onEdit(); }}>
                     <Edit className="h-4 w-4 mr-2" />
                     Edit
                   </DropdownMenuItem>
                 )}
                 {onDelete && (
                   <DropdownMenuItem 
-                    onClick={onDelete}
+                    onClick={() => { setShowMobileMenu(false); onDelete(); }}
                     className="text-destructive focus:text-destructive"
                   >
                     <Trash2 className="h-4 w-4 mr-2" />

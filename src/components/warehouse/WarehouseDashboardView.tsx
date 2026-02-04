@@ -175,6 +175,66 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   // Stock transactions hook
   const { createTransaction, refetch: refetchTransactions } = useStockTransactions(department.id);
 
+  // Handle hardware back button (Android/PWA)
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      // Prevent default browser back navigation
+      e.preventDefault();
+      
+      // Check if we can navigate within warehouse hierarchy
+      if (showStockCount || showRequestHistory || showLowStockReport || showIncomingPurchases) {
+        // Close any overlay pages first
+        setShowStockCount(false);
+        setShowRequestHistory(false);
+        setShowLowStockReport(false);
+        setShowIncomingPurchases(false);
+        // Push state back to prevent actual navigation
+        window.history.pushState(null, '', window.location.href);
+      } else if (navState.level === 'locations') {
+        if (navState.currentLocation) {
+          // We're inside a folder, go back to parent
+          if (navState.parentLocations && navState.parentLocations.length > 0) {
+            const newParentStack = [...navState.parentLocations];
+            const parentFolder = newParentStack.pop();
+            setNavState({ 
+              level: 'locations', 
+              classification: navState.classification,
+              parentLocations: newParentStack,
+              currentLocation: parentFolder
+            });
+          } else {
+            // Go to root of classification
+            setNavState({ 
+              level: 'locations', 
+              classification: navState.classification,
+              parentLocations: [],
+              currentLocation: undefined
+            });
+          }
+          window.history.pushState(null, '', window.location.href);
+        } else {
+          // We're at root of classification, go back to classifications
+          setNavState({ level: 'classifications' });
+          window.history.pushState(null, '', window.location.href);
+        }
+        setSearchQuery('');
+        setIsSearching(false);
+        // Clear selection inline (since clearSelection is defined later)
+        setSelectedItemIds(new Set());
+        setSelectionMode(false);
+      }
+      // If at classifications level, let the browser handle back (exit warehouse)
+    };
+
+    // Push initial state so we can intercept back button
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navState, showStockCount, showRequestHistory, showLowStockReport, showIncomingPurchases]);
+
   // Real-time subscription for inventory updates
   useEffect(() => {
     const channel = supabase
