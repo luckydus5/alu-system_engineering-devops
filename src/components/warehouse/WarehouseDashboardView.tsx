@@ -42,7 +42,6 @@ import {
   ChevronRight,
   FileText,
   FileSpreadsheet,
-  ClipboardCheck,
 } from 'lucide-react';
 import { Department } from '@/hooks/useDepartments';
 import { useWarehouseClassifications, WarehouseClassification } from '@/hooks/useWarehouseClassifications';
@@ -65,7 +64,7 @@ import { ImagePreviewDialog } from './ImagePreviewDialog';
 import { ItemRequestHistoryPage } from './ItemRequestHistoryPage';
 import { LowStockReportPage } from './LowStockReportPage';
 import { IncomingPurchasesPage } from './IncomingPurchasesPage';
-import { QuickStockCountPage } from './QuickStockCountPage';
+
 import { cn } from '@/lib/utils';
 import { exportLowStockToExcel } from '@/lib/excelExport';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
@@ -133,8 +132,6 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   const [showLowStockReport, setShowLowStockReport] = useState(false);
   // Incoming purchases page state
   const [showIncomingPurchases, setShowIncomingPurchases] = useState(false);
-  // Quick stock count page state
-  const [showStockCount, setShowStockCount] = useState(false);
   
   // Data hooks
   const { 
@@ -182,9 +179,8 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
       e.preventDefault();
       
       // Check if we can navigate within warehouse hierarchy
-      if (showStockCount || showRequestHistory || showLowStockReport || showIncomingPurchases) {
+      if (showRequestHistory || showLowStockReport || showIncomingPurchases) {
         // Close any overlay pages first
-        setShowStockCount(false);
         setShowRequestHistory(false);
         setShowLowStockReport(false);
         setShowIncomingPurchases(false);
@@ -233,7 +229,7 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     return () => {
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [navState, showStockCount, showRequestHistory, showLowStockReport, showIncomingPurchases]);
+  }, [navState, showRequestHistory, showLowStockReport, showIncomingPurchases]);
 
   // Real-time subscription for inventory updates
   useEffect(() => {
@@ -679,15 +675,6 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     );
   }
 
-  // Show Quick Stock Count Page when showStockCount is true
-  if (showStockCount) {
-    return (
-      <QuickStockCountPage
-        department={department}
-        onBack={() => setShowStockCount(false)}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 pb-20 md:pb-0">
@@ -737,15 +724,6 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
               >
                 <FileSpreadsheet className="h-4 w-4" />
                 <span className="hidden md:inline">Low Stock</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setShowStockCount(true)} 
-                className="gap-1 sm:gap-2 border-emerald-300 text-emerald-600 hover:bg-emerald-50 h-8 sm:h-9 px-1.5 sm:px-3"
-              >
-                <ClipboardCheck className="h-4 w-4" />
-                <span className="hidden md:inline">Count</span>
               </Button>
               <Button
                 variant="outline" 
