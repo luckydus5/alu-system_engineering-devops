@@ -9,6 +9,7 @@ import { WarehouseLayout } from '@/components/warehouse/WarehouseLayout';
 import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
 import { OfficeDashboard } from '@/components/office/OfficeDashboard';
 import { ITDashboard } from '@/components/it/ITDashboard';
+import { HRDashboard } from '@/components/hr/HRDashboard';
 import { ShieldAlert } from 'lucide-react';
 
 export default function Department() {
@@ -30,6 +31,7 @@ export default function Department() {
   const isWarehouseDepartment = deptCode === 'WAREHOUSE' || deptCode === 'WH';
   const isOperationsDepartment = deptCode === 'OPS' || deptCode === 'PEAT' || deptCode === 'OPERATIONS';
   const isITDepartment = deptCode === 'IT';
+  const isHRDepartment = deptCode === 'HR' || deptCode === 'HUMAN RESOURCES';
 
   if (deptLoading || roleLoading) {
     return (
@@ -111,7 +113,16 @@ export default function Department() {
     );
   }
 
-  // Default: Office Dashboard for office-based departments (HR, FIN, SAF, ENG, etc.)
+  // Render HR Dashboard for HR department - with leave requests, directory, and attendance
+  if (isHRDepartment) {
+    return (
+      <DashboardLayout title={department.name}>
+        <HRDashboard departmentId={department.id} />
+      </DashboardLayout>
+    );
+  }
+
+  // Default: Office Dashboard for office-based departments (FIN, SAF, ENG, etc.)
   // These departments track meetings, tasks, announcements, and office activities
   return (
     <DashboardLayout title={department.name}>
