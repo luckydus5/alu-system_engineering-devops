@@ -11,6 +11,7 @@ import {
   HardHat,
   TreePine,
   Tractor,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,6 +54,10 @@ export const departmentIcons: Record<string, LucideIcon> = {
   // Construction
   'CON': HardHat,
   'CONSTRUCTION': HardHat,
+  
+  // Human Resources
+  'HR': Users,
+  'HUMAN RESOURCES': Users,
   
   // Admin / General
   'ADMIN': Building2,
@@ -104,6 +109,10 @@ export const departmentColors: Record<string, { gradient: string; accent: string
   // Construction - Yellow/Amber
   'CON': { gradient: 'from-yellow-600 to-amber-700', accent: 'yellow' },
   'CONSTRUCTION': { gradient: 'from-yellow-600 to-amber-700', accent: 'yellow' },
+  
+  // Human Resources - Purple
+  'HR': { gradient: 'from-purple-600 to-purple-800', accent: 'purple' },
+  'HUMAN RESOURCES': { gradient: 'from-purple-600 to-purple-800', accent: 'purple' },
   
   // Default
   'DEFAULT': { gradient: 'from-gray-600 to-gray-800', accent: 'gray' },

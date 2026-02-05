@@ -53,6 +53,53 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_records: {
+        Row: {
+          attendance_date: string
+          clock_in: string | null
+          clock_out: string | null
+          created_at: string
+          department_id: string
+          id: string
+          notes: string | null
+          status: Database["public"]["Enums"]["attendance_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attendance_date: string
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string
+          department_id: string
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["attendance_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attendance_date?: string
+          clock_in?: string | null
+          clock_out?: string | null
+          created_at?: string
+          department_id?: string
+          id?: string
+          notes?: string | null
+          status?: Database["public"]["Enums"]["attendance_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_records_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -487,6 +534,107 @@ export type Database = {
           {
             foreignKeyName: "item_requests_requester_department_id_fkey"
             columns: ["requester_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leave_balances: {
+        Row: {
+          created_at: string
+          id: string
+          leave_type: Database["public"]["Enums"]["leave_type"]
+          total_days: number
+          updated_at: string
+          used_days: number
+          user_id: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          leave_type: Database["public"]["Enums"]["leave_type"]
+          total_days?: number
+          updated_at?: string
+          used_days?: number
+          user_id: string
+          year?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          leave_type?: Database["public"]["Enums"]["leave_type"]
+          total_days?: number
+          updated_at?: string
+          used_days?: number
+          user_id?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      leave_requests: {
+        Row: {
+          created_at: string
+          department_id: string
+          end_date: string
+          hr_action_at: string | null
+          hr_comment: string | null
+          hr_reviewer_id: string | null
+          id: string
+          leave_type: Database["public"]["Enums"]["leave_type"]
+          manager_action_at: string | null
+          manager_comment: string | null
+          manager_id: string | null
+          reason: string | null
+          requester_id: string
+          start_date: string
+          status: Database["public"]["Enums"]["leave_status"]
+          total_days: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department_id: string
+          end_date: string
+          hr_action_at?: string | null
+          hr_comment?: string | null
+          hr_reviewer_id?: string | null
+          id?: string
+          leave_type: Database["public"]["Enums"]["leave_type"]
+          manager_action_at?: string | null
+          manager_comment?: string | null
+          manager_id?: string | null
+          reason?: string | null
+          requester_id: string
+          start_date: string
+          status?: Database["public"]["Enums"]["leave_status"]
+          total_days: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string
+          end_date?: string
+          hr_action_at?: string | null
+          hr_comment?: string | null
+          hr_reviewer_id?: string | null
+          id?: string
+          leave_type?: Database["public"]["Enums"]["leave_type"]
+          manager_action_at?: string | null
+          manager_comment?: string | null
+          manager_id?: string | null
+          reason?: string | null
+          requester_id?: string
+          start_date?: string
+          status?: Database["public"]["Enums"]["leave_status"]
+          total_days?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_requests_department_id_fkey"
+            columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
             referencedColumns: ["id"]
@@ -1309,6 +1457,13 @@ export type Database = {
         | "director"
         | "admin"
         | "super_admin"
+      attendance_status:
+        | "present"
+        | "absent"
+        | "late"
+        | "half_day"
+        | "on_leave"
+        | "remote"
       condition_type: "good" | "fair" | "poor"
       fleet_condition:
         | "operational"
@@ -1318,6 +1473,20 @@ export type Database = {
         | "waiting_parts"
         | "decommissioned"
       fleet_status: "operational" | "under_maintenance" | "out_of_service"
+      leave_status:
+        | "pending"
+        | "manager_approved"
+        | "approved"
+        | "rejected"
+        | "cancelled"
+      leave_type:
+        | "annual"
+        | "sick"
+        | "personal"
+        | "maternity"
+        | "paternity"
+        | "bereavement"
+        | "unpaid"
       report_priority: "low" | "medium" | "high" | "critical"
       report_status:
         | "draft"
@@ -1463,6 +1632,14 @@ export const Constants = {
         "admin",
         "super_admin",
       ],
+      attendance_status: [
+        "present",
+        "absent",
+        "late",
+        "half_day",
+        "on_leave",
+        "remote",
+      ],
       condition_type: ["good", "fair", "poor"],
       fleet_condition: [
         "operational",
@@ -1473,6 +1650,22 @@ export const Constants = {
         "decommissioned",
       ],
       fleet_status: ["operational", "under_maintenance", "out_of_service"],
+      leave_status: [
+        "pending",
+        "manager_approved",
+        "approved",
+        "rejected",
+        "cancelled",
+      ],
+      leave_type: [
+        "annual",
+        "sick",
+        "personal",
+        "maternity",
+        "paternity",
+        "bereavement",
+        "unpaid",
+      ],
       report_priority: ["low", "medium", "high", "critical"],
       report_status: [
         "draft",
