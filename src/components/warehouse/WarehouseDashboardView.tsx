@@ -712,8 +712,6 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
               <OfflineIndicator
                 pendingCount={pendingCount}
                 isSyncing={isSyncing}
-                lastSyncTime={lastSyncTime}
-                isOfflineData={isOfflineData}
                 onSync={() => {
                   syncPendingTransactions();
                   backgroundSync();
