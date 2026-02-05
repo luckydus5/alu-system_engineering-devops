@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { cacheClassifications, getCachedClassifications } from '@/lib/offlineDb';
 
 export interface WarehouseClassification {
   id: string;
@@ -23,12 +24,51 @@ export interface WarehouseClassification {
 export function useWarehouseClassifications(departmentId: string | undefined) {
   const [classifications, setClassifications] = useState<WarehouseClassification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isOfflineData, setIsOfflineData] = useState(false);
   const { toast } = useToast();
+
+  // Load from cache first
+  const loadFromCache = useCallback(async () => {
+    if (!departmentId) return false;
+    
+    try {
+      const cached = await getCachedClassifications(departmentId);
+      if (cached.length > 0) {
+        // Cast to WarehouseClassification (cache doesn't have computed fields)
+        setClassifications(cached.map(c => ({
+          ...c,
+          icon: c.icon || 'Folder',
+          color: c.color || '#6366F1',
+          sort_order: c.sort_order || 0,
+          location_count: 0,
+          item_count: 0,
+          total_quantity: 0,
+          low_stock_count: 0,
+        })) as WarehouseClassification[]);
+        setLoading(false);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading classifications from cache:', error);
+    }
+    return false;
+  }, [departmentId]);
 
   const fetchClassifications = useCallback(async () => {
     if (!departmentId) {
       setClassifications([]);
       setLoading(false);
+      return;
+    }
+
+    // Check if we're online
+    const isOnline = navigator.onLine;
+    
+    if (!isOnline) {
+      const hasCached = await loadFromCache();
+      if (hasCached) {
+        setIsOfflineData(true);
+      }
       return;
     }
 
@@ -129,22 +169,40 @@ export function useWarehouseClassifications(departmentId: string | undefined) {
         };
       });
 
+      // Cache for offline use
+      try {
+        await cacheClassifications(data);
+      } catch (cacheError) {
+        console.error('Error caching classifications:', cacheError);
+      }
+
+      setIsOfflineData(false);
       setClassifications(classificationsWithStats);
     } catch (error: any) {
       console.error('Error fetching classifications:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load classifications',
-        variant: 'destructive',
-      });
+      
+      // Try loading from cache on error
+      const hasCached = await loadFromCache();
+      if (hasCached) {
+        setIsOfflineData(true);
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to load classifications',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setLoading(false);
     }
-  }, [departmentId, toast]);
+  }, [departmentId, toast, loadFromCache]);
 
   useEffect(() => {
-    fetchClassifications();
-  }, [fetchClassifications]);
+    // Load from cache first, then fetch
+    loadFromCache().then(hasCached => {
+      fetchClassifications();
+    });
+  }, [fetchClassifications, loadFromCache]);
 
   const createClassification = async (data: {
     name: string;
@@ -247,6 +305,7 @@ export function useWarehouseClassifications(departmentId: string | undefined) {
   return {
     classifications,
     loading,
+    isOfflineData,
     refetch: fetchClassifications,
     createClassification,
     updateClassification,

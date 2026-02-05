@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import {
+  cacheInventoryItems,
+  getCachedInventoryItems,
+  setLastSyncTime,
+  getLastSyncTime,
+  updateCachedItem,
+} from '@/lib/offlineDb';
 
 export interface InventoryItem {
   id: string;
@@ -38,6 +45,7 @@ interface ItemsCache {
 // Global cache - persists across hook instances
 let globalCache: ItemsCache | null = null;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache
+const OFFLINE_STALE_THRESHOLD = 30 * 60 * 1000; // 30 minutes before showing stale warning
 
 // Export function to clear cache from outside
 export function clearInventoryCache() {
@@ -47,6 +55,8 @@ export function clearInventoryCache() {
 export function useInventory(departmentId: string | undefined) {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isOfflineData, setIsOfflineData] = useState(false);
+  const [lastSyncTime, setLastSyncTimeState] = useState<number | null>(null);
   const [stats, setStats] = useState<InventoryStats>({
     totalItems: 0,
     totalQuantity: 0,
@@ -59,10 +69,62 @@ export function useInventory(departmentId: string | undefined) {
   const fetchInProgress = useRef(false);
   const lastDepartmentId = useRef<string | undefined>(undefined);
 
-  const fetchItems = useCallback(async (forceRefresh = false) => {
+  // Load from IndexedDB cache first (offline-first)
+  const loadFromCache = useCallback(async () => {
+    if (!departmentId) return false;
+    
+    try {
+      const cached = await getCachedInventoryItems(departmentId);
+      const syncTime = await getLastSyncTime(departmentId);
+      
+      if (cached.length > 0) {
+        // Calculate stats
+        const uniqueLocations = new Set(cached.map(item => item.location_id || item.location)).size;
+        const totalQuantity = cached.reduce((sum, item) => sum + item.quantity, 0);
+        const lowStockItems = cached.filter(item => item.quantity <= (item.min_quantity || 0)).length;
+        
+        const cachedStats = {
+          totalItems: cached.length,
+          totalQuantity,
+          uniqueLocations,
+          lowStockItems,
+        };
+        
+        setItems(cached as InventoryItem[]);
+        setStats(cachedStats);
+        setLastSyncTimeState(syncTime);
+        setLoading(false);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading from cache:', error);
+    }
+    return false;
+  }, [departmentId]);
+
+  const fetchItems = useCallback(async (forceRefresh = false, backgroundSync = false) => {
     if (!departmentId) {
       setItems([]);
       setLoading(false);
+      return;
+    }
+
+    // Check if we're online
+    const isOnline = navigator.onLine;
+    
+    // If offline, try to load from cache
+    if (!isOnline) {
+      const hasCachedData = await loadFromCache();
+      if (hasCachedData) {
+        setIsOfflineData(true);
+      } else {
+        toast({
+          title: 'Offline',
+          description: 'No cached data available. Connect to internet to load inventory.',
+          variant: 'destructive',
+        });
+        setLoading(false);
+      }
       return;
     }
 
@@ -83,8 +145,8 @@ export function useInventory(departmentId: string | undefined) {
 
     try {
       fetchInProgress.current = true;
-      // Don't show loading if we have cached data
-      if (!globalCache || globalCache.departmentId !== departmentId) {
+      // Don't show loading if we have cached data or doing background sync
+      if (!backgroundSync && (!globalCache || globalCache.departmentId !== departmentId)) {
         setLoading(true);
       }
 
@@ -135,30 +197,56 @@ export function useInventory(departmentId: string | undefined) {
         timestamp: Date.now(),
       };
 
+      // Also save to IndexedDB for offline access
+      try {
+        await cacheInventoryItems(all);
+        await setLastSyncTime(departmentId, Date.now());
+        setLastSyncTimeState(Date.now());
+        setIsOfflineData(false);
+      } catch (cacheError) {
+        console.error('Error caching to IndexedDB:', cacheError);
+      }
+
       setItems(all);
       setStats(newStats);
     } catch (error: any) {
       console.error('Error fetching inventory:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load inventory items',
-        variant: 'destructive',
-      });
+      
+      // If network error, try to load from cache
+      const hasCachedData = await loadFromCache();
+      if (hasCachedData) {
+        setIsOfflineData(true);
+        toast({
+          title: 'Using Offline Data',
+          description: 'Showing cached inventory. Some data may be outdated.',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to load inventory items',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setLoading(false);
       fetchInProgress.current = false;
     }
-  }, [departmentId, toast]);
+  }, [departmentId, toast, loadFromCache]);
 
   useEffect(() => {
-    // Only fetch if department changed or no data
+    // Load from cache immediately, then sync in background
     if (departmentId !== lastDepartmentId.current) {
       lastDepartmentId.current = departmentId;
-      fetchItems();
+      
+      // First load from cache for instant UI
+      loadFromCache().then(hasCached => {
+        // Then fetch from network in background
+        fetchItems(false, hasCached);
+      });
     } else if (items.length === 0 && departmentId) {
       fetchItems();
     }
-  }, [departmentId, fetchItems, items.length]);
+  }, [departmentId, fetchItems, loadFromCache, items.length]);
 
   const generateUniqueItemNumber = async (): Promise<string> => {
     // Get the highest existing item number in this department
@@ -328,10 +416,13 @@ export function useInventory(departmentId: string | undefined) {
     items,
     loading,
     stats,
+    isOfflineData,
+    lastSyncTime,
     createItem,
     updateItem,
     deleteItem,
     moveItems,
     refetch: () => fetchItems(true),
+    backgroundSync: () => fetchItems(true, true),
   };
 }
