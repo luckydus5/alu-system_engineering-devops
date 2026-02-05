@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { cacheLocations, getCachedLocations } from '@/lib/offlineDb';
 
 export interface WarehouseLocation {
   id: string;
@@ -28,12 +29,67 @@ export function useWarehouseLocations(
 ) {
   const [locations, setLocations] = useState<WarehouseLocation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isOfflineData, setIsOfflineData] = useState(false);
   const { toast } = useToast();
+
+  // Load from cache and filter by classification/parent
+  const loadFromCache = useCallback(async () => {
+    if (!classificationId && !departmentId) return false;
+    
+    try {
+      const deptId = departmentId || '';
+      if (!deptId) return false;
+      
+      const allCached = await getCachedLocations(deptId);
+      
+      // Filter by classification and parent
+      let filtered = allCached;
+      
+      if (classificationId) {
+        filtered = filtered.filter(l => l.classification_id === classificationId);
+      }
+      
+      // Filter by parent_id
+      if (parentId === undefined || parentId === null) {
+        filtered = filtered.filter(l => l.parent_id === null);
+      } else {
+        filtered = filtered.filter(l => l.parent_id === parentId);
+      }
+      
+      if (filtered.length > 0 || allCached.length > 0) {
+        setLocations(filtered.map(l => ({
+          ...l,
+          min_items: l.min_items || 0,
+          sort_order: l.sort_order || 0,
+          item_count: 0,
+          total_quantity: 0,
+          low_stock_count: 0,
+          sub_folder_count: 0,
+        })) as WarehouseLocation[]);
+        setLoading(false);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading locations from cache:', error);
+    }
+    return false;
+  }, [classificationId, departmentId, parentId]);
 
   const fetchLocations = useCallback(async () => {
     if (!classificationId && !departmentId) {
       setLocations([]);
       setLoading(false);
+      return;
+    }
+
+    // Check if we're online
+    const isOnline = navigator.onLine;
+    
+    if (!isOnline) {
+      const hasCached = await loadFromCache();
+      if (hasCached) {
+        setIsOfflineData(true);
+      }
       return;
     }
 
@@ -136,22 +192,40 @@ export function useWarehouseLocations(
         };
       });
 
+      // Cache for offline use
+      try {
+        await cacheLocations(data);
+      } catch (cacheError) {
+        console.error('Error caching locations:', cacheError);
+      }
+
+      setIsOfflineData(false);
       setLocations(locationsWithStats);
     } catch (error: any) {
       console.error('Error fetching locations:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load locations',
-        variant: 'destructive',
-      });
+      
+      // Try loading from cache on error
+      const hasCached = await loadFromCache();
+      if (hasCached) {
+        setIsOfflineData(true);
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to load locations',
+          variant: 'destructive',
+        });
+      }
     } finally {
       setLoading(false);
     }
-  }, [classificationId, departmentId, parentId, toast]);
+  }, [classificationId, departmentId, parentId, toast, loadFromCache]);
 
   useEffect(() => {
-    fetchLocations();
-  }, [fetchLocations]);
+    // Load from cache first, then fetch
+    loadFromCache().then(() => {
+      fetchLocations();
+    });
+  }, [fetchLocations, loadFromCache]);
 
   const createLocation = async (data: {
     classification_id: string;
@@ -257,6 +331,7 @@ export function useWarehouseLocations(
   return {
     locations,
     loading,
+    isOfflineData,
     refetch: fetchLocations,
     createLocation,
     updateLocation,

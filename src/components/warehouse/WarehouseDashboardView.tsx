@@ -68,6 +68,8 @@ import { IncomingPurchasesPage } from './IncomingPurchasesPage';
 import { cn } from '@/lib/utils';
 import { exportLowStockToExcel } from '@/lib/excelExport';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
+import { OfflineIndicator } from '@/components/shared/OfflineIndicator';
+import { useOfflineSync } from '@/hooks/useOfflineSync';
 
 interface WarehouseDashboardViewProps {
   department: Department;
@@ -162,15 +164,27 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
     items, 
     loading: itemsLoading, 
     stats,
+    isOfflineData,
+    lastSyncTime,
     createItem,
     updateItem,
     deleteItem,
     moveItems,
     refetch: refetchItems,
+    backgroundSync,
   } = useInventory(department.id);
 
   // Stock transactions hook
   const { createTransaction, refetch: refetchTransactions } = useStockTransactions(department.id);
+
+  // Offline sync hook
+  const {
+    pendingCount,
+    isSyncing,
+    isOnline,
+    syncPendingTransactions,
+    addOfflineTransaction,
+  } = useOfflineSync(department.id);
 
   // Handle hardware back button (Android/PWA)
   useEffect(() => {
@@ -694,6 +708,18 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
                 <h1 className="text-sm sm:text-lg font-bold text-foreground truncate">Warehouse</h1>
                 <p className="text-[10px] sm:text-xs text-muted-foreground">All Stores</p>
               </div>
+              {/* Offline Status Indicator */}
+              <OfflineIndicator
+                pendingCount={pendingCount}
+                isSyncing={isSyncing}
+                lastSyncTime={lastSyncTime}
+                isOfflineData={isOfflineData}
+                onSync={() => {
+                  syncPendingTransactions();
+                  backgroundSync();
+                }}
+                className="ml-2"
+              />
             </div>
 
             {/* Actions - Compact on mobile */}
