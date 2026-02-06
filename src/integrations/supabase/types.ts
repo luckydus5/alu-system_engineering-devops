@@ -814,6 +814,47 @@ export type Database = {
           },
         ]
       }
+      positions: {
+        Row: {
+          created_at: string
+          department_id: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          level: number | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          level?: number | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          level?: number | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "positions_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -823,6 +864,7 @@ export type Database = {
           full_name: string | null
           id: string
           phone: string | null
+          position_id: string | null
           updated_at: string
         }
         Insert: {
@@ -833,6 +875,7 @@ export type Database = {
           full_name?: string | null
           id: string
           phone?: string | null
+          position_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -843,6 +886,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           phone?: string | null
+          position_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -851,6 +895,13 @@ export type Database = {
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
             referencedColumns: ["id"]
           },
         ]
