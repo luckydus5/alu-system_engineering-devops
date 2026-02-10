@@ -7,10 +7,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Plus, Search, Filter, Calendar, RefreshCw, 
-  Clock, CheckCircle2, XCircle, AlertCircle
+  Clock, CheckCircle2, XCircle, AlertCircle, FileText
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LeaveStatus } from '@/hooks/useLeaveRequests';
 import { CreateLeaveRequestDialog } from './CreateLeaveRequestDialog';
+import { LeaveApplicationForm } from './LeaveApplicationForm';
 import { LeaveRequestDetailDialog } from './LeaveRequestDetailDialog';
 import { LeaveRequestCard } from './LeaveRequestCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,6 +36,7 @@ export function LeaveRequestsTab({ departmentId, isHR = false }: LeaveRequestsTa
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [leaveTypeFilter, setLeaveTypeFilter] = useState<string>('all');
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [leaveApplicationFormOpen, setLeaveApplicationFormOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
   
   const { leaveRequests, isLoading, refetch, updateRequestStatus } = useLeaveRequests(departmentId, isHR);
@@ -98,8 +100,14 @@ export function LeaveRequestsTab({ departmentId, isHR = false }: LeaveRequestsTa
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
+            {isHR && (
+              <Button onClick={() => setLeaveApplicationFormOpen(true)} size="sm" variant="outline" className="border-blue-500 text-blue-600 hover:bg-blue-50">
+                <FileText className="h-4 w-4 mr-2" />
+                My Leave Request
+              </Button>
+            )}
             {!isHR && (
-              <Button onClick={() => setCreateDialogOpen(true)} size="sm" className="bg-primary hover:bg-primary/90">
+              <Button onClick={() => setLeaveApplicationFormOpen(true)} size="sm" className="bg-primary hover:bg-primary/90">
                 <Plus className="h-4 w-4 mr-2" />
                 New Request
               </Button>
@@ -197,6 +205,13 @@ export function LeaveRequestsTab({ departmentId, isHR = false }: LeaveRequestsTa
         open={createDialogOpen}
         onOpenChange={setCreateDialogOpen}
         departmentId={departmentId}
+      />
+
+      <LeaveApplicationForm
+        open={leaveApplicationFormOpen}
+        onOpenChange={setLeaveApplicationFormOpen}
+        departmentId={departmentId}
+        mode="create"
       />
 
       {selectedRequest && (

@@ -9,7 +9,7 @@ import { WarehouseLayout } from '@/components/warehouse/WarehouseLayout';
 import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
 import { OfficeDashboard } from '@/components/office/OfficeDashboard';
 import { ITDashboard } from '@/components/it/ITDashboard';
-import { HRDashboard } from '@/components/hr/HRDashboard';
+import { HRCommandCenter } from '@/components/hr/HRCommandCenter';
 import { ShieldAlert } from 'lucide-react';
 
 export default function Department() {
@@ -113,13 +113,9 @@ export default function Department() {
     );
   }
 
-  // Render HR Dashboard for HR department - with leave requests, directory, and attendance
+  // Render HR Command Center for HR department - enterprise-grade HR system (full page)
   if (isHRDepartment) {
-    return (
-      <DashboardLayout title={department.name}>
-        <HRDashboard departmentId={department.id} />
-      </DashboardLayout>
-    );
+    return <HRCommandCenter departmentId={department.id} departmentName={department.name} canManage={canManage} />;
   }
 
   // Default: Office Dashboard for office-based departments (FIN, SAF, ENG, etc.)
