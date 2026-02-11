@@ -19,6 +19,7 @@ import SuperAdmin from "./pages/SuperAdmin";
 import SystemHealth from "./pages/SystemHealth";
 import Notifications from "./pages/Notifications";
 import InstallApp from "./pages/InstallApp";
+import ProfileSettings from "./pages/ProfileSettings";
 import NotFound from "./pages/NotFound";
 
 
@@ -55,6 +56,7 @@ const App = () => (
               <Route path="/system-health" element={<SystemHealth />} />
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/install" element={<InstallApp />} />
+              <Route path="/settings" element={<ProfileSettings />} />
               {/* Catch-all route for 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>

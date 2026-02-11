@@ -1,54 +1,52 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { 
-  UserPlus, CheckCircle2, Clock, FileText,
-  GraduationCap, Building2, ChevronRight, Plus, Users,
-  Calendar, Mail, Shield, Laptop, Key, BookOpen
+  UserPlus, CheckCircle2, Clock,
+  Calendar, Mail, Shield, Laptop, Key, BookOpen,
+  Users, Building2, GraduationCap, ChevronRight, Rocket
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, differenceInDays } from 'date-fns';
+import { useEmployees } from '@/hooks/useEmployees';
+import { useOnboardingChecklists } from '@/hooks/useOnboardingChecklists';
+import { useToast } from '@/hooks/use-toast';
 
 interface OnboardingTabProps {
   departmentId: string;
 }
 
-const mockNewHires = [
-  { id: '1', name: 'Alex Thompson', position: 'Software Engineer', department: 'Engineering', startDate: '2026-02-10', progress: 65, status: 'in_progress', manager: 'John Smith', email: 'alex.thompson@company.com' },
-  { id: '2', name: 'Maria Garcia', position: 'Product Designer', department: 'Design', startDate: '2026-02-17', progress: 30, status: 'in_progress', manager: 'Sarah Johnson', email: 'maria.garcia@company.com' },
-  { id: '3', name: 'James Wilson', position: 'Marketing Manager', department: 'Marketing', startDate: '2026-02-03', progress: 100, status: 'completed', manager: 'Emily Brown', email: 'james.wilson@company.com' },
-  { id: '4', name: 'Lisa Chen', position: 'Data Analyst', department: 'Analytics', startDate: '2026-02-24', progress: 0, status: 'pending', manager: 'David Lee', email: 'lisa.chen@company.com' },
-];
+const CATEGORY_ICONS: Record<string, typeof Mail> = {
+  admin: Shield,
+  it: Laptop,
+  hr: BookOpen,
+  training: GraduationCap,
+  team: Users,
+  facilities: Building2,
+};
 
-const onboardingChecklist = [
-  { id: 'welcome', label: 'Welcome Email Sent', category: 'admin', icon: Mail },
-  { id: 'account', label: 'Company Account Created', category: 'admin', icon: Shield },
-  { id: 'equipment', label: 'Equipment Prepared', category: 'it', icon: Laptop },
-  { id: 'access', label: 'System Access Granted', category: 'it', icon: Key },
-  { id: 'workspace', label: 'Workspace Setup', category: 'facilities', icon: Building2 },
-  { id: 'orientation', label: 'HR Orientation Scheduled', category: 'hr', icon: Calendar },
-  { id: 'handbook', label: 'Employee Handbook Shared', category: 'hr', icon: BookOpen },
-  { id: 'mentor', label: 'Mentor Assigned', category: 'hr', icon: Users },
-  { id: 'training', label: 'Training Plan Created', category: 'training', icon: GraduationCap },
-  { id: 'intro', label: 'Team Introduction Meeting', category: 'team', icon: Users },
-];
+const CATEGORY_LABELS: Record<string, string> = {
+  admin: 'Administrative',
+  it: 'IT Setup',
+  hr: 'HR Tasks',
+  training: 'Training',
+  team: 'Team Integration',
+  facilities: 'Facilities',
+};
 
-function OnboardingChecklistView({ hire }: { hire: typeof mockNewHires[0] }) {
-  const [checkedItems, setCheckedItems] = useState<string[]>(['welcome', 'account']);
-  const toggleItem = (id: string) => setCheckedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-
-  const categories = [
-    { id: 'admin', label: 'Administrative' },
-    { id: 'it', label: 'IT Setup' },
-    { id: 'hr', label: 'HR Tasks' },
-    { id: 'training', label: 'Training' },
-    { id: 'team', label: 'Team Integration' },
-  ];
+function OnboardingChecklistView({ employeeId, employeeName, checklists, onToggle }: {
+  employeeId: string;
+  employeeName: string;
+  checklists: Array<{ id: string; task_label: string; category: string; is_completed: boolean }>;
+  onToggle: (taskId: string, isCompleted: boolean) => void;
+}) {
+  const completedCount = checklists.filter(c => c.is_completed).length;
+  const categories = [...new Set(checklists.map(c => c.category))];
 
   return (
     <Card className="border rounded-2xl shadow-none">
@@ -57,43 +55,40 @@ function OnboardingChecklistView({ hire }: { hire: typeof mockNewHires[0] }) {
           <div className="flex items-center gap-3">
             <Avatar className="h-9 w-9">
               <AvatarFallback className="text-xs font-medium bg-muted text-muted-foreground">
-                {hire.name.split(' ').map(n => n[0]).join('')}
+                {employeeName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
               </AvatarFallback>
             </Avatar>
             <div>
-              <CardTitle className="text-sm">{hire.name}</CardTitle>
-              <CardDescription className="text-xs">{hire.position}</CardDescription>
+              <CardTitle className="text-sm">{employeeName}</CardTitle>
+              <CardDescription className="text-xs">{completedCount}/{checklists.length} completed</CardDescription>
             </div>
           </div>
-          <span className="text-xs text-muted-foreground">{checkedItems.length}/{onboardingChecklist.length}</span>
         </div>
       </CardHeader>
       <CardContent>
-        <Progress value={(checkedItems.length / onboardingChecklist.length) * 100} className="h-1 mb-5" />
+        <Progress value={checklists.length > 0 ? (completedCount / checklists.length) * 100 : 0} className="h-1 mb-5" />
         <div className="space-y-5">
           {categories.map(category => {
-            const items = onboardingChecklist.filter(item => item.category === category.id);
-            if (items.length === 0) return null;
+            const items = checklists.filter(c => c.category === category);
+            const Icon = CATEGORY_ICONS[category] || Shield;
             return (
-              <div key={category.id}>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">{category.label}</p>
+              <div key={category}>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  {CATEGORY_LABELS[category] || category}
+                </p>
                 <div className="space-y-0.5">
-                  {items.map(item => {
-                    const Icon = item.icon;
-                    const isChecked = checkedItems.includes(item.id);
-                    return (
-                      <div 
-                        key={item.id}
-                        className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer"
-                        onClick={() => toggleItem(item.id)}
-                      >
-                        <Checkbox checked={isChecked} onCheckedChange={() => toggleItem(item.id)} />
-                        <Icon className={cn("h-3.5 w-3.5", isChecked ? "text-emerald-600" : "text-muted-foreground")} />
-                        <span className={cn("text-xs", isChecked && "line-through text-muted-foreground")}>{item.label}</span>
-                        {isChecked && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 ml-auto" />}
-                      </div>
-                    );
-                  })}
+                  {items.map(item => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer"
+                      onClick={() => onToggle(item.id, !item.is_completed)}
+                    >
+                      <Checkbox checked={item.is_completed} onCheckedChange={() => onToggle(item.id, !item.is_completed)} />
+                      <Icon className={cn("h-3.5 w-3.5", item.is_completed ? "text-emerald-600" : "text-muted-foreground")} />
+                      <span className={cn("text-xs", item.is_completed && "line-through text-muted-foreground")}>{item.task_label}</span>
+                      {item.is_completed && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 ml-auto" />}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -105,24 +100,84 @@ function OnboardingChecklistView({ hire }: { hire: typeof mockNewHires[0] }) {
 }
 
 export function OnboardingTab({ departmentId }: OnboardingTabProps) {
-  const [activeView, setActiveView] = useState('new-hires');
+  const { employees, loading: employeesLoading } = useEmployees();
+  const { checklists, loading: checklistsLoading, toggleTask, initializeForEmployee, getForEmployee } = useOnboardingChecklists();
+  const { toast } = useToast();
+  const [initializing, setInitializing] = useState<string | null>(null);
 
-  const stats = {
-    totalNewHires: mockNewHires.length,
-    inProgress: mockNewHires.filter(h => h.status === 'in_progress').length,
-    pending: mockNewHires.filter(h => h.status === 'pending').length,
-    completed: mockNewHires.filter(h => h.status === 'completed').length,
+  const loading = employeesLoading || checklistsLoading;
+
+  // Recent hires = hired in last 90 days
+  const recentHires = useMemo(() => {
+    const now = new Date();
+    return employees.filter(e => {
+      const hireDays = differenceInDays(now, new Date(e.hire_date));
+      return hireDays >= 0 && hireDays <= 90;
+    }).sort((a, b) => new Date(b.hire_date).getTime() - new Date(a.hire_date).getTime());
+  }, [employees]);
+
+  // Employees with onboarding checklists
+  const employeesWithChecklists = useMemo(() => {
+    const ids = new Set(checklists.map(c => c.employee_id));
+    return [...ids];
+  }, [checklists]);
+
+  const handleInitialize = async (employeeId: string) => {
+    setInitializing(employeeId);
+    try {
+      await initializeForEmployee(employeeId);
+      toast({ title: 'Onboarding checklist created!' });
+    } catch (err: any) {
+      toast({ title: 'Failed to create checklist', description: err.message, variant: 'destructive' });
+    } finally {
+      setInitializing(null);
+    }
   };
+
+  const handleToggle = async (taskId: string, isCompleted: boolean) => {
+    try {
+      await toggleTask(taskId, isCompleted);
+    } catch (err: any) {
+      toast({ title: 'Failed to update task', variant: 'destructive' });
+    }
+  };
+
+  const inProgress = employeesWithChecklists.filter(id => {
+    const tasks = getForEmployee(id);
+    const done = tasks.filter(t => t.is_completed).length;
+    return done > 0 && done < tasks.length;
+  }).length;
+
+  const completedCount = employeesWithChecklists.filter(id => {
+    const tasks = getForEmployee(id);
+    return tasks.length > 0 && tasks.every(t => t.is_completed);
+  }).length;
+
+  const pendingCount = employeesWithChecklists.filter(id => {
+    const tasks = getForEmployee(id);
+    return tasks.every(t => !t.is_completed);
+  }).length;
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+        </div>
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
       {/* Stats */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {[
-          { label: 'New Hires', value: stats.totalNewHires, icon: UserPlus },
-          { label: 'In Progress', value: stats.inProgress, icon: Clock },
-          { label: 'Pending', value: stats.pending, icon: Calendar },
-          { label: 'Completed', value: stats.completed, icon: CheckCircle2 },
+          { label: 'Recent Hires', value: recentHires.length, icon: UserPlus },
+          { label: 'In Progress', value: inProgress, icon: Clock },
+          { label: 'Pending', value: pendingCount, icon: Calendar },
+          { label: 'Completed', value: completedCount, icon: CheckCircle2 },
         ].map(({ label, value, icon: Icon }) => (
           <div key={label} className="p-5 rounded-2xl bg-card border">
             <div className="flex items-center justify-between">
@@ -136,95 +191,99 @@ export function OnboardingTab({ departmentId }: OnboardingTabProps) {
         ))}
       </div>
 
-      <Tabs value={activeView} onValueChange={setActiveView}>
-        <div className="flex items-center justify-between">
-          <TabsList className="bg-muted/50 p-0.5 rounded-xl h-auto">
-            <TabsTrigger value="new-hires" className="gap-1.5 text-xs rounded-lg data-[state=active]:shadow-sm px-4 py-2">
-              <Users className="h-3.5 w-3.5" /> New Hires
-            </TabsTrigger>
-            <TabsTrigger value="checklists" className="gap-1.5 text-xs rounded-lg data-[state=active]:shadow-sm px-4 py-2">
-              <FileText className="h-3.5 w-3.5" /> Checklists
-            </TabsTrigger>
-            <TabsTrigger value="templates" className="gap-1.5 text-xs rounded-lg data-[state=active]:shadow-sm px-4 py-2">
-              <BookOpen className="h-3.5 w-3.5" /> Templates
-            </TabsTrigger>
-          </TabsList>
-          <Button size="sm" variant="outline" className="text-xs h-8">
-            <Plus className="h-3.5 w-3.5 mr-1.5" /> Add New Hire
-          </Button>
-        </div>
-
-        <TabsContent value="new-hires" className="mt-6">
+      {/* Recent Hires */}
+      <div>
+        <h3 className="text-base font-semibold mb-4">Recent Hires (Last 90 Days)</h3>
+        {recentHires.length === 0 ? (
+          <div className="text-center py-16 rounded-2xl bg-card border">
+            <Rocket className="h-10 w-10 mx-auto text-muted-foreground/20 mb-4" />
+            <h3 className="text-lg font-semibold">No Recent Hires</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Employees hired in the last 90 days will appear here. Add employees in the People tab.
+            </p>
+          </div>
+        ) : (
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {mockNewHires.map(hire => {
-              const daysUntilStart = differenceInDays(new Date(hire.startDate), new Date());
+            {recentHires.map(hire => {
+              const daysUntilStart = differenceInDays(new Date(hire.hire_date), new Date());
               const isStarted = daysUntilStart <= 0;
-              const statusLabel = { pending: 'Pending', in_progress: 'In Progress', completed: 'Completed' }[hire.status] || hire.status;
+              const daysSinceHire = Math.abs(daysUntilStart);
+              const hasChecklist = employeesWithChecklists.includes(hire.id);
+              const tasks = getForEmployee(hire.id);
+              const progress = tasks.length > 0 ? Math.round((tasks.filter(t => t.is_completed).length / tasks.length) * 100) : 0;
 
               return (
                 <div key={hire.id} className="p-5 rounded-2xl bg-card border space-y-3">
                   <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10">
                       <AvatarFallback className="text-xs font-medium bg-muted text-muted-foreground">
-                        {hire.name.split(' ').map(n => n[0]).join('')}
+                        {hire.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{hire.name}</p>
-                      <p className="text-xs text-muted-foreground">{hire.position}</p>
+                      <p className="font-medium text-sm">{hire.full_name}</p>
+                      <p className="text-xs text-muted-foreground">{hire.position_name || hire.employment_type}</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{hire.department} · {hire.manager}</span>
-                    <Badge variant="outline" className="text-[10px]">{statusLabel}</Badge>
+                    <span>{hire.department_name || '—'} · {hire.company_name || '—'}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                      {hire.employment_status}
+                    </Badge>
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-muted-foreground">
-                        {isStarted ? 'Started' : `Starts ${format(new Date(hire.startDate), 'MMM d')}`}
-                        {!isStarted && daysUntilStart > 0 && ` (${daysUntilStart}d)`}
+                        {isStarted ? `Started ${daysSinceHire}d ago` : `Starts ${format(new Date(hire.hire_date), 'MMM d')}`}
                       </span>
-                      <span className={hire.progress === 100 ? "text-emerald-600 font-medium" : "text-muted-foreground"}>
-                        {hire.progress}%
-                      </span>
+                      {hasChecklist && (
+                        <span className={progress === 100 ? "text-emerald-600 font-medium" : "text-muted-foreground"}>
+                          {progress}%
+                        </span>
+                      )}
                     </div>
-                    <Progress value={hire.progress} className="h-1" />
+                    {hasChecklist && <Progress value={progress} className="h-1" />}
                   </div>
-                  <div className="flex items-center justify-between pt-2 border-t">
-                    <Button variant="ghost" size="sm" className="text-xs h-7 text-muted-foreground">
-                      <Mail className="h-3 w-3 mr-1" /> Contact
+                  {!hasChecklist && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-xs h-8"
+                      disabled={initializing === hire.id}
+                      onClick={() => handleInitialize(hire.id)}
+                    >
+                      {initializing === hire.id ? 'Creating...' : 'Start Onboarding'}
                     </Button>
-                    <Button variant="ghost" size="sm" className="text-xs h-7">
-                      Details <ChevronRight className="h-3 w-3 ml-1" />
-                    </Button>
-                  </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        </TabsContent>
+        )}
+      </div>
 
-        <TabsContent value="checklists" className="mt-6">
+      {/* Checklists */}
+      {employeesWithChecklists.length > 0 && (
+        <div>
+          <h3 className="text-base font-semibold mb-4">Onboarding Checklists</h3>
           <div className="grid gap-6 lg:grid-cols-2">
-            {mockNewHires.filter(h => h.status !== 'completed').map(hire => (
-              <OnboardingChecklistView key={hire.id} hire={hire} />
-            ))}
+            {employeesWithChecklists.map(empId => {
+              const emp = employees.find(e => e.id === empId);
+              const tasks = getForEmployee(empId);
+              if (!emp || tasks.length === 0) return null;
+              return (
+                <OnboardingChecklistView
+                  key={empId}
+                  employeeId={empId}
+                  employeeName={emp.full_name}
+                  checklists={tasks}
+                  onToggle={handleToggle}
+                />
+              );
+            })}
           </div>
-        </TabsContent>
-
-        <TabsContent value="templates" className="mt-6">
-          <div className="text-center py-16 rounded-2xl bg-card border">
-            <FileText className="h-10 w-10 mx-auto text-muted-foreground/20 mb-4" />
-            <h3 className="text-lg font-semibold">Onboarding Templates</h3>
-            <p className="text-sm text-muted-foreground mt-1 max-w-sm mx-auto">
-              Create reusable onboarding templates for different roles
-            </p>
-            <Button className="mt-4" variant="outline">
-              <Plus className="h-4 w-4 mr-2" /> Create Template
-            </Button>
-          </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   );
 }
