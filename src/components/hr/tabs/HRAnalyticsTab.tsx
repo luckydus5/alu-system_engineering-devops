@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
-  BarChart3, TrendingUp, Users, Calendar,
-  Clock, Building2, PieChart, LineChart, Download,
-  ArrowUpRight, ArrowDownRight, Activity, Target, Briefcase
+  TrendingUp, Users, Calendar,
+  Clock, Building2, PieChart, Download,
+  ArrowUpRight, ArrowDownRight, Target
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LeaveType } from '@/hooks/useLeaveRequests';
 import { useUsers } from '@/hooks/useUsers';
@@ -18,75 +18,18 @@ interface HRAnalyticsTabProps {
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function MetricCard({ title, value, change, changeType, icon: Icon, gradient }: {
-  title: string;
-  value: string | number;
-  change?: number;
-  changeType?: 'positive' | 'negative' | 'neutral';
-  icon: React.ElementType;
-  gradient: string;
-}) {
+function BarVisual({ data, maxValue }: { data: { label: string; value: number }[]; maxValue: number }) {
   return (
-    <Card className="border-0 shadow-corporate overflow-hidden">
-      <div className={cn("h-0.5 bg-gradient-to-r", gradient)} />
-      <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{title}</p>
-            <p className="text-2xl font-bold">{value}</p>
-            {change !== undefined && (
-              <div className="flex items-center gap-1 text-xs">
-                {changeType === 'positive' ? (
-                  <ArrowUpRight className="h-3.5 w-3.5 text-emerald-500" />
-                ) : changeType === 'negative' ? (
-                  <ArrowDownRight className="h-3.5 w-3.5 text-destructive" />
-                ) : null}
-                <span className={cn(
-                  changeType === 'positive' ? 'text-emerald-600' : 
-                  changeType === 'negative' ? 'text-destructive' : 'text-muted-foreground'
-                )}>
-                  {change > 0 ? '+' : ''}{change}% vs last period
-                </span>
-              </div>
-            )}
-          </div>
-          <div className={cn("h-10 w-10 rounded-xl bg-gradient-to-br flex items-center justify-center", gradient)}>
-            <Icon className="h-5 w-5 text-white" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function BarChartVisual({ data, maxValue }: { data: { label: string; value: number; color: string }[]; maxValue: number }) {
-  return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       {data.map((item, idx) => (
         <div key={idx} className="space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">{item.label}</span>
-            <span className="font-semibold">{item.value}</span>
+            <span className="font-medium tabular-nums">{item.value}</span>
           </div>
-          <div className="h-2 bg-muted rounded-full overflow-hidden">
-            <div className={cn("h-full rounded-full transition-all", item.color)} style={{ width: `${Math.max((item.value / maxValue) * 100, 2)}%` }} />
+          <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-foreground/70 transition-all" style={{ width: `${Math.max((item.value / maxValue) * 100, 3)}%` }} />
           </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MonthlyTrendChart({ data }: { data: number[] }) {
-  const maxValue = Math.max(...data, 1);
-  return (
-    <div className="h-40 flex items-end gap-1.5">
-      {data.map((value, idx) => (
-        <div key={idx} className="flex-1 flex flex-col items-center gap-1.5">
-          <div className="w-full bg-muted rounded-t-md overflow-hidden flex-1 flex items-end">
-            <div className="w-full gradient-primary rounded-t-md transition-all" style={{ height: `${(value / maxValue) * 100}%` }} />
-          </div>
-          <span className="text-[9px] text-muted-foreground font-medium">{MONTHS[idx]}</span>
         </div>
       ))}
     </div>
@@ -127,24 +70,17 @@ export function HRAnalyticsTab({ departmentId }: HRAnalyticsTabProps) {
     return { totalEmployees, leaveByType, byDepartment, monthlyLeaves, roleDistribution, approvalRate, totalLeaveRequests: totalRequests, avgLeaveDays: 8.5, retentionRate: 94.5 };
   }, [leaveRequests, users, departments]);
 
-  const LEAVE_COLORS: Record<LeaveType, string> = {
-    annual: 'bg-blue-500', sick: 'bg-red-500', personal: 'bg-purple-500',
-    maternity: 'bg-pink-500', paternity: 'bg-cyan-500', bereavement: 'bg-slate-500', unpaid: 'bg-amber-500',
-  };
-
-  const BAR_COLORS = ['bg-blue-500', 'bg-emerald-500', 'bg-violet-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500'];
-
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold">HR Analytics</h2>
-          <p className="text-xs text-muted-foreground">Workforce insights and metrics</p>
+          <h2 className="text-lg font-semibold">Analytics</h2>
+          <p className="text-xs text-muted-foreground">Workforce insights and trends</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={timePeriod} onValueChange={setTimePeriod}>
-            <SelectTrigger className="w-[150px] h-8 text-xs">
+            <SelectTrigger className="w-[140px] h-8 text-xs rounded-lg">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -154,80 +90,108 @@ export function HRAnalyticsTab({ departmentId }: HRAnalyticsTabProps) {
               <SelectItem value="12months">Last 12 Months</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="text-xs h-8">
+          <Button variant="outline" size="sm" className="text-xs h-8 rounded-lg">
             <Download className="h-3.5 w-3.5 mr-1.5" /> Export
           </Button>
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        <MetricCard title="Total Employees" value={analytics.totalEmployees} change={5.2} changeType="positive" icon={Users} gradient="from-blue-500 to-cyan-600" />
-        <MetricCard title="Retention Rate" value={`${analytics.retentionRate}%`} change={2.1} changeType="positive" icon={Target} gradient="from-emerald-500 to-teal-600" />
-        <MetricCard title="Approval Rate" value={`${analytics.approvalRate}%`} change={-1.2} changeType="neutral" icon={Calendar} gradient="from-violet-500 to-purple-600" />
-        <MetricCard title="Avg Leave Days" value={analytics.avgLeaveDays} change={0.5} changeType="neutral" icon={Clock} gradient="from-amber-500 to-orange-600" />
+      {/* Metric cards */}
+      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+        {[
+          { title: 'Total Employees', value: analytics.totalEmployees, change: 5.2, type: 'positive', icon: Users },
+          { title: 'Retention Rate', value: `${analytics.retentionRate}%`, change: 2.1, type: 'positive', icon: Target },
+          { title: 'Approval Rate', value: `${analytics.approvalRate}%`, change: -1.2, type: 'neutral', icon: Calendar },
+          { title: 'Avg Leave Days', value: analytics.avgLeaveDays, change: 0.5, type: 'neutral', icon: Clock },
+        ].map(m => (
+          <div key={m.title} className="p-5 rounded-2xl bg-card border">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">{m.title}</p>
+                <p className="text-2xl font-semibold tracking-tight mt-1">{m.value}</p>
+                <div className="flex items-center gap-1 text-xs mt-1">
+                  {m.type === 'positive' ? (
+                    <ArrowUpRight className="h-3 w-3 text-emerald-500" />
+                  ) : m.type === 'negative' ? (
+                    <ArrowDownRight className="h-3 w-3 text-red-500" />
+                  ) : null}
+                  <span className={cn(
+                    m.type === 'positive' ? 'text-emerald-600' : 'text-muted-foreground'
+                  )}>
+                    {m.change > 0 ? '+' : ''}{m.change}%
+                  </span>
+                </div>
+              </div>
+              <m.icon className="h-5 w-5 text-muted-foreground/30" />
+            </div>
+          </div>
+        ))}
       </div>
 
+      {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="border-0 shadow-corporate">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <LineChart className="h-4 w-4 text-primary" />
-              Monthly Leave Requests
-            </CardTitle>
-            <CardDescription className="text-xs">12-month trend</CardDescription>
+        {/* Monthly Trend */}
+        <Card className="border rounded-2xl shadow-none">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold">Monthly Leave Requests</CardTitle>
+            <p className="text-xs text-muted-foreground">12-month trend</p>
           </CardHeader>
           <CardContent>
-            <MonthlyTrendChart data={analytics.monthlyLeaves} />
+            <div className="h-40 flex items-end gap-1.5">
+              {analytics.monthlyLeaves.map((value, idx) => {
+                const max = Math.max(...analytics.monthlyLeaves, 1);
+                return (
+                  <div key={idx} className="flex-1 flex flex-col items-center gap-1.5">
+                    <div className="w-full bg-muted rounded-t flex-1 flex items-end min-h-0">
+                      <div className="w-full bg-foreground/70 rounded-t transition-all" style={{ height: `${(value / max) * 100}%` }} />
+                    </div>
+                    <span className="text-[9px] text-muted-foreground">{MONTHS[idx]}</span>
+                  </div>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-corporate">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <PieChart className="h-4 w-4 text-violet-500" />
-              Leave by Type
-            </CardTitle>
-            <CardDescription className="text-xs">Approved leaves breakdown</CardDescription>
+        {/* Leave by Type */}
+        <Card className="border rounded-2xl shadow-none">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold">Leave by Type</CardTitle>
+            <p className="text-xs text-muted-foreground">Approved leaves breakdown</p>
           </CardHeader>
           <CardContent>
-            <BarChartVisual 
-              data={analytics.leaveByType.map(item => ({ label: item.label, value: item.count, color: LEAVE_COLORS[item.type] }))}
+            <BarVisual 
+              data={analytics.leaveByType.map(item => ({ label: item.label, value: item.count }))}
               maxValue={Math.max(...analytics.leaveByType.map(i => i.count), 1)}
             />
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-corporate">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-emerald-500" />
-              By Department
-            </CardTitle>
-            <CardDescription className="text-xs">Workforce distribution</CardDescription>
+        {/* By Department */}
+        <Card className="border rounded-2xl shadow-none">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold">By Department</CardTitle>
+            <p className="text-xs text-muted-foreground">Workforce distribution</p>
           </CardHeader>
           <CardContent>
-            <BarChartVisual 
-              data={analytics.byDepartment.slice(0, 6).map((item, idx) => ({ label: item.name, value: item.count, color: BAR_COLORS[idx % 6] }))}
+            <BarVisual 
+              data={analytics.byDepartment.slice(0, 6).map(item => ({ label: item.name, value: item.count }))}
               maxValue={Math.max(...analytics.byDepartment.map(i => i.count), 1)}
             />
           </CardContent>
         </Card>
 
-        <Card className="border-0 shadow-corporate">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Briefcase className="h-4 w-4 text-secondary" />
-              Role Distribution
-            </CardTitle>
-            <CardDescription className="text-xs">Employees by role</CardDescription>
+        {/* Role Distribution */}
+        <Card className="border rounded-2xl shadow-none">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base font-semibold">Role Distribution</CardTitle>
+            <p className="text-xs text-muted-foreground">Employees by role</p>
           </CardHeader>
           <CardContent>
-            <BarChartVisual 
-              data={Object.entries(analytics.roleDistribution).map(([role, count], idx) => ({
+            <BarVisual 
+              data={Object.entries(analytics.roleDistribution).map(([role, count]) => ({
                 label: role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
                 value: count,
-                color: BAR_COLORS[idx % 6],
               }))}
               maxValue={Math.max(...Object.values(analytics.roleDistribution), 1)}
             />
@@ -236,31 +200,24 @@ export function HRAnalyticsTab({ departmentId }: HRAnalyticsTabProps) {
       </div>
 
       {/* Insights */}
-      <Card className="border-0 shadow-corporate">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Activity className="h-4 w-4 text-rose-500" />
-            Key Insights
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 md:grid-cols-3">
-            {[
-              { icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-500/5 border-emerald-500/10', title: 'Positive Trend', text: 'Retention increased 2.1% vs last quarter, indicating improved satisfaction.' },
-              { icon: Calendar, color: 'text-amber-600', bg: 'bg-amber-500/5 border-amber-500/10', title: 'Leave Pattern', text: 'Annual leave peaks in December and July. Plan for coverage.' },
-              { icon: Users, color: 'text-primary', bg: 'bg-primary/5 border-primary/10', title: 'Growth', text: 'Workforce grew 5.2% this year. Engineering shows highest growth.' },
-            ].map(({ icon: Icon, color, bg, title, text }) => (
-              <div key={title} className={cn("p-4 rounded-xl border", bg)}>
-                <div className="flex items-center gap-2 mb-2">
-                  <Icon className={cn("h-4 w-4", color)} />
-                  <span className="text-xs font-semibold">{title}</span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">{text}</p>
+      <div>
+        <h3 className="text-sm font-semibold mb-3">Insights</h3>
+        <div className="grid gap-3 md:grid-cols-3">
+          {[
+            { icon: TrendingUp, title: 'Positive Trend', text: 'Retention increased 2.1% vs last quarter, indicating improved satisfaction.' },
+            { icon: Calendar, title: 'Leave Pattern', text: 'Annual leave peaks in December and July. Plan for coverage.' },
+            { icon: Users, title: 'Growth', text: 'Workforce grew 5.2% this year. Engineering shows highest growth.' },
+          ].map(({ icon: Icon, title, text }) => (
+            <div key={title} className="p-4 rounded-2xl bg-card border">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className="h-4 w-4 text-muted-foreground" />
+                <span className="text-xs font-semibold">{title}</span>
               </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+              <p className="text-xs text-muted-foreground leading-relaxed">{text}</p>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
