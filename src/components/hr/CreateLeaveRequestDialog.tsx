@@ -3,17 +3,23 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { 
   CalendarIcon, Loader2, Palmtree, Thermometer, User, Baby, 
-  Heart, Clock, Send, ArrowRight, CheckCircle2, AlertCircle
+  Heart, Clock, Send, ArrowRight, CheckCircle2, AlertCircle,
+  Users, Search, Building2, UserCheck
 } from 'lucide-react';
 import { format, differenceInBusinessDays, addDays, isWeekend } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LeaveType } from '@/hooks/useLeaveRequests';
+import { useEmployees, Employee } from '@/hooks/useEmployees';
 
 interface CreateLeaveRequestDialogProps {
   open: boolean;
@@ -22,14 +28,26 @@ interface CreateLeaveRequestDialogProps {
 }
 
 const LEAVE_TYPE_CONFIG: Record<LeaveType, { icon: React.ElementType; color: string; bg: string; description: string }> = {
-  annual: { icon: Palmtree, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200 hover:border-emerald-400', description: 'Vacation & holiday time' },
-  sick: { icon: Thermometer, color: 'text-red-500', bg: 'bg-red-50 border-red-200 hover:border-red-400', description: 'Health-related absence' },
-  personal: { icon: User, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200 hover:border-blue-400', description: 'Personal matters' },
-  maternity: { icon: Baby, color: 'text-pink-500', bg: 'bg-pink-50 border-pink-200 hover:border-pink-400', description: 'Maternity leave' },
-  paternity: { icon: Baby, color: 'text-indigo-500', bg: 'bg-indigo-50 border-indigo-200 hover:border-indigo-400', description: 'Paternity leave' },
-  bereavement: { icon: Heart, color: 'text-gray-500', bg: 'bg-gray-50 border-gray-200 hover:border-gray-400', description: 'Family bereavement' },
-  unpaid: { icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 border-amber-200 hover:border-amber-400', description: 'Unpaid time off' },
+  annual: { icon: Palmtree, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-800', description: 'Vacation & holiday time' },
+  sick: { icon: Thermometer, color: 'text-red-500', bg: 'bg-red-50 border-red-200 hover:border-red-400 dark:bg-red-950/30 dark:border-red-800', description: 'Health-related absence' },
+  personal: { icon: User, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200 hover:border-blue-400 dark:bg-blue-950/30 dark:border-blue-800', description: 'Personal matters' },
+  maternity: { icon: Baby, color: 'text-pink-500', bg: 'bg-pink-50 border-pink-200 hover:border-pink-400 dark:bg-pink-950/30 dark:border-pink-800', description: 'Maternity leave' },
+  paternity: { icon: Baby, color: 'text-indigo-500', bg: 'bg-indigo-50 border-indigo-200 hover:border-indigo-400 dark:bg-indigo-950/30 dark:border-indigo-800', description: 'Paternity leave' },
+  bereavement: { icon: Heart, color: 'text-gray-500', bg: 'bg-gray-50 border-gray-200 hover:border-gray-400 dark:bg-gray-950/30 dark:border-gray-800', description: 'Family bereavement' },
+  unpaid: { icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 border-amber-200 hover:border-amber-400 dark:bg-amber-950/30 dark:border-amber-800', description: 'Unpaid time off' },
 };
+
+const AVATAR_GRADIENTS = [
+  'from-violet-500 to-purple-600',
+  'from-blue-500 to-cyan-600',
+  'from-emerald-500 to-teal-600',
+  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+];
+
+function getGradient(name: string) {
+  return AVATAR_GRADIENTS[name.charCodeAt(0) % AVATAR_GRADIENTS.length];
+}
 
 export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: CreateLeaveRequestDialogProps) {
   const [leaveType, setLeaveType] = useState<LeaveType>('annual');
@@ -37,8 +55,24 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
   const [endDate, setEndDate] = useState<Date | undefined>();
   const [reason, setReason] = useState('');
   const [step, setStep] = useState(1);
+  
+  // On-behalf-of state
+  const [isOnBehalf, setIsOnBehalf] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+  const [employeeSearch, setEmployeeSearch] = useState('');
 
   const { createRequest } = useLeaveRequests();
+  const { employees } = useEmployees();
+
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearch.trim()) return employees.slice(0, 20);
+    const q = employeeSearch.toLowerCase();
+    return employees.filter(e => 
+      e.full_name.toLowerCase().includes(q) || 
+      e.employee_number.toLowerCase().includes(q) ||
+      e.email?.toLowerCase().includes(q)
+    ).slice(0, 20);
+  }, [employees, employeeSearch]);
 
   const totalDays = useMemo(() => {
     if (!startDate || !endDate) return 0;
@@ -47,14 +81,22 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
 
   const handleSubmit = async () => {
     if (!startDate || !endDate || !leaveType) return;
-    await createRequest.mutateAsync({
+    
+    const requestData: any = {
       leave_type: leaveType,
       start_date: format(startDate, 'yyyy-MM-dd'),
       end_date: format(endDate, 'yyyy-MM-dd'),
       total_days: totalDays,
       reason: reason || undefined,
-      department_id: departmentId,
-    });
+      department_id: isOnBehalf && selectedEmployee?.department_id ? selectedEmployee.department_id : departmentId,
+    };
+
+    // If filing on behalf, attach employee_id
+    if (isOnBehalf && selectedEmployee) {
+      requestData.employee_id = selectedEmployee.id;
+    }
+
+    await createRequest.mutateAsync(requestData);
     resetForm();
     onOpenChange(false);
   };
@@ -65,6 +107,9 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
     setEndDate(undefined);
     setReason('');
     setStep(1);
+    setIsOnBehalf(false);
+    setSelectedEmployee(null);
+    setEmployeeSearch('');
   };
 
   const handleOpenChange = (v: boolean) => {
@@ -72,20 +117,30 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
     onOpenChange(v);
   };
 
-  const canProceedStep1 = !!leaveType;
+  const canProceedStep1 = isOnBehalf ? !!selectedEmployee && !!leaveType : !!leaveType;
   const canProceedStep2 = !!startDate && !!endDate;
   const config = LEAVE_TYPE_CONFIG[leaveType];
   const Icon = config.icon;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[540px] p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[580px] p-0 gap-0 overflow-hidden">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold">New Leave Request</DialogTitle>
             <p className="text-sm text-muted-foreground">Complete 3 quick steps to submit your request</p>
           </DialogHeader>
+          
+          {/* On Behalf Toggle */}
+          <div className="flex items-center justify-between mt-3 p-3 rounded-xl bg-background/80 border">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Filing on behalf of an employee</span>
+            </div>
+            <Switch checked={isOnBehalf} onCheckedChange={(v) => { setIsOnBehalf(v); if (!v) { setSelectedEmployee(null); setEmployeeSearch(''); }}} />
+          </div>
+
           {/* Progress Steps */}
           <div className="flex items-center gap-2 mt-4">
             {[1, 2, 3].map((s) => (
@@ -108,16 +163,68 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
             ))}
           </div>
           <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground font-medium">
-            <span className="w-8 text-center">Type</span>
+            <span className="w-8 text-center">{isOnBehalf ? 'Who' : 'Type'}</span>
             <span className="text-center">Dates</span>
             <span className="w-8 text-center">Review</span>
           </div>
         </div>
 
-        <div className="px-6 py-5 min-h-[280px]">
-          {/* Step 1: Leave Type */}
+        <div className="px-6 py-5 min-h-[320px]">
+          {/* Step 1 */}
           {step === 1 && (
-            <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-200">
+            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
+              {/* Employee Picker (when on behalf) */}
+              {isOnBehalf && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold flex items-center gap-2">
+                    <UserCheck className="h-4 w-4 text-primary" />
+                    Select Employee
+                  </Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search by name, ID, or email..."
+                      value={employeeSearch}
+                      onChange={e => setEmployeeSearch(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <ScrollArea className="h-[140px] border rounded-xl">
+                    <div className="p-1 space-y-0.5">
+                      {filteredEmployees.map(emp => {
+                        const selected = selectedEmployee?.id === emp.id;
+                        return (
+                          <button
+                            key={emp.id}
+                            onClick={() => setSelectedEmployee(emp)}
+                            className={cn(
+                              'w-full flex items-center gap-3 p-2 rounded-lg text-left transition-all',
+                              selected ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-muted/60'
+                            )}
+                          >
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className={cn('text-[10px] font-bold text-white bg-gradient-to-br', getGradient(emp.full_name))}>
+                                {emp.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium truncate">{emp.full_name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {emp.employee_number} • {emp.department_name || 'No dept'}
+                              </p>
+                            </div>
+                            {selected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                          </button>
+                        );
+                      })}
+                      {filteredEmployees.length === 0 && (
+                        <p className="text-center text-sm text-muted-foreground py-6">No employees found</p>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </div>
+              )}
+
               <Label className="text-sm font-semibold">Select Leave Type</Label>
               <div className="grid grid-cols-2 gap-2">
                 {(Object.entries(LEAVE_TYPE_CONFIG) as [LeaveType, typeof config][]).map(([type, cfg]) => {
@@ -149,6 +256,22 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
           {/* Step 2: Dates */}
           {step === 2 && (
             <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
+              {/* Show who this is for */}
+              {isOnBehalf && selectedEmployee && (
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
+                  <Avatar className="h-9 w-9">
+                    <AvatarFallback className={cn('text-xs font-bold text-white bg-gradient-to-br', getGradient(selectedEmployee.full_name))}>
+                      {selectedEmployee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="text-sm font-semibold">{selectedEmployee.full_name}</p>
+                    <p className="text-[10px] text-muted-foreground">{selectedEmployee.employee_number} • {selectedEmployee.department_name}</p>
+                  </div>
+                  <Badge variant="outline" className="ml-auto text-[10px]">On behalf</Badge>
+                </div>
+              )}
+
               <div className="flex items-center gap-2 mb-1">
                 <Icon className={cn('h-5 w-5', config.color)} />
                 <span className="text-sm font-semibold">{LEAVE_TYPE_LABELS[leaveType]}</span>
@@ -228,7 +351,7 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">Reason (Optional)</Label>
                 <Textarea
-                  placeholder="Brief reason for your leave..."
+                  placeholder="Brief reason for the leave..."
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   rows={2}
@@ -247,6 +370,22 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
               </div>
 
               <div className="rounded-xl border-2 border-border overflow-hidden">
+                {/* On behalf banner */}
+                {isOnBehalf && selectedEmployee && (
+                  <div className="px-4 py-3 bg-primary/5 border-b flex items-center gap-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className={cn('text-[10px] font-bold text-white bg-gradient-to-br', getGradient(selectedEmployee.full_name))}>
+                        {selectedEmployee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold">{selectedEmployee.full_name}</p>
+                      <p className="text-[10px] text-muted-foreground">{selectedEmployee.employee_number}</p>
+                    </div>
+                    <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">On behalf</Badge>
+                  </div>
+                )}
+
                 <div className={cn('p-4 flex items-center gap-3', config.bg)}>
                   <Icon className={cn('h-6 w-6', config.color)} />
                   <div>
@@ -274,9 +413,14 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
                 </div>
               </div>
 
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-800">
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300">
                 <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                <p className="text-xs">This will be sent to your manager for approval, then forwarded to HR for final review.</p>
+                <p className="text-xs">
+                  {isOnBehalf 
+                    ? `This will be submitted on behalf of ${selectedEmployee?.full_name}. The request follows the same approval workflow: Manager → HR → General Manager.`
+                    : 'This will be sent to your manager for approval, then forwarded to HR for final review.'
+                  }
+                </p>
               </div>
             </div>
           )}

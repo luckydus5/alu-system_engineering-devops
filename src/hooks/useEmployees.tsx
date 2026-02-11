@@ -9,6 +9,7 @@ export interface Employee {
   phone: string | null;
   department_id: string | null;
   position_id: string | null;
+  company_id: string | null;
   date_of_birth: string | null;
   hire_date: string;
   employment_status: string;
@@ -26,6 +27,7 @@ export interface Employee {
   // joined
   department_name?: string;
   position_name?: string;
+  company_name?: string;
 }
 
 export interface EmployeeInsert {
@@ -34,6 +36,7 @@ export interface EmployeeInsert {
   phone?: string;
   department_id?: string | null;
   position_id?: string | null;
+  company_id?: string | null;
   date_of_birth?: string | null;
   hire_date?: string;
   employment_status?: string;
@@ -58,7 +61,8 @@ export function useEmployees() {
         .select(`
           *,
           departments (name),
-          positions (name)
+          positions (name),
+          companies (name)
         `)
         .order('full_name');
 
@@ -68,6 +72,7 @@ export function useEmployees() {
         ...e,
         department_name: e.departments?.name || null,
         position_name: e.positions?.name || null,
+        company_name: e.companies?.name || null,
       }));
 
       setEmployees(mapped);

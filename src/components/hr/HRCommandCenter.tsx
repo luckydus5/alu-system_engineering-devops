@@ -4,16 +4,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   LayoutDashboard, Users, Calendar, Clock, Target, 
   UserPlus, BarChart3, Bell, Search, Settings, 
-  Building2, AlertCircle, Home, ArrowLeft, Sun, Moon, Sunrise
+  Building2, AlertCircle, Home, ArrowLeft, Sun, Moon, Sunrise,
+  Globe
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useUsers } from '@/hooks/useUsers';
 import { usePositions } from '@/hooks/usePositions';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useAttendance } from '@/hooks/useAttendance';
+import { useCompanies } from '@/hooks/useCompanies';
 import { cn } from '@/lib/utils';
 import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 
@@ -52,6 +55,7 @@ function getGreeting() {
 export function HRCommandCenter({ departmentId, departmentName, canManage }: HRCommandCenterProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+  const [selectedCompany, setSelectedCompany] = useState<string>('all');
   
   // Real data from hooks
   const { leaveRequests = [], isLoading: leaveLoading } = useLeaveRequests(undefined, true);
@@ -59,6 +63,7 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
   const { positions = [], isLoading: positionsLoading } = usePositions();
   const { departments = [], loading: departmentsLoading } = useDepartments();
   const { records: attendanceRecords = [], isLoading: attendanceLoading } = useAttendance();
+  const { companies = [], parentCompanies = [], loading: companiesLoading } = useCompanies();
 
   const greeting = getGreeting();
 
@@ -188,6 +193,29 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
+                {/* Company Selector */}
+                {companies.length > 0 && (
+                  <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                    <SelectTrigger className="w-[180px] bg-muted/50 border-0 rounded-full h-9">
+                      <Globe className="h-4 w-4 mr-2 text-muted-foreground" />
+                      <SelectValue placeholder="All Companies" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Companies</SelectItem>
+                      {parentCompanies.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          🏢 {c.name}
+                        </SelectItem>
+                      ))}
+                      {companies.filter(c => c.parent_id).map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          └ {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+
                 {/* Real Stats Pills */}
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">

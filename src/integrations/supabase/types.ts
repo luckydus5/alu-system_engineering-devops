@@ -156,10 +156,55 @@ export type Database = {
           },
         ]
       }
+      companies: {
+        Row: {
+          code: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          logo_url: string | null
+          name: string
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          logo_url?: string | null
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           code: string
           color: string | null
+          company_id: string | null
           created_at: string
           description: string | null
           icon: string | null
@@ -170,6 +215,7 @@ export type Database = {
         Insert: {
           code: string
           color?: string | null
+          company_id?: string | null
           created_at?: string
           description?: string | null
           icon?: string | null
@@ -180,6 +226,7 @@ export type Database = {
         Update: {
           code?: string
           color?: string | null
+          company_id?: string | null
           created_at?: string
           description?: string | null
           icon?: string | null
@@ -187,12 +234,21 @@ export type Database = {
           name?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "departments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       employees: {
         Row: {
           address: string | null
           avatar_url: string | null
+          company_id: string | null
           created_at: string
           created_by: string | null
           date_of_birth: string | null
@@ -216,6 +272,7 @@ export type Database = {
         Insert: {
           address?: string | null
           avatar_url?: string | null
+          company_id?: string | null
           created_at?: string
           created_by?: string | null
           date_of_birth?: string | null
@@ -239,6 +296,7 @@ export type Database = {
         Update: {
           address?: string | null
           avatar_url?: string | null
+          company_id?: string | null
           created_at?: string
           created_by?: string | null
           date_of_birth?: string | null
@@ -260,6 +318,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "employees_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "employees_department_id_fkey"
             columns: ["department_id"]
@@ -662,8 +727,10 @@ export type Database = {
       }
       leave_requests: {
         Row: {
+          company_id: string | null
           created_at: string
           department_id: string
+          employee_id: string | null
           end_date: string
           hr_action_at: string | null
           hr_comment: string | null
@@ -677,12 +744,15 @@ export type Database = {
           requester_id: string
           start_date: string
           status: Database["public"]["Enums"]["leave_status"]
+          submitted_by_id: string | null
           total_days: number
           updated_at: string
         }
         Insert: {
+          company_id?: string | null
           created_at?: string
           department_id: string
+          employee_id?: string | null
           end_date: string
           hr_action_at?: string | null
           hr_comment?: string | null
@@ -696,12 +766,15 @@ export type Database = {
           requester_id: string
           start_date: string
           status?: Database["public"]["Enums"]["leave_status"]
+          submitted_by_id?: string | null
           total_days: number
           updated_at?: string
         }
         Update: {
+          company_id?: string | null
           created_at?: string
           department_id?: string
+          employee_id?: string | null
           end_date?: string
           hr_action_at?: string | null
           hr_comment?: string | null
@@ -715,15 +788,30 @@ export type Database = {
           requester_id?: string
           start_date?: string
           status?: Database["public"]["Enums"]["leave_status"]
+          submitted_by_id?: string | null
           total_days?: number
           updated_at?: string
         }
         Relationships: [
           {
+            foreignKeyName: "leave_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "leave_requests_department_id_fkey"
             columns: ["department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leave_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
             referencedColumns: ["id"]
           },
         ]
