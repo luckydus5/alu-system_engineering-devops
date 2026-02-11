@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   LayoutDashboard, Users, Calendar, Clock, Target, 
-  UserPlus, BarChart3, Bell, Search, Settings, 
-  Building2, AlertCircle, Home, ArrowLeft, Sun, Moon, Sunrise,
-  Globe, ChevronDown, Sparkles, Shield, Activity
+  UserPlus, BarChart3, Search, 
+  Building2, Home, ArrowLeft,
+  Globe, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useUsers } from '@/hooks/useUsers';
@@ -18,7 +17,7 @@ import { useAttendance } from '@/hooks/useAttendance';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useEmployees } from '@/hooks/useEmployees';
 import { cn } from '@/lib/utils';
-import { format, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 
 import { HROverviewTab } from './tabs/HROverviewTab';
 import { EmployeeHubTab } from './tabs/EmployeeHubTab';
@@ -35,27 +34,20 @@ interface HRCommandCenterProps {
 }
 
 const NAVIGATION_ITEMS = [
-  { id: 'overview', label: 'Overview', shortLabel: 'Overview', icon: LayoutDashboard },
-  { id: 'employees', label: 'Employee Hub', shortLabel: 'Employees', icon: Users },
-  { id: 'leave', label: 'Leave Management', shortLabel: 'Leave', icon: Calendar },
-  { id: 'attendance', label: 'Time & Attendance', shortLabel: 'Attendance', icon: Clock },
-  { id: 'performance', label: 'Performance', shortLabel: 'Perform', icon: Target },
-  { id: 'onboarding', label: 'Onboarding', shortLabel: 'Onboard', icon: UserPlus },
-  { id: 'analytics', label: 'Analytics', shortLabel: 'Analytics', icon: BarChart3 },
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'employees', label: 'People', icon: Users },
+  { id: 'leave', label: 'Leave', icon: Calendar },
+  { id: 'attendance', label: 'Attendance', icon: Clock },
+  { id: 'performance', label: 'Performance', icon: Target },
+  { id: 'onboarding', label: 'Onboarding', icon: UserPlus },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return { text: 'Good morning', icon: Sunrise };
-  if (hour < 17) return { text: 'Good afternoon', icon: Sun };
-  return { text: 'Good evening', icon: Moon };
-}
-
 const COMPANY_COLORS: Record<string, string> = {
-  'HQP': 'from-blue-600 to-indigo-700',
-  'HQPEAT': 'from-emerald-600 to-teal-700',
-  'HQSVC': 'from-amber-500 to-orange-600',
-  'FARM': 'from-lime-600 to-green-700',
+  'HQP': 'bg-blue-500',
+  'HQPEAT': 'bg-emerald-500',
+  'HQSVC': 'bg-amber-500',
+  'FARM': 'bg-lime-600',
 };
 
 export function HRCommandCenter({ departmentId, departmentName, canManage }: HRCommandCenterProps) {
@@ -71,8 +63,6 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
   const { records: attendanceRecords = [], isLoading: attendanceLoading } = useAttendance();
   const { companies = [], parentCompanies = [], loading: companiesLoading } = useCompanies();
   const { employees = [] } = useEmployees();
-
-  const greeting = getGreeting();
 
   const selectedCompanyData = companies.find(c => c.id === selectedCompany);
   const selectedCompanyName = selectedCompany === 'all' ? 'All Companies' : selectedCompanyData?.name || 'All Companies';
@@ -139,186 +129,109 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
 
   return (
     <div className="min-h-screen w-full bg-background">
-      {/* ═══════════════ HEADER ═══════════════ */}
-      <header className="relative overflow-hidden">
-        <div className="absolute inset-0 gradient-hero" />
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjAzIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
-        
-        <div className="relative z-10">
-          {/* Top bar */}
-          <div className="flex items-center justify-between px-4 md:px-8 py-3">
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="ghost" size="sm" 
-                onClick={() => navigate(-1)} 
-                className="text-white/70 hover:text-white hover:bg-white/10 gap-1.5"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                <span className="hidden sm:inline text-sm">Back</span>
-              </Button>
-              <div className="h-5 w-px bg-white/20" />
-              <Button 
-                variant="ghost" size="sm" 
-                onClick={() => navigate('/')} 
-                className="text-white/70 hover:text-white hover:bg-white/10 gap-1.5"
-              >
-                <Home className="h-4 w-4" />
-                <span className="hidden sm:inline text-sm">Dashboard</span>
-              </Button>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="text-white/70 hover:text-white hover:bg-white/10 h-9 w-9 rounded-xl">
-                <Search className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="text-white/70 hover:text-white hover:bg-white/10 h-9 w-9 rounded-xl relative">
-                <Bell className="h-4 w-4" />
-                {urgentItems.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-destructive text-[10px] text-white flex items-center justify-center font-bold animate-pulse">
-                    {urgentItems.length}
-                  </span>
-                )}
-              </Button>
-              <Button variant="ghost" size="icon" className="text-white/70 hover:text-white hover:bg-white/10 h-9 w-9 rounded-xl">
-                <Settings className="h-4 w-4" />
-              </Button>
-            </div>
+      {/* ── Breadcrumb Bar ── */}
+      <div className="border-b bg-card/60 backdrop-blur-sm">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex items-center justify-between h-12">
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <button onClick={() => navigate('/')} className="hover:text-foreground transition-colors">
+              <Home className="h-4 w-4" />
+            </button>
+            <ChevronRight className="h-3 w-3" />
+            <span className="text-foreground font-medium">Human Resources</span>
           </div>
 
-          {/* Hero section */}
-          <div className="px-4 md:px-8 pb-6 pt-2">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-              <div className="flex items-start gap-4">
-                <div className="h-14 w-14 md:h-16 md:w-16 rounded-2xl gradient-gold shadow-gold flex items-center justify-center shrink-0">
-                  <Shield className="h-7 w-7 md:h-8 md:w-8 text-white" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <greeting.icon className="h-4 w-4 text-secondary" />
-                    <span className="text-white/50 text-xs font-medium">{greeting.text}</span>
-                  </div>
-                  <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
-                    HR Command Center
-                  </h1>
-                  <p className="text-white/40 text-xs mt-0.5">
-                    Unified workforce management across all companies
-                  </p>
-                </div>
-              </div>
+          <div className="flex items-center gap-3">
+            {/* Company Selector */}
+            {companies.length > 0 && (
+              <div className="relative">
+                <button
+                  onClick={() => setCompanyDropdownOpen(!companyDropdownOpen)}
+                  className="flex items-center gap-2 h-8 px-3 rounded-lg text-xs font-medium bg-muted/60 hover:bg-muted transition-colors"
+                >
+                  <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>{selectedCompanyName}</span>
+                  <ChevronDown className={cn("h-3 w-3 text-muted-foreground transition-transform", companyDropdownOpen && "rotate-180")} />
+                </button>
 
-              {/* Stats pills + Company selector */}
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Company Selector */}
-                {companies.length > 0 && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setCompanyDropdownOpen(!companyDropdownOpen)}
-                      className={cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
-                        "bg-white/10 hover:bg-white/15 text-white border border-white/10",
-                        "backdrop-blur-sm"
-                      )}
-                    >
-                      <Globe className="h-3.5 w-3.5 text-secondary" />
-                      <span>{selectedCompanyName}</span>
-                      <ChevronDown className={cn("h-3 w-3 transition-transform", companyDropdownOpen && "rotate-180")} />
-                    </button>
+                <AnimatePresence>
+                  {companyDropdownOpen && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setCompanyDropdownOpen(false)} />
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.12 }}
+                        className="absolute right-0 top-full mt-1.5 w-56 bg-popover border rounded-xl shadow-lg z-50 overflow-hidden p-1"
+                      >
+                        <button
+                          onClick={() => { setSelectedCompany('all'); setCompanyDropdownOpen(false); }}
+                          className={cn(
+                            "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-colors",
+                            selectedCompany === 'all' ? "bg-accent text-accent-foreground" : "hover:bg-muted"
+                          )}
+                        >
+                          <div className="h-2 w-2 rounded-full bg-foreground/30" />
+                          <span className="text-xs font-medium">All Companies</span>
+                        </button>
 
-                    <AnimatePresence>
-                      {companyDropdownOpen && (
-                        <>
-                          <div className="fixed inset-0 z-40" onClick={() => setCompanyDropdownOpen(false)} />
-                          <motion.div
-                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                            transition={{ duration: 0.15 }}
-                            className="absolute right-0 top-full mt-2 w-60 bg-card border rounded-xl shadow-corporate-lg z-50 overflow-hidden"
-                          >
-                            <div className="p-1.5">
+                        <div className="h-px bg-border my-1" />
+
+                        {parentCompanies.map(c => (
+                          <div key={c.id}>
+                            <button
+                              onClick={() => { setSelectedCompany(c.id); setCompanyDropdownOpen(false); }}
+                              className={cn(
+                                "w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-left transition-colors",
+                                selectedCompany === c.id ? "bg-accent text-accent-foreground" : "hover:bg-muted"
+                              )}
+                            >
+                              <div className={cn("h-2 w-2 rounded-full", COMPANY_COLORS[c.code] || 'bg-primary')} />
+                              <span className="text-xs font-medium">{c.name}</span>
+                            </button>
+                            {companies.filter(sub => sub.parent_id === c.id).map(sub => (
                               <button
-                                onClick={() => { setSelectedCompany('all'); setCompanyDropdownOpen(false); }}
+                                key={sub.id}
+                                onClick={() => { setSelectedCompany(sub.id); setCompanyDropdownOpen(false); }}
                                 className={cn(
-                                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left",
-                                  selectedCompany === 'all' ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"
+                                  "w-full flex items-center gap-2.5 px-3 py-2 pl-7 rounded-lg text-sm text-left transition-colors",
+                                  selectedCompany === sub.id ? "bg-accent text-accent-foreground" : "hover:bg-muted"
                                 )}
                               >
-                                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                                  <Globe className="h-3.5 w-3.5 text-white" />
-                                </div>
-                                <div>
-                                  <p className="font-medium text-xs">All Companies</p>
-                                  <p className="text-[10px] text-muted-foreground">{employees.length} employees</p>
-                                </div>
+                                <div className={cn("h-1.5 w-1.5 rounded-full", COMPANY_COLORS[sub.code] || 'bg-muted-foreground')} />
+                                <span className="text-xs">{sub.name}</span>
                               </button>
-
-                              <div className="h-px bg-border my-1" />
-
-                              {parentCompanies.map(c => (
-                                <div key={c.id}>
-                                  <button
-                                    onClick={() => { setSelectedCompany(c.id); setCompanyDropdownOpen(false); }}
-                                    className={cn(
-                                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left",
-                                      selectedCompany === c.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"
-                                    )}
-                                  >
-                                    <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center", COMPANY_COLORS[c.code] || 'from-primary to-accent')}>
-                                      <Building2 className="h-3.5 w-3.5 text-white" />
-                                    </div>
-                                    <div>
-                                      <p className="font-medium text-xs">{c.name}</p>
-                                      <p className="text-[10px] text-muted-foreground">Parent</p>
-                                    </div>
-                                  </button>
-                                  {companies.filter(sub => sub.parent_id === c.id).map(sub => (
-                                    <button
-                                      key={sub.id}
-                                      onClick={() => { setSelectedCompany(sub.id); setCompanyDropdownOpen(false); }}
-                                      className={cn(
-                                        "w-full flex items-center gap-3 px-3 py-2 pl-7 rounded-lg text-sm transition-colors text-left",
-                                        selectedCompany === sub.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"
-                                      )}
-                                    >
-                                      <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center", COMPANY_COLORS[sub.code] || 'from-muted to-muted-foreground/20')}>
-                                        <Building2 className="h-3 w-3 text-white" />
-                                      </div>
-                                      <p className="font-medium text-xs">{sub.name}</p>
-                                    </button>
-                                  ))}
-                                </div>
-                              ))}
-                            </div>
-                          </motion.div>
-                        </>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 backdrop-blur-sm border border-white/10">
-                  <Users className="h-3 w-3 text-emerald-400" />
-                  <span className="text-xs font-semibold text-white">{metrics.activeEmployees}</span>
-                  <span className="text-[10px] text-white/40">staff</span>
-                </div>
-                
-                {metrics.pendingLeaveRequests > 0 && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 backdrop-blur-sm border border-amber-500/30 animate-pulse">
-                    <AlertCircle className="h-3 w-3 text-amber-400" />
-                    <span className="text-xs font-semibold text-amber-200">{metrics.pendingLeaveRequests}</span>
-                    <span className="text-[10px] text-amber-300/60">pending</span>
-                  </div>
-                )}
+                            ))}
+                          </div>
+                        ))}
+                      </motion.div>
+                    </>
+                  )}
+                </AnimatePresence>
               </div>
-            </div>
+            )}
+
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+              <Search className="h-4 w-4" />
+            </Button>
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* ═══════════════ NAVIGATION ═══════════════ */}
-      <div className="sticky top-0 z-40 bg-card/95 backdrop-blur-xl border-b">
-        <div className="px-4 md:px-8">
-          <nav className="flex items-center gap-1 overflow-x-auto py-0 mobile-scroll-x">
+      {/* ── Page Title ── */}
+      <div className="max-w-[1400px] mx-auto px-4 md:px-8 pt-8 pb-2">
+        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-foreground">
+          Human Resources
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Manage your workforce across {companies.length || 1} {companies.length > 1 ? 'companies' : 'company'}
+        </p>
+      </div>
+
+      {/* ── Navigation Tabs ── */}
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl">
+        <div className="max-w-[1400px] mx-auto px-4 md:px-8">
+          <nav className="flex items-center gap-0.5 overflow-x-auto mobile-scroll-x border-b">
             {NAVIGATION_ITEMS.map((item) => {
               const isActive = activeTab === item.id;
               return (
@@ -326,35 +239,31 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
                   className={cn(
-                    "relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap",
-                    "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "relative flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors",
                     isActive
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground"
+                      ? "text-foreground"
+                      : "text-muted-foreground hover:text-foreground/70"
                   )}
                 >
                   <item.icon className="h-4 w-4" />
-                  <span className="hidden sm:inline">{item.label}</span>
-                  <span className="sm:hidden">{item.shortLabel}</span>
+                  {item.label}
                   
                   {item.id === 'leave' && metrics.pendingLeaveRequests > 0 && (
-                    <Badge 
-                      className={cn(
-                        "h-5 min-w-5 px-1.5 text-[10px] font-bold border-0",
-                        isActive 
-                          ? "bg-primary text-primary-foreground" 
-                          : "bg-destructive text-destructive-foreground"
-                      )}
-                    >
+                    <span className={cn(
+                      "h-5 min-w-5 px-1.5 rounded-full text-[10px] font-semibold flex items-center justify-center",
+                      isActive 
+                        ? "bg-foreground text-background" 
+                        : "bg-destructive text-destructive-foreground"
+                    )}>
                       {metrics.pendingLeaveRequests}
-                    </Badge>
+                    </span>
                   )}
 
                   {isActive && (
                     <motion.div
                       layoutId="hr-tab-indicator"
-                      className="absolute bottom-0 left-3 right-3 h-[2px] bg-primary rounded-full"
-                      transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                      className="absolute bottom-0 left-2 right-2 h-[2px] bg-foreground rounded-full"
+                      transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                     />
                   )}
                 </button>
@@ -364,15 +273,15 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
         </div>
       </div>
 
-      {/* ═══════════════ CONTENT ═══════════════ */}
-      <div className="p-4 md:p-6 lg:p-8 max-w-[1600px] mx-auto">
+      {/* ── Content ── */}
+      <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-6 md:py-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 8 }}
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
           >
             {activeTab === 'overview' && (
               <HROverviewTab 
