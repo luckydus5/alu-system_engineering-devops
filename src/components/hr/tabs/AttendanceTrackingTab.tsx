@@ -28,6 +28,7 @@ const STATUS_CONFIG: Record<AttendanceStatus, { color: string; bgColor: string; 
   absent: { color: 'text-red-600', bgColor: 'bg-red-500/10', dotColor: 'bg-red-500' },
   half_day: { color: 'text-blue-600', bgColor: 'bg-blue-500/10', dotColor: 'bg-blue-500' },
   on_leave: { color: 'text-violet-600', bgColor: 'bg-violet-500/10', dotColor: 'bg-violet-500' },
+  remote: { color: 'text-teal-600', bgColor: 'bg-teal-500/10', dotColor: 'bg-teal-500' },
 };
 
 function TimelineBar({ record }: { record: any }) {

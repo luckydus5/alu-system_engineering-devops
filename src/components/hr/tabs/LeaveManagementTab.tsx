@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
@@ -12,13 +13,15 @@ import {
   Search, Calendar as CalendarIcon, Clock, Users, FileText,
   CheckCircle2, XCircle, AlertCircle, Filter, RefreshCw,
   ChevronLeft, ChevronRight, Plus, Eye, MoreHorizontal,
-  CalendarDays, LayoutGrid, List, Download, ArrowUpRight
+  CalendarDays, LayoutGrid, List, Download, ArrowUpRight,
+  Wallet, Timer
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveType, LeaveStatus } from '@/hooks/useLeaveRequests';
+import { useAllLeaveBalances } from '@/hooks/useAllLeaveBalances';
 import { LeaveApplicationForm } from '../LeaveApplicationForm';
 import { LeaveRequestDetailDialog } from '../LeaveRequestDetailDialog';
 import { cn } from '@/lib/utils';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths, differenceInDays } from 'date-fns';
 
 interface LeaveManagementTabProps {
   departmentId: string;
@@ -208,15 +211,17 @@ function LeaveRequestItem({ request, onView, onApprove, onReject }: {
 }
 
 export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
-  const [activeView, setActiveView] = useState<'requests' | 'calendar'>('requests');
+  const [activeView, setActiveView] = useState<'requests' | 'calendar' | 'balances'>('requests');
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
+  const [balanceSearch, setBalanceSearch] = useState('');
 
   const { leaveRequests, isLoading, refetch, updateRequestStatus } = useLeaveRequests(undefined, true);
+  const { employeeBalances, isLoading: balancesLoading, initializeBalances } = useAllLeaveBalances();
 
   const filteredRequests = useMemo(() => {
     return leaveRequests.filter(request => {
@@ -351,6 +356,14 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
                   <CalendarDays className="h-4 w-4 mr-2" />
                   Calendar
                 </Button>
+                <Button
+                  variant={activeView === 'balances' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveView('balances')}
+                >
+                  <Wallet className="h-4 w-4 mr-2" />
+                  Balances
+                </Button>
               </div>
               
               <Button variant="outline" size="sm" onClick={() => refetch()}>
@@ -397,12 +410,125 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
             </ScrollArea>
           )}
         </div>
-      ) : (
+      ) : activeView === 'calendar' ? (
         <LeaveCalendarView
           leaveRequests={leaveRequests}
           selectedMonth={selectedMonth}
           onMonthChange={setSelectedMonth}
         />
+      ) : (
+        /* Employee Leave Balances View */
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Wallet className="h-5 w-5 text-primary" />
+                    Employee Leave Balances
+                  </CardTitle>
+                  <CardDescription>Overview of all employee leave balances for {new Date().getFullYear()}</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="relative max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search employee..."
+                      value={balanceSearch}
+                      onChange={(e) => setBalanceSearch(e.target.value)}
+                      className="pl-10 w-[200px]"
+                    />
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => initializeBalances()}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Initialize All
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {employeeBalances.length === 0 ? (
+                <div className="text-center py-12">
+                  <Wallet className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                  <h3 className="text-lg font-semibold mb-1">No leave balances found</h3>
+                  <p className="text-sm text-muted-foreground mb-4">Click "Initialize All" to set default balances for all employees</p>
+                </div>
+              ) : (
+                <ScrollArea className="h-[600px]">
+                  <div className="space-y-4 pr-4">
+                    {employeeBalances
+                      .filter(emp => 
+                        !balanceSearch || 
+                        emp.full_name?.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+                        emp.email.toLowerCase().includes(balanceSearch.toLowerCase())
+                      )
+                      .map(employee => {
+                        const initials = employee.full_name?.split(' ').map(n => n[0]).join('') || '?';
+                        
+                        // Check if employee has active leave today
+                        const activeLeave = leaveRequests.find(r => {
+                          if (r.requester_id !== employee.user_id || r.status !== 'approved') return false;
+                          try {
+                            const now = new Date();
+                            return isWithinInterval(now, { start: parseISO(r.start_date), end: parseISO(r.end_date) });
+                          } catch { return false; }
+                        });
+                        
+                        const daysRemaining = activeLeave 
+                          ? differenceInDays(parseISO(activeLeave.end_date), new Date()) + 1
+                          : null;
+
+                        return (
+                          <Card key={employee.user_id} className="border">
+                            <CardContent className="p-4">
+                              <div className="flex items-start gap-4">
+                                <Avatar className="h-10 w-10">
+                                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-violet-600 text-white text-sm">
+                                    {initials}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <h4 className="font-semibold truncate">{employee.full_name || employee.email}</h4>
+                                    {employee.department_name && (
+                                      <Badge variant="secondary" className="text-xs">{employee.department_name}</Badge>
+                                    )}
+                                    {activeLeave && (
+                                      <Badge className="bg-amber-500/10 text-amber-600 text-xs">
+                                        <Timer className="h-3 w-3 mr-1" />
+                                        On Leave • {daysRemaining}d left
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
+                                    {employee.balances.map(bal => {
+                                      const percentage = bal.total_days > 0 ? (bal.used_days / bal.total_days) * 100 : 0;
+                                      return (
+                                        <div key={bal.leave_type} className="space-y-1.5">
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-xs text-muted-foreground">{LEAVE_TYPE_LABELS[bal.leave_type]}</span>
+                                            <span className="text-xs font-medium">{bal.remaining}/{bal.total_days}</span>
+                                          </div>
+                                          <Progress 
+                                            value={100 - percentage} 
+                                            className="h-2" 
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                  </div>
+                </ScrollArea>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Dialogs */}

@@ -54,11 +54,11 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
   const [activeTab, setActiveTab] = useState('overview');
   
   // Real data from hooks
-  const { leaveRequests = [], loading: leaveLoading } = useLeaveRequests(undefined, true);
+  const { leaveRequests = [], isLoading: leaveLoading } = useLeaveRequests(undefined, true);
   const { users = [], loading: usersLoading } = useUsers();
-  const { positions = [], loading: positionsLoading } = usePositions();
+  const { positions = [], isLoading: positionsLoading } = usePositions();
   const { departments = [], loading: departmentsLoading } = useDepartments();
-  const { records: attendanceRecords = [], loading: attendanceLoading } = useAttendance();
+  const { records: attendanceRecords = [], isLoading: attendanceLoading } = useAttendance();
 
   const greeting = getGreeting();
 
