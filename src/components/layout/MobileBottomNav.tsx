@@ -18,7 +18,7 @@ export function MobileBottomNav() {
     { icon: Home, label: 'Home', path: '/' },
     { icon: Warehouse, label: 'Warehouse', path: '/department/wh' },
     { icon: Bell, label: 'Alerts', path: '/notifications', badge: unreadCount },
-    { icon: Settings, label: 'Settings', path: '/admin' },
+    { icon: Settings, label: 'Settings', path: '/settings' },
   ];
 
   // Don't show on auth page
