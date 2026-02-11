@@ -189,6 +189,93 @@ export type Database = {
         }
         Relationships: []
       }
+      employees: {
+        Row: {
+          address: string | null
+          avatar_url: string | null
+          created_at: string
+          created_by: string | null
+          date_of_birth: string | null
+          department_id: string | null
+          email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          employee_number: string
+          employment_status: string
+          employment_type: string
+          full_name: string
+          gender: string | null
+          hire_date: string
+          id: string
+          linked_user_id: string | null
+          notes: string | null
+          phone: string | null
+          position_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_of_birth?: string | null
+          department_id?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          employee_number: string
+          employment_status?: string
+          employment_type?: string
+          full_name: string
+          gender?: string | null
+          hire_date?: string
+          id?: string
+          linked_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          position_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          avatar_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          date_of_birth?: string | null
+          department_id?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          employee_number?: string
+          employment_status?: string
+          employment_type?: string
+          full_name?: string
+          gender?: string | null
+          hire_date?: string
+          id?: string
+          linked_user_id?: string | null
+          notes?: string | null
+          phone?: string | null
+          position_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employees_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_position_id_fkey"
+            columns: ["position_id"]
+            isOneToOne: false
+            referencedRelation: "positions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fleet_audit_log: {
         Row: {
           action: string
