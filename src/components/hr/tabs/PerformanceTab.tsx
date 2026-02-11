@@ -19,17 +19,16 @@ interface PerformanceTabProps {
 }
 
 const PERFORMANCE_LEVELS = [
-  { level: 'Outstanding', min: 90, max: 100, color: 'text-emerald-600', bgColor: 'bg-emerald-500', badge: 'bg-emerald-500/10' },
-  { level: 'Exceeds', min: 75, max: 89, color: 'text-blue-600', bgColor: 'bg-blue-500', badge: 'bg-blue-500/10' },
-  { level: 'Meets', min: 60, max: 74, color: 'text-amber-600', bgColor: 'bg-amber-500', badge: 'bg-amber-500/10' },
-  { level: 'Needs Improvement', min: 0, max: 59, color: 'text-red-600', bgColor: 'bg-red-500', badge: 'bg-red-500/10' },
+  { level: 'Outstanding', min: 90, max: 100, color: 'text-emerald-600', bgColor: 'bg-emerald-500', badge: 'bg-emerald-500/10 border-emerald-500/20' },
+  { level: 'Exceeds', min: 75, max: 89, color: 'text-blue-600', bgColor: 'bg-blue-500', badge: 'bg-blue-500/10 border-blue-500/20' },
+  { level: 'Meets', min: 60, max: 74, color: 'text-amber-600', bgColor: 'bg-amber-500', badge: 'bg-amber-500/10 border-amber-500/20' },
+  { level: 'Needs Improvement', min: 0, max: 59, color: 'text-red-600', bgColor: 'bg-red-500', badge: 'bg-red-500/10 border-red-500/20' },
 ];
 
 function getPerformanceLevel(score: number) {
   return PERFORMANCE_LEVELS.find(l => score >= l.min && score <= l.max) || PERFORMANCE_LEVELS[3];
 }
 
-// Mock data for demonstration
 const mockReviews = [
   { id: '1', employeeName: 'John Smith', score: 92, period: 'Q4 2025', status: 'completed', goals: 8, goalsCompleted: 7 },
   { id: '2', employeeName: 'Sarah Johnson', score: 85, period: 'Q4 2025', status: 'completed', goals: 6, goalsCompleted: 5 },
@@ -45,39 +44,59 @@ const mockGoals = [
   { id: '4', title: 'Customer Satisfaction Improvement', progress: 75, dueDate: '2026-02-28', priority: 'high' },
 ];
 
-function PerformanceCard({ review }: { review: typeof mockReviews[0] }) {
+const AVATAR_GRADIENTS = [
+  'from-violet-500 to-purple-600',
+  'from-blue-500 to-cyan-600',
+  'from-emerald-500 to-teal-600',
+  'from-rose-500 to-pink-600',
+  'from-amber-500 to-orange-600',
+];
+
+function PerformanceCard({ review, rank }: { review: typeof mockReviews[0]; rank?: number }) {
   const level = getPerformanceLevel(review.score);
+  const gradient = AVATAR_GRADIENTS[review.employeeName.charCodeAt(0) % AVATAR_GRADIENTS.length];
   
   return (
-    <Card className="hover:shadow-md transition-all">
-      <CardContent className="p-4">
+    <Card className="group border-0 shadow-corporate hover:shadow-corporate-lg transition-all duration-300 hover:-translate-y-0.5 overflow-hidden">
+      <div className={cn("h-0.5 w-full", level.bgColor)} />
+      <CardContent className="p-5">
         <div className="flex items-start gap-4">
-          <Avatar className="h-12 w-12">
-            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-              {review.employeeName.split(' ').map(n => n[0]).join('')}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <Avatar className="h-12 w-12 ring-2 ring-background shadow-sm">
+              <AvatarFallback className={cn("text-sm font-bold text-white bg-gradient-to-br", gradient)}>
+                {review.employeeName.split(' ').map(n => n[0]).join('')}
+              </AvatarFallback>
+            </Avatar>
+            {rank && rank <= 3 && (
+              <div className={cn(
+                "absolute -top-1 -right-1 h-5 w-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow",
+                rank === 1 ? "bg-amber-500" : rank === 2 ? "bg-slate-400" : "bg-amber-700"
+              )}>
+                {rank}
+              </div>
+            )}
+          </div>
           
           <div className="flex-1 min-w-0">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="font-semibold">{review.employeeName}</h4>
-              <Badge className={cn("text-xs", level.badge, level.color)}>
+            <div className="flex items-center justify-between mb-1.5">
+              <h4 className="font-semibold text-sm">{review.employeeName}</h4>
+              <Badge variant="outline" className={cn("text-[10px] font-semibold", level.badge, level.color)}>
                 {level.level}
               </Badge>
             </div>
             
-            <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
+            <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
               <span>{review.period}</span>
-              <span>•</span>
+              <span className="h-1 w-1 rounded-full bg-muted-foreground/30" />
               <span>{review.goalsCompleted}/{review.goals} goals</span>
             </div>
             
-            <div className="space-y-1">
-              <div className="flex items-center justify-between text-sm">
-                <span>Performance Score</span>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Score</span>
                 <span className={cn("font-bold", level.color)}>{review.score}%</span>
               </div>
-              <Progress value={review.score} className="h-2" />
+              <Progress value={review.score} className="h-1.5" />
             </div>
           </div>
         </div>
@@ -87,25 +106,26 @@ function PerformanceCard({ review }: { review: typeof mockReviews[0] }) {
 }
 
 function GoalCard({ goal }: { goal: typeof mockGoals[0] }) {
-  const priorityColors = {
-    high: 'border-red-500 bg-red-500/5',
-    medium: 'border-amber-500 bg-amber-500/5',
-    low: 'border-blue-500 bg-blue-500/5',
+  const priorityConfig = {
+    high: { border: 'border-l-destructive', badge: 'bg-destructive/10 text-destructive', label: 'High' },
+    medium: { border: 'border-l-secondary', badge: 'bg-secondary/10 text-secondary-foreground', label: 'Medium' },
+    low: { border: 'border-l-primary', badge: 'bg-primary/10 text-primary', label: 'Low' },
   };
+  const config = priorityConfig[goal.priority as keyof typeof priorityConfig];
   
   return (
-    <Card className={cn("border-l-4", priorityColors[goal.priority as keyof typeof priorityColors])}>
-      <CardContent className="p-4">
+    <Card className={cn("border-l-4 border-0 shadow-corporate hover:shadow-corporate-lg transition-all", config.border)}>
+      <CardContent className="p-5">
         <div className="flex items-start justify-between mb-3">
           <div>
-            <h4 className="font-semibold">{goal.title}</h4>
-            <p className="text-sm text-muted-foreground">Due: {goal.dueDate}</p>
+            <h4 className="font-semibold text-sm">{goal.title}</h4>
+            <p className="text-xs text-muted-foreground mt-0.5">Due: {goal.dueDate}</p>
           </div>
-          <Badge variant={goal.progress === 100 ? 'default' : 'secondary'}>
-            {goal.progress === 100 ? 'Completed' : `${goal.progress}%`}
+          <Badge variant="outline" className={cn("text-[10px]", config.badge)}>
+            {goal.progress === 100 ? '✓ Done' : `${goal.progress}%`}
           </Badge>
         </div>
-        <Progress value={goal.progress} className="h-2" />
+        <Progress value={goal.progress} className="h-1.5" />
       </CardContent>
     </Card>
   );
@@ -115,7 +135,6 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
   const [activeView, setActiveView] = useState('overview');
   const { users } = useUsers();
 
-  // Calculate mock stats
   const stats = {
     avgScore: 84,
     reviewsCompleted: 45,
@@ -124,128 +143,74 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
     goalsOnTrack: 78,
   };
 
+  const statCards = [
+    { label: 'Avg Score', value: `${stats.avgScore}%`, icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600' },
+    { label: 'Completed', value: stats.reviewsCompleted, icon: CheckCircle2, gradient: 'from-blue-500 to-cyan-600' },
+    { label: 'Pending', value: stats.reviewsPending, icon: Clock, gradient: 'from-amber-500 to-orange-600' },
+    { label: 'Top Stars', value: stats.topPerformers, icon: Trophy, gradient: 'from-violet-500 to-purple-600' },
+    { label: 'On Track', value: `${stats.goalsOnTrack}%`, icon: Target, gradient: 'from-rose-500 to-pink-600' },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Header Stats */}
-      <div className="grid gap-4 md:grid-cols-5">
-        <Card className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Avg Score</p>
-                <p className="text-3xl font-bold text-emerald-600">{stats.avgScore}%</p>
+      {/* KPI Cards */}
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
+        {statCards.map(({ label, value, icon: Icon, gradient }) => (
+          <Card key={label} className="border-0 shadow-corporate overflow-hidden">
+            <div className={cn("h-0.5 bg-gradient-to-r", gradient)} />
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{label}</p>
+                  <p className="text-2xl font-bold mt-0.5">{value}</p>
+                </div>
+                <div className={cn("h-10 w-10 rounded-xl bg-gradient-to-br flex items-center justify-center", gradient)}>
+                  <Icon className="h-5 w-5 text-white" />
+                </div>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-emerald-500/20 flex items-center justify-center">
-                <TrendingUp className="h-6 w-6 text-emerald-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Reviews Done</p>
-                <p className="text-3xl font-bold text-blue-600">{stats.reviewsCompleted}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-blue-500/20 flex items-center justify-center">
-                <CheckCircle2 className="h-6 w-6 text-blue-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-amber-500/10 to-orange-500/10 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Pending</p>
-                <p className="text-3xl font-bold text-amber-600">{stats.reviewsPending}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-amber-500/20 flex items-center justify-center">
-                <Clock className="h-6 w-6 text-amber-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-violet-500/10 to-purple-500/10 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Top Performers</p>
-                <p className="text-3xl font-bold text-violet-600">{stats.topPerformers}</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-violet-500/20 flex items-center justify-center">
-                <Trophy className="h-6 w-6 text-violet-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-rose-500/10 to-pink-500/10 border-0">
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground">Goals On Track</p>
-                <p className="text-3xl font-bold text-rose-600">{stats.goalsOnTrack}%</p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-rose-500/20 flex items-center justify-center">
-                <Target className="h-6 w-6 text-rose-600" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
-      {/* Navigation Tabs */}
+      {/* Tabs */}
       <Tabs value={activeView} onValueChange={setActiveView}>
-        <TabsList className="bg-muted/50">
-          <TabsTrigger value="overview" className="gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Overview
+        <TabsList className="bg-muted/50 p-1">
+          <TabsTrigger value="overview" className="gap-2 text-xs">
+            <BarChart3 className="h-3.5 w-3.5" /> Overview
           </TabsTrigger>
-          <TabsTrigger value="reviews" className="gap-2">
-            <Star className="h-4 w-4" />
-            Reviews
+          <TabsTrigger value="reviews" className="gap-2 text-xs">
+            <Star className="h-3.5 w-3.5" /> Reviews
           </TabsTrigger>
-          <TabsTrigger value="goals" className="gap-2">
-            <Target className="h-4 w-4" />
-            Goals
+          <TabsTrigger value="goals" className="gap-2 text-xs">
+            <Target className="h-3.5 w-3.5" /> Goals
           </TabsTrigger>
-          <TabsTrigger value="feedback" className="gap-2">
-            <MessageSquare className="h-4 w-4" />
-            Feedback
+          <TabsTrigger value="feedback" className="gap-2 text-xs">
+            <MessageSquare className="h-3.5 w-3.5" /> Feedback
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6 mt-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Performance Distribution */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-blue-500" />
+            <Card className="border-0 shadow-corporate">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
                   Performance Distribution
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {PERFORMANCE_LEVELS.map((level, idx) => {
+                {PERFORMANCE_LEVELS.map((level) => {
                   const count = mockReviews.filter(r => r.score >= level.min && r.score <= level.max).length;
                   const percentage = (count / mockReviews.length) * 100;
-                  
                   return (
-                    <div key={level.level} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className={level.color}>{level.level}</span>
+                    <div key={level.level} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className={cn("font-medium", level.color)}>{level.level}</span>
                         <span className="text-muted-foreground">{count} employees</span>
                       </div>
-                      <div className="h-3 bg-muted rounded-full overflow-hidden">
-                        <div 
-                          className={cn("h-full rounded-full", level.bgColor)}
-                          style={{ width: `${percentage}%` }}
-                        />
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className={cn("h-full rounded-full transition-all", level.bgColor)} style={{ width: `${percentage}%` }} />
                       </div>
                     </div>
                   );
@@ -253,68 +218,62 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
               </CardContent>
             </Card>
 
-            {/* Top Performers */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-amber-500" />
+            <Card className="border-0 shadow-corporate">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-secondary" />
                   Top Performers
                 </CardTitle>
-                <CardDescription>Highest rated employees this quarter</CardDescription>
+                <CardDescription className="text-xs">Highest rated this quarter</CardDescription>
               </CardHeader>
               <CardContent>
-                <ScrollArea className="h-[250px]">
-                  <div className="space-y-3">
-                    {mockReviews
-                      .sort((a, b) => b.score - a.score)
-                      .slice(0, 5)
-                      .map((review, idx) => (
-                        <div 
-                          key={review.id}
-                          className="flex items-center gap-3 p-3 rounded-lg bg-muted/50"
-                        >
+                <div className="space-y-2">
+                  {mockReviews
+                    .sort((a, b) => b.score - a.score)
+                    .slice(0, 5)
+                    .map((review, idx) => {
+                      const level = getPerformanceLevel(review.score);
+                      const gradient = AVATAR_GRADIENTS[review.employeeName.charCodeAt(0) % AVATAR_GRADIENTS.length];
+                      return (
+                        <div key={review.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-muted/30 hover:bg-muted/50 transition-colors">
                           <div className={cn(
-                            "h-8 w-8 rounded-full flex items-center justify-center text-sm font-bold text-white",
-                            idx === 0 ? "bg-amber-500" : idx === 1 ? "bg-slate-400" : idx === 2 ? "bg-amber-700" : "bg-slate-300"
+                            "h-7 w-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0",
+                            idx === 0 ? "bg-amber-500" : idx === 1 ? "bg-slate-400" : idx === 2 ? "bg-amber-700" : "bg-muted-foreground/30"
                           )}>
                             {idx + 1}
                           </div>
-                          <Avatar className="h-10 w-10">
-                            <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white text-sm">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className={cn("text-[10px] font-bold text-white bg-gradient-to-br", gradient)}>
                               {review.employeeName.split(' ').map(n => n[0]).join('')}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="flex-1">
-                            <p className="font-medium">{review.employeeName}</p>
-                            <p className="text-xs text-muted-foreground">{review.goalsCompleted}/{review.goals} goals</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium truncate">{review.employeeName}</p>
+                            <p className="text-[10px] text-muted-foreground">{review.goalsCompleted}/{review.goals} goals</p>
                           </div>
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-emerald-600">{review.score}%</p>
-                          </div>
+                          <span className={cn("text-sm font-bold", level.color)}>{review.score}%</span>
                         </div>
-                      ))}
-                  </div>
-                </ScrollArea>
+                      );
+                    })}
+                </div>
               </CardContent>
             </Card>
           </div>
 
-          {/* Recent Reviews */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+          <Card className="border-0 shadow-corporate">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <div>
-                <CardTitle className="text-base">Recent Performance Reviews</CardTitle>
-                <CardDescription>Latest employee evaluations</CardDescription>
+                <CardTitle className="text-sm font-semibold">Recent Performance Reviews</CardTitle>
+                <CardDescription className="text-xs">Latest evaluations</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                View All
-                <ChevronRight className="h-4 w-4 ml-1" />
+              <Button variant="outline" size="sm" className="text-xs h-8">
+                View All <ChevronRight className="h-3.5 w-3.5 ml-1" />
               </Button>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {mockReviews.slice(0, 3).map(review => (
-                  <PerformanceCard key={review.id} review={review} />
+                {mockReviews.slice(0, 3).map((review, idx) => (
+                  <PerformanceCard key={review.id} review={review} rank={idx + 1} />
                 ))}
               </div>
             </CardContent>
@@ -338,14 +297,16 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
         </TabsContent>
 
         <TabsContent value="feedback" className="mt-6">
-          <Card>
+          <Card className="border-0 shadow-corporate">
             <CardContent className="p-12 text-center">
-              <MessageSquare className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
+              <div className="h-16 w-16 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-4">
+                <MessageSquare className="h-8 w-8 text-muted-foreground/40" />
+              </div>
               <h3 className="text-lg font-semibold mb-1">360° Feedback</h3>
-              <p className="text-muted-foreground mb-4">
+              <p className="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
                 Collect and manage employee feedback for comprehensive performance reviews
               </p>
-              <Button>
+              <Button className="shadow-sm">
                 <Sparkles className="h-4 w-4 mr-2" />
                 Start Feedback Cycle
               </Button>

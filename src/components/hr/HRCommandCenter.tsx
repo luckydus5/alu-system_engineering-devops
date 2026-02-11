@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   LayoutDashboard, Users, Calendar, Clock, Target, 
@@ -140,9 +139,8 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
 
   return (
     <div className="min-h-screen w-full bg-background">
-      {/* ═══════════════ PREMIUM HEADER ═══════════════ */}
+      {/* ═══════════════ HEADER ═══════════════ */}
       <header className="relative overflow-hidden">
-        {/* Gradient background */}
         <div className="absolute inset-0 gradient-hero" />
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iLjAzIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-50" />
         
@@ -191,39 +189,39 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
           <div className="px-4 md:px-8 pb-6 pt-2">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div className="flex items-start gap-4">
-                <div className="h-16 w-16 md:h-20 md:w-20 rounded-2xl gradient-gold shadow-gold flex items-center justify-center shrink-0">
-                  <Shield className="h-8 w-8 md:h-10 md:w-10 text-white" />
+                <div className="h-14 w-14 md:h-16 md:w-16 rounded-2xl gradient-gold shadow-gold flex items-center justify-center shrink-0">
+                  <Shield className="h-7 w-7 md:h-8 md:w-8 text-white" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <greeting.icon className="h-5 w-5 text-secondary" />
-                    <span className="text-white/60 text-sm">{greeting.text}</span>
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <greeting.icon className="h-4 w-4 text-secondary" />
+                    <span className="text-white/50 text-xs font-medium">{greeting.text}</span>
                   </div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                  <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">
                     HR Command Center
                   </h1>
-                  <p className="text-white/50 text-sm mt-1 max-w-md">
+                  <p className="text-white/40 text-xs mt-0.5">
                     Unified workforce management across all companies
                   </p>
                 </div>
               </div>
 
               {/* Stats pills + Company selector */}
-              <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                {/* Company Selector - Custom dropdown */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Company Selector */}
                 {companies.length > 0 && (
                   <div className="relative">
                     <button
                       onClick={() => setCompanyDropdownOpen(!companyDropdownOpen)}
                       className={cn(
-                        "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all",
+                        "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                         "bg-white/10 hover:bg-white/15 text-white border border-white/10",
                         "backdrop-blur-sm"
                       )}
                     >
-                      <Globe className="h-4 w-4 text-secondary" />
+                      <Globe className="h-3.5 w-3.5 text-secondary" />
                       <span>{selectedCompanyName}</span>
-                      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", companyDropdownOpen && "rotate-180")} />
+                      <ChevronDown className={cn("h-3 w-3 transition-transform", companyDropdownOpen && "rotate-180")} />
                     </button>
 
                     <AnimatePresence>
@@ -235,62 +233,57 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -8, scale: 0.95 }}
                             transition={{ duration: 0.15 }}
-                            className="absolute right-0 top-full mt-2 w-64 bg-card border rounded-xl shadow-corporate-lg z-50 overflow-hidden"
+                            className="absolute right-0 top-full mt-2 w-60 bg-card border rounded-xl shadow-corporate-lg z-50 overflow-hidden"
                           >
-                            <div className="p-2">
+                            <div className="p-1.5">
                               <button
                                 onClick={() => { setSelectedCompany('all'); setCompanyDropdownOpen(false); }}
                                 className={cn(
-                                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left",
+                                  "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left",
                                   selectedCompany === 'all' ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"
                                 )}
                               >
-                                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                                  <Globe className="h-4 w-4 text-white" />
+                                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                                  <Globe className="h-3.5 w-3.5 text-white" />
                                 </div>
                                 <div>
-                                  <p className="font-medium">All Companies</p>
-                                  <p className="text-xs text-muted-foreground">{employees.length} employees total</p>
+                                  <p className="font-medium text-xs">All Companies</p>
+                                  <p className="text-[10px] text-muted-foreground">{employees.length} employees</p>
                                 </div>
                               </button>
 
-                              <div className="h-px bg-border my-1.5" />
+                              <div className="h-px bg-border my-1" />
 
                               {parentCompanies.map(c => (
                                 <div key={c.id}>
                                   <button
                                     onClick={() => { setSelectedCompany(c.id); setCompanyDropdownOpen(false); }}
                                     className={cn(
-                                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors text-left",
+                                      "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-left",
                                       selectedCompany === c.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"
                                     )}
                                   >
-                                    <div className={cn("h-8 w-8 rounded-lg bg-gradient-to-br flex items-center justify-center", COMPANY_COLORS[c.code] || 'from-primary to-accent')}>
-                                      <Building2 className="h-4 w-4 text-white" />
+                                    <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center", COMPANY_COLORS[c.code] || 'from-primary to-accent')}>
+                                      <Building2 className="h-3.5 w-3.5 text-white" />
                                     </div>
                                     <div>
-                                      <p className="font-medium">{c.name}</p>
-                                      <p className="text-xs text-muted-foreground">Parent company</p>
+                                      <p className="font-medium text-xs">{c.name}</p>
+                                      <p className="text-[10px] text-muted-foreground">Parent</p>
                                     </div>
                                   </button>
-
-                                  {/* Subsidiaries */}
                                   {companies.filter(sub => sub.parent_id === c.id).map(sub => (
                                     <button
                                       key={sub.id}
                                       onClick={() => { setSelectedCompany(sub.id); setCompanyDropdownOpen(false); }}
                                       className={cn(
-                                        "w-full flex items-center gap-3 px-3 py-2.5 pl-8 rounded-lg text-sm transition-colors text-left",
+                                        "w-full flex items-center gap-3 px-3 py-2 pl-7 rounded-lg text-sm transition-colors text-left",
                                         selectedCompany === sub.id ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"
                                       )}
                                     >
-                                      <div className={cn("h-7 w-7 rounded-lg bg-gradient-to-br flex items-center justify-center", COMPANY_COLORS[sub.code] || 'from-muted to-muted-foreground/20')}>
-                                        <Building2 className="h-3.5 w-3.5 text-white" />
+                                      <div className={cn("h-6 w-6 rounded-md bg-gradient-to-br flex items-center justify-center", COMPANY_COLORS[sub.code] || 'from-muted to-muted-foreground/20')}>
+                                        <Building2 className="h-3 w-3 text-white" />
                                       </div>
-                                      <div>
-                                        <p className="font-medium">{sub.name}</p>
-                                        <p className="text-xs text-muted-foreground">Subsidiary</p>
-                                      </div>
+                                      <p className="font-medium text-xs">{sub.name}</p>
                                     </button>
                                   ))}
                                 </div>
@@ -303,26 +296,17 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                   </div>
                 )}
 
-                {/* Quick stats */}
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 backdrop-blur-sm border border-white/10">
-                  <Users className="h-3.5 w-3.5 text-emerald-400" />
-                  <span className="text-sm font-semibold text-white">{metrics.activeEmployees}</span>
-                  <span className="text-xs text-white/50">staff</span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 backdrop-blur-sm border border-white/10">
+                  <Users className="h-3 w-3 text-emerald-400" />
+                  <span className="text-xs font-semibold text-white">{metrics.activeEmployees}</span>
+                  <span className="text-[10px] text-white/40">staff</span>
                 </div>
                 
                 {metrics.pendingLeaveRequests > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 backdrop-blur-sm border border-amber-500/30 animate-pulse">
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
-                    <span className="text-sm font-semibold text-amber-200">{metrics.pendingLeaveRequests}</span>
-                    <span className="text-xs text-amber-300/70">pending</span>
-                  </div>
-                )}
-
-                {metrics.employeesOnLeaveToday > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-500/20 backdrop-blur-sm border border-violet-500/30">
-                    <Calendar className="h-3.5 w-3.5 text-violet-400" />
-                    <span className="text-sm font-semibold text-violet-200">{metrics.employeesOnLeaveToday}</span>
-                    <span className="text-xs text-violet-300/70">on leave</span>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 backdrop-blur-sm border border-amber-500/30 animate-pulse">
+                    <AlertCircle className="h-3 w-3 text-amber-400" />
+                    <span className="text-xs font-semibold text-amber-200">{metrics.pendingLeaveRequests}</span>
+                    <span className="text-[10px] text-amber-300/60">pending</span>
                   </div>
                 )}
               </div>
@@ -332,9 +316,9 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
       </header>
 
       {/* ═══════════════ NAVIGATION ═══════════════ */}
-      <div className="sticky top-0 z-40 bg-card/95 backdrop-blur-lg border-b shadow-sm">
+      <div className="sticky top-0 z-40 bg-card/95 backdrop-blur-xl border-b">
         <div className="px-4 md:px-8">
-          <nav className="flex items-center gap-0.5 overflow-x-auto py-1 -mx-1 px-1 mobile-scroll-x">
+          <nav className="flex items-center gap-1 overflow-x-auto py-0 mobile-scroll-x">
             {NAVIGATION_ITEMS.map((item) => {
               const isActive = activeTab === item.id;
               return (
@@ -342,11 +326,11 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
                   className={cn(
-                    "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg transition-all whitespace-nowrap",
+                    "relative flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all whitespace-nowrap",
                     "focus:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isActive
                       ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   <item.icon className="h-4 w-4" />
@@ -366,11 +350,10 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                     </Badge>
                   )}
 
-                  {/* Active indicator line */}
                   {isActive && (
                     <motion.div
                       layoutId="hr-tab-indicator"
-                      className="absolute bottom-0 left-2 right-2 h-0.5 bg-primary rounded-full"
+                      className="absolute bottom-0 left-3 right-3 h-[2px] bg-primary rounded-full"
                       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                     />
                   )}
@@ -386,10 +369,10 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
-            initial={{ opacity: 0, y: 12 }}
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
           >
             {activeTab === 'overview' && (
               <HROverviewTab 
