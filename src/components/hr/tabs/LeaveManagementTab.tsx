@@ -14,14 +14,14 @@ import {
   CheckCircle2, XCircle, AlertCircle, Filter, RefreshCw,
   ChevronLeft, ChevronRight, Plus, Eye, MoreHorizontal,
   CalendarDays, LayoutGrid, List, Download, ArrowUpRight,
-  Wallet, Timer
+  Wallet, Timer, Calculator, Table2
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveType, LeaveStatus } from '@/hooks/useLeaveRequests';
 import { useAllLeaveBalances } from '@/hooks/useAllLeaveBalances';
 import { LeaveApplicationForm } from '../LeaveApplicationForm';
 import { LeaveRequestDetailDialog } from '../LeaveRequestDetailDialog';
 import { cn } from '@/lib/utils';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths, differenceInDays } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths, differenceInDays, eachDayOfInterval as eachDay, isSaturday, isSunday, addDays } from 'date-fns';
 
 interface LeaveManagementTabProps {
   departmentId: string;
@@ -210,8 +210,293 @@ function LeaveRequestItem({ request, onView, onApprove, onReject }: {
   );
 }
 
+// Leave Date Calculator matching Excel Page 2 rules
+function calculateLeaveDays(lastDayWork: Date, returnDate: Date): { calendarDays: number; workingDays: number; saturdays: number; sundays: number; totalLeaveDays: number } {
+  // Rule: Last Day of Work & Return Day are NOT counted as leave
+  const startLeave = addDays(lastDayWork, 1);
+  const endLeave = addDays(returnDate, -1);
+  
+  if (endLeave < startLeave) return { calendarDays: 0, workingDays: 0, saturdays: 0, sundays: 0, totalLeaveDays: 0 };
+  
+  const days = eachDayOfInterval({ start: startLeave, end: endLeave });
+  let workingDays = 0, saturdays = 0, sundays = 0;
+  
+  days.forEach(day => {
+    if (isSunday(day)) sundays++;
+    else if (isSaturday(day)) saturdays++;
+    else workingDays++;
+  });
+  
+  // Formula: Mon-Fri (full) + Saturdays × 0.5 + Sundays × 0
+  const totalLeaveDays = workingDays + saturdays * 0.5;
+  
+  return { calendarDays: days.length, workingDays, saturdays, sundays, totalLeaveDays };
+}
+
+function LeaveDateCalculator() {
+  const [lastDayWork, setLastDayWork] = useState('');
+  const [returnDate, setReturnDate] = useState('');
+  
+  const result = useMemo(() => {
+    if (!lastDayWork || !returnDate) return null;
+    try {
+      return calculateLeaveDays(new Date(lastDayWork), new Date(returnDate));
+    } catch { return null; }
+  }, [lastDayWork, returnDate]);
+
+  const examples = [
+    { lastDay: '2025-11-02', returnDay: '2025-11-11', expected: 6.5 },
+    { lastDay: '2025-01-10', returnDay: '2025-01-20', expected: 6 },
+    { lastDay: '2025-07-01', returnDay: '2025-07-14', expected: 9 },
+    { lastDay: '2025-09-12', returnDay: '2025-10-06', expected: 17 },
+  ];
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Calculator className="h-5 w-5 text-primary" />
+            📅 Quick Date Range Calculator
+          </CardTitle>
+          <CardDescription>Enter Last Day of Work and Return Date to calculate leave days</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Last Day of Work</label>
+              <Input type="date" value={lastDayWork} onChange={e => setLastDayWork(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Return to Work</label>
+              <Input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
+            </div>
+          </div>
+
+          {result && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-4 space-y-2">
+                <h4 className="font-semibold text-sm">Results:</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">Calendar Days (Leave):</span>
+                  <span className="font-medium">{result.calendarDays}</span>
+                  <span className="text-muted-foreground">Working Days (Mon-Fri):</span>
+                  <span className="font-medium">{result.workingDays}</span>
+                  <span className="text-muted-foreground">Saturdays in Leave:</span>
+                  <span className="font-medium">{result.saturdays}</span>
+                  <span className="text-muted-foreground">Sundays in Leave:</span>
+                  <span className="font-medium">{result.sundays}</span>
+                </div>
+                <div className="pt-2 border-t">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-lg">TOTAL LEAVE DAYS:</span>
+                    <span className="font-bold text-2xl text-primary">{result.totalLeaveDays}</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
+            <p>📝 Rule: Last Day of Work & Return Day are NOT counted as leave</p>
+            <p>📝 Formula: Mon-Fri (full) + Saturdays × 0.5 + Sundays × 0</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">📋 Examples</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2 font-medium">Last Day Work</th>
+                <th className="text-left py-2 font-medium">Return Date</th>
+                <th className="text-right py-2 font-medium">Leave Days</th>
+              </tr>
+            </thead>
+            <tbody>
+              {examples.map((ex, i) => {
+                const calc = calculateLeaveDays(new Date(ex.lastDay), new Date(ex.returnDay));
+                return (
+                  <tr key={i} className="border-b hover:bg-muted/30">
+                    <td className="py-2">{format(new Date(ex.lastDay), 'dd-MMM-yyyy')}</td>
+                    <td className="py-2">{format(new Date(ex.returnDay), 'dd-MMM-yyyy')}</td>
+                    <td className="py-2 text-right font-bold text-primary">{calc.totalLeaveDays}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// Leave Allowance & Balance Tracker (Excel Page 4)
+function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch, onSearchChange, onInitialize }: {
+  employeeBalances: any[];
+  leaveRequests: any[];
+  balanceSearch: string;
+  onSearchChange: (v: string) => void;
+  onInitialize: () => void;
+}) {
+  const currentYear = new Date().getFullYear();
+  const annualAllowance = 18; // As per Excel
+
+  const filteredEmployees = employeeBalances.filter(emp =>
+    !balanceSearch ||
+    emp.full_name?.toLowerCase().includes(balanceSearch.toLowerCase()) ||
+    emp.email.toLowerCase().includes(balanceSearch.toLowerCase())
+  );
+
+  // Group by department
+  const grouped = useMemo(() => {
+    const map = new Map<string, any[]>();
+    filteredEmployees.forEach(emp => {
+      const dept = emp.department_name || 'Unassigned';
+      const list = map.get(dept) || [];
+      list.push(emp);
+      map.set(dept, list);
+    });
+    return map;
+  }, [filteredEmployees]);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Table2 className="h-5 w-5 text-primary" />
+              📊 Leave Allowance & Balance Tracker {currentYear}
+            </CardTitle>
+            <CardDescription>
+              Annual Leave Allowance: {annualAllowance} days per employee | Formula: Mon-Fri = 1 day, Saturday = 0.5 day, Sunday = 0
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search..." value={balanceSearch} onChange={e => onSearchChange(e.target.value)} className="pl-10 w-[200px]" />
+            </div>
+            <Button variant="outline" size="sm" onClick={onInitialize}>
+              <Plus className="h-4 w-4 mr-1" /> Initialize All
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {filteredEmployees.length === 0 ? (
+          <div className="text-center py-12 px-4">
+            <Wallet className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+            <h3 className="text-lg font-semibold mb-1">No leave balances found</h3>
+            <p className="text-sm text-muted-foreground mb-4">Click "Initialize All" to set default balances</p>
+          </div>
+        ) : (
+          <ScrollArea className="w-full">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse min-w-[900px]">
+                <thead>
+                  <tr className="bg-muted/50 border-b">
+                    <th className="sticky left-0 z-10 bg-muted/90 px-2 py-2 text-left font-semibold w-8">No</th>
+                    <th className="px-2 py-2 text-left font-semibold w-16">Dept</th>
+                    <th className="sticky left-8 z-10 bg-muted/90 px-2 py-2 text-left font-semibold min-w-[160px]">Employee Name</th>
+                    <th className="px-2 py-2 text-center font-semibold bg-amber-50 dark:bg-amber-900/20">Carry Over</th>
+                    <th className="px-2 py-2 text-center font-semibold bg-emerald-50 dark:bg-emerald-900/20">Allowance</th>
+                    <th className="px-2 py-2 text-center font-semibold bg-blue-50 dark:bg-blue-900/20">TOTAL Entitlement</th>
+                    <th className="px-2 py-2 text-center font-semibold bg-orange-50 dark:bg-orange-900/20">Days Used</th>
+                    <th className="px-2 py-2 text-center font-semibold bg-violet-50 dark:bg-violet-900/20">Balance</th>
+                    <th className="px-2 py-2 text-center font-semibold">Status</th>
+                    <th className="px-2 py-2 text-left font-semibold min-w-[100px]">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from(grouped.entries()).map(([deptName, deptEmployees]) => (
+                    <>
+                      <tr key={`dept-${deptName}`} className="bg-primary/5 border-b">
+                        <td colSpan={10} className="px-2 py-1.5 font-bold text-sm text-primary">
+                          ► {deptName.toUpperCase()}
+                        </td>
+                      </tr>
+                      {deptEmployees.map((emp, idx) => {
+                        // Find annual leave balance
+                        const annualBal = emp.balances.find((b: any) => b.leave_type === 'annual');
+                        const totalEntitlement = annualBal ? annualBal.total_days : annualAllowance;
+                        const usedDays = annualBal ? annualBal.used_days : 0;
+                        const balance = totalEntitlement - usedDays;
+                        
+                        // Check active leave
+                        const activeLeave = leaveRequests.find((r: any) => {
+                          if (r.requester_id !== emp.user_id || r.status !== 'approved') return false;
+                          try {
+                            const now = new Date();
+                            return isWithinInterval(now, { start: parseISO(r.start_date), end: parseISO(r.end_date) });
+                          } catch { return false; }
+                        });
+
+                        return (
+                          <tr key={emp.user_id} className="border-b hover:bg-muted/30 transition-colors">
+                            <td className="sticky left-0 z-10 bg-background px-2 py-1.5 text-muted-foreground">{idx + 1}</td>
+                            <td className="px-2 py-1.5 text-muted-foreground">{deptName.substring(0, 8)}</td>
+                            <td className="sticky left-8 z-10 bg-background px-2 py-1.5 font-medium truncate max-w-[160px]">{emp.full_name || emp.email}</td>
+                            <td className="px-2 py-1.5 text-center bg-amber-50/50 dark:bg-amber-900/10">0</td>
+                            <td className="px-2 py-1.5 text-center font-medium bg-emerald-50/50 dark:bg-emerald-900/10">{totalEntitlement}</td>
+                            <td className="px-2 py-1.5 text-center font-bold bg-blue-50/50 dark:bg-blue-900/10">{totalEntitlement}</td>
+                            <td className="px-2 py-1.5 text-center font-medium bg-orange-50/50 dark:bg-orange-900/10">{usedDays}</td>
+                            <td className={cn(
+                              "px-2 py-1.5 text-center font-bold",
+                              balance > 0 ? "text-emerald-600 bg-emerald-50/50 dark:bg-emerald-900/10" : "text-red-600 bg-red-50/50 dark:bg-red-900/10"
+                            )}>
+                              {balance}
+                            </td>
+                            <td className="px-2 py-1.5 text-center">
+                              {activeLeave ? (
+                                <Badge className="bg-amber-500/10 text-amber-600 text-[10px]">
+                                  <Timer className="h-3 w-3 mr-0.5" /> On Leave
+                                </Badge>
+                              ) : balance <= 0 ? (
+                                <Badge className="bg-red-500/10 text-red-600 text-[10px]">Exhausted</Badge>
+                              ) : balance <= 5 ? (
+                                <Badge className="bg-amber-500/10 text-amber-600 text-[10px]">Low</Badge>
+                              ) : (
+                                <Badge className="bg-emerald-500/10 text-emerald-600 text-[10px]">Available</Badge>
+                              )}
+                            </td>
+                            <td className="px-2 py-1.5 text-muted-foreground">
+                              {activeLeave && `Until ${format(parseISO(activeLeave.end_date), 'MMM d')}`}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </ScrollArea>
+        )}
+
+        {/* Summary Footer */}
+        {filteredEmployees.length > 0 && (
+          <div className="p-4 border-t bg-muted/30">
+            <div className="flex flex-wrap gap-6 text-sm">
+              <span>📊 Total Employees: <strong>{filteredEmployees.length}</strong></span>
+              <span>📅 Annual Leave Allowance: <strong>{annualAllowance} days</strong> per employee</span>
+              <span>📝 Formula: Mon-Fri = 1 day, Saturday = 0.5 day, Sunday = 0</span>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
-  const [activeView, setActiveView] = useState<'requests' | 'calendar' | 'balances'>('requests');
+  const [activeView, setActiveView] = useState<'requests' | 'calendar' | 'balances' | 'calculator'>('requests');
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -362,7 +647,15 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
                   onClick={() => setActiveView('balances')}
                 >
                   <Wallet className="h-4 w-4 mr-2" />
-                  Balances
+                  Allowance
+                </Button>
+                <Button
+                  variant={activeView === 'calculator' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveView('calculator')}
+                >
+                  <Calculator className="h-4 w-4 mr-2" />
+                  Calculator
                 </Button>
               </div>
               
@@ -416,119 +709,16 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
           selectedMonth={selectedMonth}
           onMonthChange={setSelectedMonth}
         />
+      ) : activeView === 'balances' ? (
+        <LeaveAllowanceTracker
+          employeeBalances={employeeBalances}
+          leaveRequests={leaveRequests}
+          balanceSearch={balanceSearch}
+          onSearchChange={setBalanceSearch}
+          onInitialize={initializeBalances}
+        />
       ) : (
-        /* Employee Leave Balances View */
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Wallet className="h-5 w-5 text-primary" />
-                    Employee Leave Balances
-                  </CardTitle>
-                  <CardDescription>Overview of all employee leave balances for {new Date().getFullYear()}</CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="relative max-w-xs">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search employee..."
-                      value={balanceSearch}
-                      onChange={(e) => setBalanceSearch(e.target.value)}
-                      className="pl-10 w-[200px]"
-                    />
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => initializeBalances()}>
-                    <Plus className="h-4 w-4 mr-1" />
-                    Initialize All
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {employeeBalances.length === 0 ? (
-                <div className="text-center py-12">
-                  <Wallet className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                  <h3 className="text-lg font-semibold mb-1">No leave balances found</h3>
-                  <p className="text-sm text-muted-foreground mb-4">Click "Initialize All" to set default balances for all employees</p>
-                </div>
-              ) : (
-                <ScrollArea className="h-[600px]">
-                  <div className="space-y-4 pr-4">
-                    {employeeBalances
-                      .filter(emp => 
-                        !balanceSearch || 
-                        emp.full_name?.toLowerCase().includes(balanceSearch.toLowerCase()) ||
-                        emp.email.toLowerCase().includes(balanceSearch.toLowerCase())
-                      )
-                      .map(employee => {
-                        const initials = employee.full_name?.split(' ').map(n => n[0]).join('') || '?';
-                        
-                        // Check if employee has active leave today
-                        const activeLeave = leaveRequests.find(r => {
-                          if (r.requester_id !== employee.user_id || r.status !== 'approved') return false;
-                          try {
-                            const now = new Date();
-                            return isWithinInterval(now, { start: parseISO(r.start_date), end: parseISO(r.end_date) });
-                          } catch { return false; }
-                        });
-                        
-                        const daysRemaining = activeLeave 
-                          ? differenceInDays(parseISO(activeLeave.end_date), new Date()) + 1
-                          : null;
-
-                        return (
-                          <Card key={employee.user_id} className="border">
-                            <CardContent className="p-4">
-                              <div className="flex items-start gap-4">
-                                <Avatar className="h-10 w-10">
-                                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-violet-600 text-white text-sm">
-                                    {initials}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h4 className="font-semibold truncate">{employee.full_name || employee.email}</h4>
-                                    {employee.department_name && (
-                                      <Badge variant="secondary" className="text-xs">{employee.department_name}</Badge>
-                                    )}
-                                    {activeLeave && (
-                                      <Badge className="bg-amber-500/10 text-amber-600 text-xs">
-                                        <Timer className="h-3 w-3 mr-1" />
-                                        On Leave • {daysRemaining}d left
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 mt-3">
-                                    {employee.balances.map(bal => {
-                                      const percentage = bal.total_days > 0 ? (bal.used_days / bal.total_days) * 100 : 0;
-                                      return (
-                                        <div key={bal.leave_type} className="space-y-1.5">
-                                          <div className="flex items-center justify-between">
-                                            <span className="text-xs text-muted-foreground">{LEAVE_TYPE_LABELS[bal.leave_type]}</span>
-                                            <span className="text-xs font-medium">{bal.remaining}/{bal.total_days}</span>
-                                          </div>
-                                          <Progress 
-                                            value={100 - percentage} 
-                                            className="h-2" 
-                                          />
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                  </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <LeaveDateCalculator />
       )}
 
       {/* Dialogs */}
