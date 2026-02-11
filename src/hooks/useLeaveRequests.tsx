@@ -110,16 +110,25 @@ export function useLeaveRequests(departmentId?: string, isHR = false) {
       total_days: number;
       reason?: string;
       department_id: string;
+      employee_id?: string;
+      company_id?: string;
     }) => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Not authenticated');
 
+      const insertData: Record<string, unknown> = {
+        ...request,
+        requester_id: userData.user.id,
+      };
+
+      // If filing on behalf of an employee, track who submitted
+      if (request.employee_id) {
+        insertData.submitted_by_id = userData.user.id;
+      }
+
       const { data, error } = await supabase
         .from('leave_requests')
-        .insert({
-          ...request,
-          requester_id: userData.user.id,
-        })
+        .insert(insertData as any)
         .select()
         .single();
 

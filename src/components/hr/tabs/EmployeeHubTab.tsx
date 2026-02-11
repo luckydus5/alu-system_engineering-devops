@@ -22,6 +22,7 @@ import {
 import { useEmployees, Employee, EmployeeInsert } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
 import { usePositions } from '@/hooks/usePositions';
+import { useCompanies } from '@/hooks/useCompanies';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -66,11 +67,12 @@ function getInitials(name: string) {
 }
 
 // ─────────── Add Employee Dialog ───────────
-function AddEmployeeDialog({ open, onClose, departments, positions, onAdd }: {
+function AddEmployeeDialog({ open, onClose, departments, positions, companies, onAdd }: {
   open: boolean;
   onClose: () => void;
   departments: Array<{ id: string; name: string }>;
   positions: Array<{ id: string; name: string }>;
+  companies: Array<{ id: string; name: string; parent_id: string | null }>;
   onAdd: (emp: EmployeeInsert) => Promise<{ error: Error | null }>;
 }) {
   const { toast } = useToast();
@@ -81,6 +83,7 @@ function AddEmployeeDialog({ open, onClose, departments, positions, onAdd }: {
     phone: '',
     department_id: null,
     position_id: null,
+    company_id: null,
     hire_date: format(new Date(), 'yyyy-MM-dd'),
     employment_type: 'full_time',
     gender: null,
@@ -106,7 +109,7 @@ function AddEmployeeDialog({ open, onClose, departments, positions, onAdd }: {
     } else {
       toast({ title: 'Employee added successfully!' });
       onClose();
-      setForm({ full_name: '', email: '', phone: '', department_id: null, position_id: null, hire_date: format(new Date(), 'yyyy-MM-dd'), employment_type: 'full_time', gender: null, date_of_birth: null, address: null, emergency_contact_name: null, emergency_contact_phone: null, notes: null });
+      setForm({ full_name: '', email: '', phone: '', department_id: null, position_id: null, company_id: null, hire_date: format(new Date(), 'yyyy-MM-dd'), employment_type: 'full_time', gender: null, date_of_birth: null, address: null, emergency_contact_name: null, emergency_contact_phone: null, notes: null });
     }
   };
 
@@ -170,6 +173,20 @@ function AddEmployeeDialog({ open, onClose, departments, positions, onAdd }: {
               <Briefcase className="h-4 w-4" /> Employment Details
             </h4>
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Company</Label>
+                <Select value={form.company_id || ''} onValueChange={v => update('company_id', v || null)}>
+                  <SelectTrigger><SelectValue placeholder="Select company" /></SelectTrigger>
+                  <SelectContent>
+                    {companies.filter(c => !c.parent_id).map(c => (
+                      <SelectItem key={c.id} value={c.id}>🏢 {c.name}</SelectItem>
+                    ))}
+                    {companies.filter(c => c.parent_id).map(c => (
+                      <SelectItem key={c.id} value={c.id}>└ {c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label>Department</Label>
                 <Select value={form.department_id || ''} onValueChange={v => update('department_id', v || null)}>
@@ -395,6 +412,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
   const { employees, loading, addEmployee, deleteEmployee } = useEmployees();
   const { departments } = useDepartments();
   const { activePositions } = usePositions();
+  const { companies } = useCompanies();
 
   const filtered = useMemo(() => {
     return employees.filter(emp => {
@@ -688,6 +706,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
         onClose={() => setAddDialogOpen(false)}
         departments={departments}
         positions={activePositions}
+        companies={companies}
         onAdd={addEmployee}
       />
       <EmployeeProfileDialog
