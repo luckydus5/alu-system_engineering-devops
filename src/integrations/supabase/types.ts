@@ -1479,6 +1479,7 @@ export type Database = {
         }[]
       }
       cleanup_inactive_sessions: { Args: never; Returns: undefined }
+      deduct_active_leave_balances: { Args: never; Returns: undefined }
       get_user_department: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
@@ -1491,6 +1492,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      initialize_default_leave_balances: { Args: never; Returns: undefined }
       reduce_item_quantity: {
         Args: { p_item_id: string; p_new_quantity: number }
         Returns: boolean
