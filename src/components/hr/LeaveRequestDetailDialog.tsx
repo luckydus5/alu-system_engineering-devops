@@ -7,12 +7,14 @@ import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { 
   Calendar, User, Clock, MessageSquare, Check, X, Loader2,
-  Plane, Thermometer, Baby, Heart, Ban, ArrowRight, Building
+  Plane, Thermometer, Baby, Heart, Ban, ArrowRight, Building, Download
 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { useState } from 'react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveStatus, LeaveType } from '@/hooks/useLeaveRequests';
 import { cn } from '@/lib/utils';
+import { generateLeaveApprovalPdf } from '@/lib/generateLeavePdf';
+import { supabase } from '@/integrations/supabase/client';
 
 interface LeaveRequestDetailDialogProps {
   requestId: string;
@@ -24,6 +26,7 @@ interface LeaveRequestDetailDialogProps {
 const STATUS_STYLES: Record<LeaveStatus, { bg: string; text: string }> = {
   pending: { bg: 'bg-amber-500/10', text: 'text-amber-600' },
   manager_approved: { bg: 'bg-blue-500/10', text: 'text-blue-600' },
+  gm_pending: { bg: 'bg-indigo-500/10', text: 'text-indigo-600' },
   approved: { bg: 'bg-emerald-500/10', text: 'text-emerald-600' },
   rejected: { bg: 'bg-red-500/10', text: 'text-red-600' },
   cancelled: { bg: 'bg-muted', text: 'text-muted-foreground' },
@@ -58,13 +61,22 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
   if (!request) return null;
 
   const LeaveIcon = LEAVE_ICONS[request.leave_type];
-  const canApprove = isHR && (request.status === 'pending' || request.status === 'manager_approved');
+  const canApprove = isHR && (request.status === 'pending' || request.status === 'manager_approved' || request.status === 'gm_pending');
   const canCancel = !isHR && request.status === 'pending';
   const isManagerApproval = request.status === 'pending';
+  const isHRForward = request.status === 'manager_approved';
+  const isGMApproval = request.status === 'gm_pending';
   const statusStyle = STATUS_STYLES[request.status];
 
   const handleApprove = async () => {
-    const newStatus: LeaveStatus = isManagerApproval ? 'manager_approved' : 'approved';
+    let newStatus: LeaveStatus;
+    if (isManagerApproval) {
+      newStatus = 'manager_approved';
+    } else if (isHRForward) {
+      newStatus = 'gm_pending';
+    } else {
+      newStatus = 'approved';
+    }
     await updateRequestStatus.mutateAsync({
       id: requestId,
       status: newStatus,
@@ -238,13 +250,37 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
                 </div>
               )}
 
+              {/* GM Action */}
+              {(request as any).gm_action_at && (
+                <div className="relative">
+                  <div className={cn(
+                    "absolute -left-6 top-1 h-3 w-3 rounded-full",
+                    request.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'
+                  )} />
+                  <div className="absolute -left-[18px] top-4 bottom-0 w-0.5 bg-border" />
+                  <div className="p-3 rounded-lg border bg-card">
+                    <p className="text-sm font-medium">General Manager Review</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(new Date((request as any).gm_action_at), 'MMM d, yyyy h:mm a')}
+                    </p>
+                    {(request as any).gm_comment && (
+                      <p className="text-sm mt-2 text-muted-foreground italic">
+                        "{(request as any).gm_comment}"
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Pending indicator */}
-              {(request.status === 'pending' || request.status === 'manager_approved') && (
+              {(request.status === 'pending' || request.status === 'manager_approved' || request.status === 'gm_pending') && (
                 <div className="relative">
                   <div className="absolute -left-6 top-1 h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
                   <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
                     <p className="text-sm font-medium text-amber-600">
-                      {request.status === 'pending' ? 'Awaiting Manager Approval' : 'Awaiting HR Approval'}
+                      {request.status === 'pending' ? 'Awaiting Department Manager' : 
+                       request.status === 'manager_approved' ? 'Awaiting HR to Forward to GM' :
+                       'Awaiting General Manager Approval'}
                     </p>
                   </div>
                 </div>
@@ -301,12 +337,47 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
                 ) : (
                   <Check className="h-4 w-4 mr-2" />
                 )}
-                {isManagerApproval ? 'Manager Approve' : 'HR Approve'}
+                {isManagerApproval ? 'Manager Approve' : isHRForward ? 'Forward to GM' : 'GM Approve'}
               </Button>
             </>
           )}
 
-          {!canApprove && !canCancel && (
+          {request.status === 'approved' && (
+            <Button
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={async () => {
+                const profileIds = [request.manager_id, request.hr_reviewer_id, (request as any).gm_reviewer_id].filter(Boolean);
+                const { data: profiles } = await supabase.from('profiles').select('id, full_name').in('id', profileIds);
+                const pm = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
+                generateLeaveApprovalPdf({
+                  employeeName: request.requester?.full_name || 'Unknown',
+                  department: request.department?.name || '',
+                  leaveType: LEAVE_TYPE_LABELS[request.leave_type],
+                  startDate: format(parseISO(request.start_date), 'dd MMM yyyy'),
+                  endDate: format(parseISO(request.end_date), 'dd MMM yyyy'),
+                  totalDays: request.total_days,
+                  reason: request.reason,
+                  requestDate: format(parseISO(request.created_at), 'dd MMM yyyy'),
+                  managerName: request.manager_id ? pm.get(request.manager_id) || 'Manager' : null,
+                  managerDate: request.manager_action_at ? format(parseISO(request.manager_action_at), 'dd MMM yyyy') : null,
+                  managerComment: request.manager_comment,
+                  hrName: request.hr_reviewer_id ? pm.get(request.hr_reviewer_id) || 'HR' : null,
+                  hrDate: request.hr_action_at ? format(parseISO(request.hr_action_at), 'dd MMM yyyy') : null,
+                  hrComment: request.hr_comment,
+                  gmName: (request as any).gm_reviewer_id ? pm.get((request as any).gm_reviewer_id) || 'GM' : null,
+                  gmDate: (request as any).gm_action_at ? format(parseISO((request as any).gm_action_at), 'dd MMM yyyy') : null,
+                  gmComment: (request as any).gm_comment,
+                  status: request.status,
+                });
+              }}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Download PDF
+            </Button>
+          )}
+
+          {!canApprove && !canCancel && request.status !== 'approved' && (
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
             </Button>

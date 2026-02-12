@@ -21,6 +21,7 @@ interface LeaveRequestCardProps {
 const STATUS_STYLES: Record<LeaveStatus, { bg: string; text: string; border: string }> = {
   pending: { bg: 'bg-amber-500/10', text: 'text-amber-600', border: 'border-amber-500/30' },
   manager_approved: { bg: 'bg-blue-500/10', text: 'text-blue-600', border: 'border-blue-500/30' },
+  gm_pending: { bg: 'bg-indigo-500/10', text: 'text-indigo-600', border: 'border-indigo-500/30' },
   approved: { bg: 'bg-emerald-500/10', text: 'text-emerald-600', border: 'border-emerald-500/30' },
   rejected: { bg: 'bg-red-500/10', text: 'text-red-600', border: 'border-red-500/30' },
   cancelled: { bg: 'bg-muted', text: 'text-muted-foreground', border: 'border-muted' },

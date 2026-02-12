@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 export type LeaveType = 'annual' | 'sick' | 'personal' | 'maternity' | 'paternity' | 'bereavement' | 'unpaid';
-export type LeaveStatus = 'pending' | 'manager_approved' | 'approved' | 'rejected' | 'cancelled';
+export type LeaveStatus = 'pending' | 'manager_approved' | 'gm_pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface LeaveRequest {
   id: string;
@@ -21,6 +21,9 @@ export interface LeaveRequest {
   hr_reviewer_id: string | null;
   hr_action_at: string | null;
   hr_comment: string | null;
+  gm_reviewer_id: string | null;
+  gm_action_at: string | null;
+  gm_comment: string | null;
   created_at: string;
   updated_at: string;
   requester?: {
@@ -54,6 +57,7 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
 export const LEAVE_STATUS_LABELS: Record<LeaveStatus, string> = {
   pending: 'Pending',
   manager_approved: 'Manager Approved',
+  gm_pending: 'Awaiting GM',
   approved: 'Approved',
   rejected: 'Rejected',
   cancelled: 'Cancelled',
@@ -118,12 +122,13 @@ export function useLeaveRequests(departmentId?: string, isHR = false) {
 
       const insertData: Record<string, unknown> = {
         ...request,
-        requester_id: userData.user.id,
+        requester_id: request.employee_id || userData.user.id,
       };
 
       // If filing on behalf of an employee, track who submitted
       if (request.employee_id) {
         insertData.submitted_by_id = userData.user.id;
+        insertData.requester_id = request.employee_id;
       }
 
       const { data, error } = await supabase
@@ -165,6 +170,16 @@ export function useLeaveRequests(departmentId?: string, isHR = false) {
         updateData.manager_id = userData.user.id;
         updateData.manager_action_at = new Date().toISOString();
         if (comment) updateData.manager_comment = comment;
+      } else if (status === 'gm_pending') {
+        // HR forwarding to GM
+        updateData.hr_reviewer_id = userData.user.id;
+        updateData.hr_action_at = new Date().toISOString();
+        if (comment) updateData.hr_comment = comment;
+      } else if (status === 'approved' || (status === 'rejected' && !isManager)) {
+        // GM final decision
+        updateData.gm_reviewer_id = userData.user.id;
+        updateData.gm_action_at = new Date().toISOString();
+        if (comment) updateData.gm_comment = comment;
       } else {
         updateData.hr_reviewer_id = userData.user.id;
         updateData.hr_action_at = new Date().toISOString();
