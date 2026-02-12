@@ -8,6 +8,7 @@ export interface SystemPosition {
 
 export const SYSTEM_POSITIONS: SystemPosition[] = [
   { value: 'peat_manager', label: 'Peat Manager', description: 'Controls and approves leave requests before HR' },
+  { value: 'peat_admin', label: 'Peat Admin', description: 'Files leave requests on behalf of employees' },
   { value: 'hr_reviewer', label: 'HR Officer', description: 'Reviews leave requests after manager approval' },
   { value: 'gm_approver', label: 'General Manager', description: 'Final leave approval authority' },
   { value: 'om_approver', label: 'Operations Manager', description: 'Final leave approval authority' },
@@ -17,6 +18,7 @@ export const SYSTEM_POSITIONS: SystemPosition[] = [
 
 export const POSITION_LABELS: Record<string, string> = {
   peat_manager: 'Peat Manager',
+  peat_admin: 'Peat Admin',
   hr_reviewer: 'HR Officer',
   gm_approver: 'General Manager',
   om_approver: 'Operations Manager',
@@ -26,6 +28,7 @@ export const POSITION_LABELS: Record<string, string> = {
 
 export const POSITION_COLORS: Record<string, string> = {
   peat_manager: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30',
+  peat_admin: 'bg-lime-500/15 text-lime-700 dark:text-lime-300 border-lime-500/30',
   hr_reviewer: 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30',
   gm_approver: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
   om_approver: 'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30',

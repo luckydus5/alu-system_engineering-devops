@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
-export type LeaveApproverRole = 'peat_manager' | 'hr_reviewer' | 'gm_approver' | 'om_approver' | 'it_manager' | 'it_officer';
+export type LeaveApproverRole = 'peat_manager' | 'hr_reviewer' | 'gm_approver' | 'om_approver' | 'it_manager' | 'it_officer' | 'peat_admin';
 
 export const APPROVER_ROLE_LABELS: Record<LeaveApproverRole, string> = {
   peat_manager: 'Peat Manager',
@@ -11,6 +11,7 @@ export const APPROVER_ROLE_LABELS: Record<LeaveApproverRole, string> = {
   om_approver: 'Operations Manager',
   it_manager: 'IT Manager',
   it_officer: 'IT Officer',
+  peat_admin: 'Peat Admin',
 };
 
 export interface LeaveApprover {
@@ -134,6 +135,7 @@ export function useCurrentUserApproverRoles() {
   return {
     approverRoles: roles,
     isPeatManager: roles.includes('peat_manager'),
+    isPeatAdmin: roles.includes('peat_admin'),
     isGMApprover: roles.includes('gm_approver'),
     isOMApprover: roles.includes('om_approver'),
     isAnyApprover: roles.length > 0,
