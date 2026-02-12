@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,17 +12,19 @@ import {
   Clock, LogIn, LogOut, Users, CalendarIcon, RefreshCw,
   Timer, TrendingUp, AlertCircle, CheckCircle2, Coffee,
   ChevronLeft, ChevronRight, BarChart3, Search, Download,
-  Table2, LayoutGrid
+  Table2, LayoutGrid, Upload, FileSpreadsheet, X, Loader2
 } from 'lucide-react';
 import { 
   format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, 
   getDay, getDaysInMonth, addMonths, subMonths, getYear, getMonth,
-  isWeekend, isSaturday, isSunday
+  isWeekend, isSaturday, isSunday, parse
 } from 'date-fns';
 import { useAttendance, useMyAttendance, ATTENDANCE_STATUS_LABELS, AttendanceStatus } from '@/hooks/useAttendance';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useUsers } from '@/hooks/useUsers';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 interface AttendanceTrackingTabProps {
   departmentId: string;
@@ -97,14 +99,14 @@ function MonthlyGrid({ records, selectedMonth, users, departments, searchTerm, f
       const matchesSearch = !searchTerm || 
         u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         u.email?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesDept = filterDepartment === 'all' || u.departmentId === filterDepartment;
+      const matchesDept = filterDepartment === 'all' || u.department_id === filterDepartment;
       return matchesSearch && matchesDept;
     });
 
     // Group by department
     const grouped = new Map<string, any[]>();
     filtered.forEach(u => {
-      const deptName = departments.find(d => d.id === u.departmentId)?.name || 'Unassigned';
+      const deptName = departments.find(d => d.id === u.department_id)?.name || 'Unassigned';
       const list = grouped.get(deptName) || [];
       list.push(u);
       grouped.set(deptName, list);
@@ -265,7 +267,7 @@ function AnnualSummary({ records, users, departments, searchTerm, filterDepartme
     return users.filter(u => {
       const matchesSearch = !searchTerm || 
         u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesDept = filterDepartment === 'all' || u.departmentId === filterDepartment;
+      const matchesDept = filterDepartment === 'all' || u.department_id === filterDepartment;
       return matchesSearch && matchesDept;
     });
   }, [users, searchTerm, filterDepartment]);
@@ -274,7 +276,7 @@ function AnnualSummary({ records, users, departments, searchTerm, filterDepartme
   const grouped = useMemo(() => {
     const map = new Map<string, any[]>();
     filteredUsers.forEach(u => {
-      const deptName = departments.find(d => d.id === u.departmentId)?.name || 'Unassigned';
+      const deptName = departments.find(d => d.id === u.department_id)?.name || 'Unassigned';
       const list = map.get(deptName) || [];
       list.push(u);
       map.set(deptName, list);
@@ -379,76 +381,310 @@ function AnnualSummary({ records, users, departments, searchTerm, filterDepartme
 }
 
 export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabProps) {
-  const [activeView, setActiveView] = useState<'monthly' | 'annual' | 'my'>('monthly');
+  const [activeView, setActiveView] = useState<'monthly' | 'annual'>('monthly');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
   const [selectedYear] = useState(new Date().getFullYear());
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [uploadPreview, setUploadPreview] = useState<any[] | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const { departments } = useDepartments();
   const { users } = useUsers();
-  const { records, isLoading, refetch, clockIn, clockOut } = useAttendance(
+  const { records, isLoading, refetch, bulkImportAttendance } = useAttendance(
     filterDepartment === 'all' ? undefined : filterDepartment
   );
-  const { todayRecord } = useMyAttendance();
 
-  const canClockIn = !todayRecord?.clock_in;
-  const canClockOut = todayRecord?.clock_in && !todayRecord?.clock_out;
+  // Parse Excel file
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-  const formatTime = (timestamp: string | null) => {
-    if (!timestamp) return '--:--';
-    return format(new Date(timestamp), 'h:mm a');
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      
+      if (jsonData.length === 0) {
+        toast({ title: 'Empty file', description: 'The Excel file has no data rows', variant: 'destructive' });
+        return;
+      }
+
+      // Parse rows - expected columns: Name/Employee, Date, Check In, Check Out (flexible matching)
+      const parsed: any[] = [];
+      const headers = Object.keys(jsonData[0] as object).map(h => h.toLowerCase().trim());
+      
+      // Find column indices by flexible matching
+      const nameCol = Object.keys(jsonData[0] as object).find(h => 
+        /name|employee|staff|person/i.test(h));
+      const dateCol = Object.keys(jsonData[0] as object).find(h => 
+        /date|day|attendance/i.test(h));
+      const checkInCol = Object.keys(jsonData[0] as object).find(h => 
+        /check.?in|clock.?in|in.?time|arrival|start/i.test(h));
+      const checkOutCol = Object.keys(jsonData[0] as object).find(h => 
+        /check.?out|clock.?out|out.?time|departure|end|leave/i.test(h));
+
+      if (!nameCol || !dateCol) {
+        toast({ 
+          title: 'Invalid format', 
+          description: 'Excel must have columns for Name/Employee and Date. Found: ' + Object.keys(jsonData[0] as object).join(', '), 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      for (const row of jsonData as Record<string, any>[]) {
+        const name = String(row[nameCol!] || '').trim();
+        const dateVal = row[dateCol!];
+        const checkIn = checkInCol ? String(row[checkInCol] || '').trim() : '';
+        const checkOut = checkOutCol ? String(row[checkOutCol] || '').trim() : '';
+
+        if (!name || !dateVal) continue;
+
+        // Parse date (handle Excel serial numbers and various formats)
+        let parsedDate: Date | null = null;
+        if (typeof dateVal === 'number') {
+          // Excel serial date
+          parsedDate = new Date((dateVal - 25569) * 86400 * 1000);
+        } else {
+          const dateStr = String(dateVal).trim();
+          // Try common formats
+          for (const fmt of ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'dd-MM-yyyy', 'dd-MMM-yyyy']) {
+            try {
+              parsedDate = parse(dateStr, fmt, new Date());
+              if (!isNaN(parsedDate.getTime())) break;
+              parsedDate = null;
+            } catch { parsedDate = null; }
+          }
+          if (!parsedDate) {
+            parsedDate = new Date(dateStr);
+            if (isNaN(parsedDate.getTime())) parsedDate = null;
+          }
+        }
+
+        if (!parsedDate) continue;
+
+        // Match user by name
+        const matchedUser = users.find(u => 
+          u.full_name?.toLowerCase() === name.toLowerCase() ||
+          u.full_name?.toLowerCase().includes(name.toLowerCase()) ||
+          name.toLowerCase().includes(u.full_name?.toLowerCase() || '___')
+        );
+
+        // Parse time strings
+        const parseTime = (timeStr: string, dateBase: Date): string | null => {
+          if (!timeStr || timeStr === '-' || timeStr === '--:--') return null;
+          // Handle Excel decimal time (e.g., 0.354166...)
+          if (!isNaN(Number(timeStr)) && Number(timeStr) < 1) {
+            const totalMinutes = Math.round(Number(timeStr) * 24 * 60);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            const d = new Date(dateBase);
+            d.setHours(hours, minutes, 0, 0);
+            return d.toISOString();
+          }
+          // Handle HH:mm or H:mm format
+          const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+          if (match) {
+            const d = new Date(dateBase);
+            d.setHours(parseInt(match[1]), parseInt(match[2]), 0, 0);
+            return d.toISOString();
+          }
+          return null;
+        };
+
+        const clockIn = parseTime(checkIn, parsedDate);
+        const clockOut = parseTime(checkOut, parsedDate);
+
+        // Determine status
+        let status: AttendanceStatus = 'present';
+        if (!clockIn && !clockOut) {
+          status = isSunday(parsedDate) || isSaturday(parsedDate) ? 'absent' : 'absent';
+        } else if (clockIn) {
+          const inHour = new Date(clockIn).getHours();
+          if (inHour >= 9) status = 'late';
+        }
+
+        parsed.push({
+          name,
+          date: format(parsedDate, 'yyyy-MM-dd'),
+          dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
+          clockIn: clockIn ? format(new Date(clockIn), 'HH:mm') : '—',
+          clockOut: clockOut ? format(new Date(clockOut), 'HH:mm') : '—',
+          clockInRaw: clockIn,
+          clockOutRaw: clockOut,
+          status,
+          matched: !!matchedUser,
+          matchedUser,
+          userId: matchedUser?.id,
+          departmentId: matchedUser?.department_id || departmentId,
+        });
+      }
+
+      if (parsed.length === 0) {
+        toast({ title: 'No valid records', description: 'Could not parse any attendance records from the file', variant: 'destructive' });
+        return;
+      }
+
+      setUploadPreview(parsed);
+      toast({ title: `${parsed.length} records parsed`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
+    } catch (err) {
+      toast({ title: 'Failed to read file', description: String(err), variant: 'destructive' });
+    }
+
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [users, departmentId, toast]);
+
+  // Import parsed records
+  const handleImport = async () => {
+    if (!uploadPreview) return;
+    const validRecords = uploadPreview.filter(r => r.matched && r.userId);
+    if (validRecords.length === 0) {
+      toast({ title: 'No matched records to import', variant: 'destructive' });
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      await bulkImportAttendance.mutateAsync(
+        validRecords.map(r => ({
+          user_id: r.userId,
+          department_id: r.departmentId,
+          attendance_date: r.date,
+          clock_in: r.clockInRaw,
+          clock_out: r.clockOutRaw,
+          status: r.status,
+          notes: 'Imported from Excel',
+        }))
+      );
+      setUploadPreview(null);
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* My Attendance Card */}
-      <Card className="bg-gradient-to-r from-blue-600 to-violet-600 text-white border-0 overflow-hidden relative">
-        <CardContent className="p-6 relative">
+      {/* Upload Excel Section */}
+      <Card className="bg-gradient-to-r from-blue-600 to-violet-600 text-white border-0 overflow-hidden">
+        <CardContent className="p-6">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="flex items-center gap-4">
               <div className="h-16 w-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                <Clock className="h-8 w-8" />
+                <FileSpreadsheet className="h-8 w-8" />
               </div>
               <div>
-                <p className="text-white/80 text-sm">Today's Status</p>
-                <h2 className="text-2xl font-bold">
-                  {todayRecord ? (
-                    <>
-                      {formatTime(todayRecord.clock_in)} 
-                      {todayRecord.clock_out && ` - ${formatTime(todayRecord.clock_out)}`}
-                    </>
-                  ) : 'Not clocked in'}
-                </h2>
-                {todayRecord && (
-                  <Badge className="bg-white/20 text-white border-0 mt-1">
-                    {ATTENDANCE_STATUS_LABELS[todayRecord.status]}
-                  </Badge>
-                )}
+                <p className="text-white/80 text-sm">Attendance Machine Data</p>
+                <h2 className="text-2xl font-bold">Upload Excel File</h2>
+                <p className="text-white/60 text-xs mt-1">
+                  Columns: Name/Employee, Date, Check In, Check Out
+                </p>
               </div>
             </div>
             <div className="flex gap-3">
-              {canClockIn && (
-                <Button size="lg" className="bg-white text-blue-600 hover:bg-white/90"
-                  onClick={() => clockIn.mutateAsync(departmentId)} disabled={clockIn.isPending}>
-                  <LogIn className="h-5 w-5 mr-2" /> Clock In
-                </Button>
-              )}
-              {canClockOut && (
-                <Button size="lg" className="bg-white/20 hover:bg-white/30 text-white border-white/30" variant="outline"
-                  onClick={() => clockOut.mutateAsync()} disabled={clockOut.isPending}>
-                  <LogOut className="h-5 w-5 mr-2" /> Clock Out
-                </Button>
-              )}
-              {todayRecord?.clock_out && (
-                <div className="flex items-center gap-2 px-4 py-2 bg-white/20 rounded-lg">
-                  <CheckCircle2 className="h-5 w-5" /><span className="font-medium">Day Complete</span>
-                </div>
-              )}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+              <Button size="lg" className="bg-white text-blue-600 hover:bg-white/90"
+                onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-5 w-5 mr-2" /> Upload Excel
+              </Button>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {/* Upload Preview */}
+      {uploadPreview && (
+        <Card className="border-blue-200 dark:border-blue-800">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <FileSpreadsheet className="h-5 w-5 text-blue-600" />
+                  Import Preview — {uploadPreview.length} records
+                </CardTitle>
+                <CardDescription>
+                  <span className="text-emerald-600 font-medium">{uploadPreview.filter(r => r.matched).length} matched</span>
+                  {' · '}
+                  <span className="text-red-600 font-medium">{uploadPreview.filter(r => !r.matched).length} unmatched</span>
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setUploadPreview(null)}>
+                  <X className="h-4 w-4 mr-1" /> Cancel
+                </Button>
+                <Button size="sm" onClick={handleImport} disabled={isImporting || uploadPreview.filter(r => r.matched).length === 0}>
+                  {isImporting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle2 className="h-4 w-4 mr-1" />}
+                  Import {uploadPreview.filter(r => r.matched).length} Records
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <ScrollArea className="max-h-[400px]">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="bg-muted/50 border-b">
+                    <th className="px-3 py-2 text-left font-semibold">#</th>
+                    <th className="px-3 py-2 text-left font-semibold">Name (Excel)</th>
+                    <th className="px-3 py-2 text-left font-semibold">Matched Employee</th>
+                    <th className="px-3 py-2 text-center font-semibold">Date</th>
+                    <th className="px-3 py-2 text-center font-semibold">Check In</th>
+                    <th className="px-3 py-2 text-center font-semibold">Check Out</th>
+                    <th className="px-3 py-2 text-center font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {uploadPreview.map((row, idx) => (
+                    <tr key={idx} className={cn(
+                      "border-b hover:bg-muted/30",
+                      !row.matched && "bg-red-50/50 dark:bg-red-900/10"
+                    )}>
+                      <td className="px-3 py-1.5 text-muted-foreground">{idx + 1}</td>
+                      <td className="px-3 py-1.5 font-medium">{row.name}</td>
+                      <td className="px-3 py-1.5">
+                        {row.matched ? (
+                          <Badge className="bg-emerald-500/10 text-emerald-600 text-[10px]">
+                            <CheckCircle2 className="h-3 w-3 mr-0.5" />
+                            {row.matchedUser?.full_name}
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-500/10 text-red-600 text-[10px]">
+                            <AlertCircle className="h-3 w-3 mr-0.5" />
+                            Not Found
+                          </Badge>
+                        )}
+                      </td>
+                      <td className="px-3 py-1.5 text-center">{row.dateDisplay}</td>
+                      <td className="px-3 py-1.5 text-center font-medium text-emerald-600">{row.clockIn}</td>
+                      <td className="px-3 py-1.5 text-center font-medium text-blue-600">{row.clockOut}</td>
+                      <td className="px-3 py-1.5 text-center">
+                        <Badge className={cn(
+                          "text-[10px]",
+                          row.status === 'present' && "bg-emerald-500/10 text-emerald-600",
+                          row.status === 'late' && "bg-amber-500/10 text-amber-600",
+                          row.status === 'absent' && "bg-red-500/10 text-red-600",
+                        )}>
+                          {ATTENDANCE_STATUS_LABELS[row.status as AttendanceStatus]}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Controls */}
       <Card>
