@@ -17,6 +17,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useCurrentUserLeavePermissions } from '@/hooks/useLeaveManagers';
+import { useCurrentUserApproverRoles } from '@/hooks/useLeaveApprovers';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +42,8 @@ export function TopNavbar() {
   const { unreadCount } = useNotifications();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const { canFileForOthers } = useCurrentUserLeavePermissions();
+  const { isAnyApprover } = useCurrentUserApproverRoles();
 
   const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
   const isSuperAdmin = highestRole === 'super_admin';
@@ -75,7 +79,7 @@ export function TopNavbar() {
         </NavLink>
 
         {/* My Dashboard Button */}
-        {(isSuperAdmin || isAdmin) && (
+        {(canFileForOthers || isAnyApprover) && (
           <Button
             variant="outline"
             size="sm"
