@@ -62,7 +62,11 @@ export type Database = {
           department_id: string
           id: string
           notes: string | null
+          overtime_hours: number | null
+          regular_hours: number | null
+          shift_type: string | null
           status: Database["public"]["Enums"]["attendance_status"]
+          total_hours: number | null
           updated_at: string
           user_id: string
         }
@@ -74,7 +78,11 @@ export type Database = {
           department_id: string
           id?: string
           notes?: string | null
+          overtime_hours?: number | null
+          regular_hours?: number | null
+          shift_type?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
+          total_hours?: number | null
           updated_at?: string
           user_id: string
         }
@@ -86,7 +94,11 @@ export type Database = {
           department_id?: string
           id?: string
           notes?: string | null
+          overtime_hours?: number | null
+          regular_hours?: number | null
+          shift_type?: string | null
           status?: Database["public"]["Enums"]["attendance_status"]
+          total_hours?: number | null
           updated_at?: string
           user_id?: string
         }

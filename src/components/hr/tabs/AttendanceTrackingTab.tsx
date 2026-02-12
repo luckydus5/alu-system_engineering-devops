@@ -10,7 +10,7 @@ import {
   TrendingUp, AlertCircle, CheckCircle2,
   ChevronLeft, ChevronRight, BarChart3, Search,
   Table2, Upload, FileSpreadsheet, X, Loader2,
-  UserCheck, UserX, Timer, Award
+  UserCheck, UserX, Timer, Award, Sun, Moon
 } from 'lucide-react';
 import { 
   format, startOfMonth, endOfMonth, isSameDay, 
@@ -22,6 +22,8 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useUsers } from '@/hooks/useUsers';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useCompanies } from '@/hooks/useCompanies';
+import { useCompanyPolicies } from '@/hooks/useCompanyPolicies';
+import { buildPolicyValues, processAttendanceRecord } from '@/lib/timesheetProcessor';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
@@ -495,6 +497,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const { users } = useUsers();
   const { employees } = useEmployees();
   const { companies } = useCompanies();
+  const { getPolicyValue } = useCompanyPolicies(null); // global policies
+  const policyValues = useMemo(() => buildPolicyValues(getPolicyValue), [getPolicyValue]);
   const { records, isLoading, refetch, bulkImportAttendance } = useAttendance(
     filterDepartment === 'all' ? undefined : filterDepartment
   );
@@ -705,9 +709,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const matchedUser = matchUser(name, group.empNo);
           const companyMatch = matchCompany(group.excelDept);
 
-          let status: AttendanceStatus = 'present';
-          if (!earliestIn && !latestOut) status = 'absent';
-          else if (earliestIn && earliestIn.getHours() >= 9) status = 'late';
+          // Apply business rules from policy engine
+          const processed = processAttendanceRecord(earliestIn, latestOut, policyValues);
 
           // Determine department: matched user's department > company match > fallback
           const resolvedDeptId = matchedUser?.department_id || companyMatch.deptId || departmentId;
@@ -718,7 +721,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             clockOut: latestOut ? format(latestOut, 'HH:mm') : '—',
             clockInRaw: earliestIn?.toISOString() || null,
             clockOutRaw: latestOut?.toISOString() || null,
-            status, matched: !!matchedUser, matchedUser,
+            status: processed.status,
+            shiftType: processed.shiftType,
+            totalHours: processed.totalHours,
+            regularHours: processed.regularHours,
+            overtimeHours: processed.overtimeHours,
+            matched: !!matchedUser, matchedUser,
             userId: matchedUser?.id,
             matchedUserName: matchedUser?.full_name || null,
             departmentId: resolvedDeptId,
@@ -769,18 +777,23 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             return null;
           };
 
-          const clockIn = parseTime(checkIn, parsedDate);
-          const clockOut = parseTime(checkOut, parsedDate);
+          const clockInISO = parseTime(checkIn, parsedDate);
+          const clockOutISO = parseTime(checkOut, parsedDate);
 
-          let status: AttendanceStatus = 'present';
-          if (!clockIn && !clockOut) status = 'absent';
-          else if (clockIn && new Date(clockIn).getHours() >= 9) status = 'late';
+          const clockInDate = clockInISO ? new Date(clockInISO) : null;
+          const clockOutDate = clockOutISO ? new Date(clockOutISO) : null;
+          const processed = processAttendanceRecord(clockInDate, clockOutDate, policyValues);
 
           parsed.push({
             name, date: format(parsedDate, 'yyyy-MM-dd'), dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
-            clockIn: clockIn ? format(new Date(clockIn), 'HH:mm') : '—',
-            clockOut: clockOut ? format(new Date(clockOut), 'HH:mm') : '—',
-            clockInRaw: clockIn, clockOutRaw: clockOut, status,
+            clockIn: clockInISO ? format(new Date(clockInISO), 'HH:mm') : '—',
+            clockOut: clockOutISO ? format(new Date(clockOutISO), 'HH:mm') : '—',
+            clockInRaw: clockInISO, clockOutRaw: clockOutISO,
+            status: processed.status,
+            shiftType: processed.shiftType,
+            totalHours: processed.totalHours,
+            regularHours: processed.regularHours,
+            overtimeHours: processed.overtimeHours,
             matched: !!matchedUser, matchedUser, userId: matchedUser?.id,
             departmentId: matchedUser?.department_id || departmentId,
           });
@@ -813,7 +826,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       await bulkImportAttendance.mutateAsync(
         validRecords.map(r => ({
           user_id: r.userId, department_id: r.departmentId, attendance_date: r.date,
-          clock_in: r.clockInRaw, clock_out: r.clockOutRaw, status: r.status, notes: 'Imported from Excel',
+          clock_in: r.clockInRaw, clock_out: r.clockOutRaw, status: r.status,
+          shift_type: r.shiftType || 'day',
+          total_hours: r.totalHours || 0,
+          regular_hours: r.regularHours || 0,
+          overtime_hours: r.overtimeHours || 0,
+          notes: `Imported from Excel | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
         }))
       );
       setUploadPreview(null);
@@ -916,12 +934,21 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                   <FileSpreadsheet className="h-4 w-4 text-info" />
                   Import Preview — {uploadPreview.length} records
                 </CardTitle>
-                <div className="flex gap-3 mt-1">
+                <div className="flex gap-3 mt-1 flex-wrap">
                   <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" /> {uploadPreview.filter(r => r.matched).length} matched
                   </span>
                   <span className="text-xs text-red-600 font-medium flex items-center gap-1">
                     <AlertCircle className="h-3 w-3" /> {uploadPreview.filter(r => !r.matched).length} unmatched
+                  </span>
+                  <span className="text-xs text-amber-600 font-medium flex items-center gap-1">
+                    <Sun className="h-3 w-3" /> {uploadPreview.filter(r => r.shiftType === 'day').length} day
+                  </span>
+                  <span className="text-xs text-indigo-600 font-medium flex items-center gap-1">
+                    <Moon className="h-3 w-3" /> {uploadPreview.filter(r => r.shiftType === 'night').length} night
+                  </span>
+                  <span className="text-xs text-orange-600 font-medium flex items-center gap-1">
+                    <TrendingUp className="h-3 w-3" /> {uploadPreview.reduce((sum, r) => sum + (r.overtimeHours || 0), 0).toFixed(1)}h total OT
                   </span>
                 </div>
               </div>
@@ -944,11 +971,14 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                     <th className="px-3 py-2.5 text-left font-semibold border-b w-10">#</th>
                     <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[160px]">Name (Excel)</th>
                     <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[140px]">Matched Employee</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[140px]">Department (Excel)</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[120px]">Matched Company</th>
+                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[100px]">Dept (Excel)</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[100px]">Date</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Check In</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Check Out</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[70px]">Shift</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[70px]">Total Hrs</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[70px]">Regular</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[60px]">OT Hrs</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Status</th>
                   </tr>
                 </thead>
@@ -969,25 +999,34 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-muted-foreground text-[10px]">{row.excelDept || '—'}</td>
-                      <td className="px-3 py-2.5">
-                        {row.matchedCompany ? (
-                          <span className="inline-flex items-center gap-1 text-primary text-[10px] font-medium">
-                            <CheckCircle2 className="h-3 w-3" /> {row.matchedCompany}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground text-[10px]">—</span>
-                        )}
-                      </td>
                       <td className="px-3 py-2.5 text-center">{row.dateDisplay}</td>
                       <td className="px-3 py-2.5 text-center font-medium text-emerald-600">{row.clockIn}</td>
                       <td className="px-3 py-2.5 text-center font-medium text-info">{row.clockOut}</td>
                       <td className="px-3 py-2.5 text-center">
                         <Badge variant="outline" className={cn("text-[10px] border-0",
+                          row.shiftType === 'day' ? "bg-amber-500/10 text-amber-600" : "bg-indigo-500/10 text-indigo-600"
+                        )}>
+                          {row.shiftType === 'day' ? <Sun className="h-3 w-3 mr-0.5 inline" /> : <Moon className="h-3 w-3 mr-0.5 inline" />}
+                          {row.shiftType === 'day' ? 'Day' : 'Night'}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2.5 text-center font-bold">{row.totalHours?.toFixed(1) || '0'}h</td>
+                      <td className="px-3 py-2.5 text-center text-muted-foreground">{row.regularHours?.toFixed(1) || '0'}h</td>
+                      <td className="px-3 py-2.5 text-center">
+                        {(row.overtimeHours || 0) > 0 ? (
+                          <span className="font-bold text-orange-600">{row.overtimeHours?.toFixed(2)}h</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        <Badge variant="outline" className={cn("text-[10px] border-0",
                           row.status === 'present' && "bg-emerald-500/10 text-emerald-600",
                           row.status === 'late' && "bg-amber-500/10 text-amber-600",
                           row.status === 'absent' && "bg-red-500/10 text-red-600",
+                          row.status === 'half_day' && "bg-blue-500/10 text-blue-600",
                         )}>
-                          {ATTENDANCE_STATUS_LABELS[row.status as AttendanceStatus]}
+                          {ATTENDANCE_STATUS_LABELS[row.status as AttendanceStatus] || row.status}
                         </Badge>
                       </td>
                     </tr>
