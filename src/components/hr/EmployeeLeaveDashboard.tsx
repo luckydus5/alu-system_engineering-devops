@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   CalendarDays, Clock, Download, Timer, CheckCircle2, 
@@ -181,8 +182,8 @@ export function EmployeeLeaveDashboard({ departmentId }: { departmentId: string 
         })}
       </div>
 
-      {/* Recent Requests */}
-      <Card>
+      {/* Recent Requests - Excel Style Table */}
+      <Card className="shadow-sm">
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <CalendarDays className="h-5 w-5 text-primary" />
@@ -190,46 +191,67 @@ export function EmployeeLeaveDashboard({ departmentId }: { departmentId: string 
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <ScrollArea className="max-h-[300px]">
-            {myRequests.length === 0 ? (
-              <div className="py-8 text-center text-muted-foreground text-sm">
-                No leave requests yet.
-              </div>
-            ) : (
-              <div className="divide-y">
-                {myRequests.map(request => {
-                  const isApproved = request.status === 'approved';
-                  return (
-                    <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors">
-                      <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", LEAVE_COLORS[request.leave_type as LeaveType])}>
-                        {(() => { const Icon = LEAVE_ICONS[request.leave_type as LeaveType]; return <Icon className="h-4 w-4" />; })()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{LEAVE_TYPE_LABELS[request.leave_type as LeaveType]}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {format(parseISO(request.start_date), 'MMM d')} - {format(parseISO(request.end_date), 'MMM d, yyyy')} • {request.total_days} days
-                        </p>
-                      </div>
-                      <Badge className={cn("text-[10px] shrink-0", STATUS_COLORS[request.status as LeaveStatus])}>
-                        {LEAVE_STATUS_LABELS[request.status as LeaveStatus]}
-                      </Badge>
-                      {isApproved && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-7 w-7 shrink-0"
-                          onClick={() => handleDownloadPdf(request)}
-                          title="Download approved leave form"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </ScrollArea>
+          {myRequests.length === 0 ? (
+            <div className="py-8 text-center text-muted-foreground text-sm">
+              No leave requests yet.
+            </div>
+          ) : (
+            <ScrollArea className="max-h-[450px]">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/60 hover:bg-muted/60">
+                    <TableHead className="text-xs font-bold uppercase tracking-wider w-[40px] text-center">#</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider">Type</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider">Start Date</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider">End Date</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider text-center">Days</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider">Status</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider text-center">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {myRequests.map((request, idx) => {
+                    const isApproved = request.status === 'approved';
+                    return (
+                      <TableRow key={request.id} className="text-sm hover:bg-muted/30">
+                        <TableCell className="text-center text-muted-foreground font-mono text-xs">{idx + 1}</TableCell>
+                        <TableCell className="font-medium">
+                          {LEAVE_TYPE_LABELS[request.leave_type as LeaveType]}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {format(parseISO(request.start_date), 'dd MMM yyyy')}
+                        </TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {format(parseISO(request.end_date), 'dd MMM yyyy')}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">{request.total_days}</TableCell>
+                        <TableCell>
+                          <Badge className={cn("text-[10px]", STATUS_COLORS[request.status as LeaveStatus])}>
+                            {LEAVE_STATUS_LABELS[request.status as LeaveStatus]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {isApproved ? (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7"
+                              onClick={() => handleDownloadPdf(request)}
+                              title="Download approved leave form"
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          )}
         </CardContent>
       </Card>
     </div>
