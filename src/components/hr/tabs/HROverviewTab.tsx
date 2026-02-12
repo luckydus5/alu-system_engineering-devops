@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useCompanies } from '@/hooks/useCompanies';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 interface HROverviewTabProps {
@@ -30,18 +31,20 @@ interface HROverviewTabProps {
 export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }: HROverviewTabProps) {
   const { leaveRequests } = useLeaveRequests(undefined, true);
   const { companies } = useCompanies();
+  const { user } = useAuth();
 
-  // Compute leave stats
+  // Compute current user's own leave stats
   const leaveStats = useMemo(() => {
-    const approved = leaveRequests.filter(r => r.status === 'approved');
-    const annualDays = approved
+    if (!user) return { annualDays: 0, personalDays: 0 };
+    const myApproved = leaveRequests.filter(r => r.status === 'approved' && r.requester_id === user.id);
+    const annualDays = myApproved
       .filter(r => r.leave_type === 'annual')
       .reduce((sum, r) => sum + r.total_days, 0);
-    const personalDays = approved
+    const personalDays = myApproved
       .filter(r => r.leave_type === 'personal' || r.leave_type === 'sick')
       .reduce((sum, r) => sum + r.total_days, 0);
     return { annualDays, personalDays };
-  }, [leaveRequests]);
+  }, [leaveRequests, user]);
 
   const STAT_CARDS = [
     { 
