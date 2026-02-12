@@ -14,13 +14,19 @@ import {
   CheckCircle2, XCircle, AlertCircle, Filter, RefreshCw,
   ChevronLeft, ChevronRight, Plus, Eye, MoreHorizontal,
   CalendarDays, LayoutGrid, List, Download, ArrowUpRight,
-  Wallet, Timer, Calculator, Table2
+  Wallet, Timer, Calculator, Table2, Edit, Loader2
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveType, LeaveStatus } from '@/hooks/useLeaveRequests';
 import { useAllLeaveBalances } from '@/hooks/useAllLeaveBalances';
+import { useCurrentUserLeavePermissions } from '@/hooks/useLeaveManagers';
 import { LeaveApplicationForm } from '../LeaveApplicationForm';
 import { LeaveRequestDetailDialog } from '../LeaveRequestDetailDialog';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useUserRole } from '@/hooks/useUserRole';
+import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths, differenceInDays, eachDayOfInterval as eachDay, isSaturday, isSunday, addDays } from 'date-fns';
 
 interface LeaveManagementTabProps {
@@ -429,15 +435,41 @@ function LeaveDateCalculator() {
 }
 
 // Leave Allowance & Balance Tracker (Excel Page 4)
-function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch, onSearchChange, onInitialize }: {
+function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch, onSearchChange, onInitialize, canEditBalances }: {
   employeeBalances: any[];
   leaveRequests: any[];
   balanceSearch: string;
   onSearchChange: (v: string) => void;
   onInitialize: () => void;
+  canEditBalances: boolean;
 }) {
+  const { toast } = useToast();
   const currentYear = new Date().getFullYear();
-  const annualAllowance = 18; // As per Excel
+  const annualAllowance = 18; // Default
+  const [editingEmployee, setEditingEmployee] = useState<{ userId: string; name: string; currentTotal: number } | null>(null);
+  const [newAllowance, setNewAllowance] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSaveAllowance = async () => {
+    if (!editingEmployee) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('leave_balances')
+        .update({ total_days: Number(newAllowance) })
+        .eq('user_id', editingEmployee.userId)
+        .eq('leave_type', 'annual')
+        .eq('year', currentYear);
+      if (error) throw error;
+      toast({ title: `Updated ${editingEmployee.name}'s annual leave to ${newAllowance} days` });
+      setEditingEmployee(null);
+      onInitialize(); // Refetch
+    } catch (err: any) {
+      toast({ title: 'Failed to update', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const filteredEmployees = employeeBalances.filter(emp =>
     !balanceSearch ||
@@ -558,8 +590,21 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
                                 <Badge className="bg-emerald-500/10 text-emerald-600 text-[10px]">Available</Badge>
                               )}
                             </td>
-                            <td className="px-2 py-1.5 text-muted-foreground">
+                            <td className="px-2 py-1.5 text-muted-foreground flex items-center gap-1">
                               {activeLeave && `Until ${format(parseISO(activeLeave.end_date), 'MMM d')}`}
+                              {canEditBalances && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 ml-auto"
+                                  onClick={() => {
+                                    setEditingEmployee({ userId: emp.user_id, name: emp.full_name || emp.email, currentTotal: totalEntitlement });
+                                    setNewAllowance(String(totalEntitlement));
+                                  }}
+                                >
+                                  <Edit className="h-3 w-3" />
+                                </Button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -577,12 +622,48 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
           <div className="p-4 border-t bg-muted/30">
             <div className="flex flex-wrap gap-6 text-sm">
               <span>📊 Total Employees: <strong>{filteredEmployees.length}</strong></span>
-              <span>📅 Annual Leave Allowance: <strong>{annualAllowance} days</strong> per employee</span>
+              <span>📅 Annual Leave Allowance: <strong>{annualAllowance} days</strong> per employee (default)</span>
               <span>📝 Formula: Mon-Fri = 1 day, Saturday = 0.5 day, Sunday = 0</span>
             </div>
           </div>
         )}
       </CardContent>
+
+      {/* Edit Balance Dialog */}
+      <Dialog open={!!editingEmployee} onOpenChange={(open) => !open && setEditingEmployee(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Edit Leave Allowance</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs text-muted-foreground">Employee</Label>
+              <p className="text-sm font-medium">{editingEmployee?.name}</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Annual Leave Days ({currentYear})</Label>
+              <Input
+                type="number"
+                value={newAllowance}
+                onChange={(e) => setNewAllowance(e.target.value)}
+                min={0}
+                max={365}
+                className="h-9"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Default is {annualAllowance} days. Current: {editingEmployee?.currentTotal} days.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setEditingEmployee(null)}>Cancel</Button>
+            <Button size="sm" onClick={handleSaveAllowance} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
@@ -599,6 +680,10 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
 
   const { leaveRequests, isLoading, refetch, updateRequestStatus } = useLeaveRequests(undefined, true);
   const { employeeBalances, isLoading: balancesLoading, initializeBalances } = useAllLeaveBalances();
+  const { canEditBalances: userCanEditBalances } = useCurrentUserLeavePermissions();
+  const { hasRole } = useUserRole();
+  const isHROrAdmin = hasRole('admin') || hasRole('super_admin');
+  const canEditBalances = isHROrAdmin || userCanEditBalances;
 
   const filteredRequests = useMemo(() => {
     return leaveRequests.filter(request => {
@@ -786,6 +871,7 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
           balanceSearch={balanceSearch}
           onSearchChange={setBalanceSearch}
           onInitialize={initializeBalances}
+          canEditBalances={canEditBalances}
         />
       ) : (
         <LeaveDateCalculator />
