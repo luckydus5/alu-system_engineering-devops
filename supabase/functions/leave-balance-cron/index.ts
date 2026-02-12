@@ -22,6 +22,17 @@ Deno.serve(async (req) => {
       console.error("Error initializing balances:", initError);
     }
 
+    // Monthly accrual: check if it's the 1st of the month, add 1.5 days to annual leave
+    const today = new Date();
+    if (today.getDate() === 1) {
+      const { error: accrualError } = await supabase.rpc("accrue_monthly_annual_leave");
+      if (accrualError) {
+        console.error("Error accruing monthly leave:", accrualError);
+      } else {
+        console.log("Monthly annual leave accrual completed");
+      }
+    }
+
     // Deduct active leave balances
     const { error: deductError } = await supabase.rpc("deduct_active_leave_balances");
     if (deductError) {
