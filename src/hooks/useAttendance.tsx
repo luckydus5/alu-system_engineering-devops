@@ -176,6 +176,10 @@ export function useAttendance(departmentId?: string, date?: Date) {
       clock_in: string | null;
       clock_out: string | null;
       status: AttendanceStatus;
+      shift_type?: string;
+      total_hours?: number;
+      regular_hours?: number;
+      overtime_hours?: number;
       notes?: string;
     }[]) => {
       // Upsert in batches of 50
