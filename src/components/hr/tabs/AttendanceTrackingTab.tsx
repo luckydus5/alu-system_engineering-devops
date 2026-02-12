@@ -24,6 +24,7 @@ import { useEmployees } from '@/hooks/useEmployees';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useCompanyPolicies } from '@/hooks/useCompanyPolicies';
 import { buildPolicyValues, processAttendanceRecord } from '@/lib/timesheetProcessor';
+import { buildClassifier, type ClassificationSummary } from '@/lib/attendanceClassifier';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
@@ -487,10 +488,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadPreview, setUploadPreview] = useState<any[] | null>(null);
+  const [classificationSummary, setClassificationSummary] = useState<ClassificationSummary | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [parseProgress, setParseProgress] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  const [previewGroupBy, setPreviewGroupBy] = useState<'company' | 'flat'>('company');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -498,17 +501,14 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const { users } = useUsers();
   const { employees } = useEmployees();
   const { companies } = useCompanies();
-  const { getPolicyValue } = useCompanyPolicies(null); // global policies
+  const { getPolicyValue } = useCompanyPolicies(null);
   const policyValues = useMemo(() => buildPolicyValues(getPolicyValue), [getPolicyValue]);
   const { records, isLoading, refetch, bulkImportAttendance } = useAttendance(
     filterDepartment === 'all' ? undefined : filterDepartment
   );
 
-  // Departments filtered by selected company
-  const companyDepartments = useMemo(() => {
-    if (!selectedCompanyId) return departments;
-    return departments.filter(d => d.company_id === selectedCompanyId);
-  }, [departments, selectedCompanyId]);
+  // Build the multi-company classifier
+  const classifier = useMemo(() => buildClassifier(companies, departments), [companies, departments]);
 
   // Normalize column name for flexible matching
   const normalizeCol = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s/]+/g, " ").trim();
@@ -597,43 +597,9 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const userLookup = users.map(u => ({ ...u, nameLower: u.full_name?.toLowerCase().trim() || '' }));
       const employeeLookup = employees.map(e => ({ ...e, nameLower: e.full_name?.toLowerCase().trim() || '' }));
 
-      // Company/department matching from Excel department column
-      const matchCompany = (excelDept: string): { companyName: string | null; companyId: string | null; deptId: string | null } => {
-        if (!excelDept) return { companyName: null, companyId: null, deptId: null };
-        const search = excelDept.toLowerCase().trim();
-        // Try to match against companies
-        for (const c of companies) {
-          const cName = c.name.toLowerCase();
-          if (search.includes(cName) || cName.includes(search) || search.includes(c.code.toLowerCase())) {
-            return { companyName: c.name, companyId: c.id, deptId: null };
-          }
-        }
-        // Try keywords
-        if (search.includes('farmer') || search.includes('peatshed') || search.includes('farm')) {
-          const c = companies.find(co => co.code === 'FARM');
-          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
-        }
-        if (search.includes('peat') && !search.includes('farmer')) {
-          const c = companies.find(co => co.code === 'HQPEAT');
-          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
-        }
-        if (search.includes('service') || search.includes('svc')) {
-          const c = companies.find(co => co.code === 'HQSVC');
-          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
-        }
-        if (search.includes('power') || search.includes('hqp')) {
-          const c = companies.find(co => co.code === 'HQP');
-          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
-        }
-        // Try department matching
-        for (const d of departments) {
-          const dName = d.name.toLowerCase();
-          if (search.includes(dName) || dName.includes(search)) {
-            return { companyName: null, companyId: null, deptId: d.id };
-          }
-        }
-        return { companyName: excelDept, companyId: null, deptId: null };
-      };
+      // Company/department classification using advanced classifier
+      const fallbackCo = selectedCompanyId && selectedCompanyId !== 'none' ? selectedCompanyId : undefined;
+      const classifyDept = (excelDept: string) => classifier.classify(excelDept, fallbackCo);
 
       const matchUser = (name: string, empNo?: string) => {
         const searchName = name.toLowerCase().trim();
@@ -714,16 +680,13 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const latestOut = group.checkOuts.length > 0 ? group.checkOuts.sort((a, b) => b.getTime() - a.getTime())[0] : null;
 
           const matchedUser = matchUser(name, group.empNo);
-          const companyMatch = matchCompany(group.excelDept);
+          const classification = classifyDept(group.excelDept);
 
           // Apply business rules from policy engine
           const processed = processAttendanceRecord(earliestIn, latestOut, policyValues);
 
-          // Determine department: matched user's department > company match > selected company's first dept > fallback
-          let resolvedDeptId = matchedUser?.department_id || companyMatch.deptId;
-          if (!resolvedDeptId && selectedCompanyId) {
-            resolvedDeptId = companyDepartments[0]?.id || departmentId;
-          }
+          // Determine department: matched user's department > classification > fallback
+          let resolvedDeptId = matchedUser?.department_id || classification.departmentId;
           if (!resolvedDeptId) resolvedDeptId = departmentId;
 
           parsed.push({
@@ -742,7 +705,9 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             matchedUserName: matchedUser?.full_name || null,
             departmentId: resolvedDeptId,
             excelDept: group.excelDept,
-            matchedCompany: companyMatch.companyName,
+            classifiedCompany: classification.company?.companyName || null,
+            classifiedCompanyId: classification.company?.companyId || null,
+            classificationConfidence: classification.confidence,
             empNo: group.empNo,
           });
         });
@@ -752,9 +717,15 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           setIsParsing(false);
           return;
         }
-        parsed.sort((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date));
+        parsed.sort((a, b) => (a.classifiedCompany || '').localeCompare(b.classifiedCompany || '') || a.name.localeCompare(b.name) || a.date.localeCompare(b.date));
+        
+        // Build classification summary
+        const deptTexts = parsed.map(r => r.excelDept || '');
+        const { summary } = classifier.classifyBatch(deptTexts, fallbackCo);
+        setClassificationSummary(summary);
         setUploadPreview(parsed);
-        toast({ title: `${parsed.length} daily records parsed from ${jsonData.length.toLocaleString()} events`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
+        const companyNames = Object.values(summary.byCompany).map(c => c.companyName).join(', ');
+        toast({ title: `${parsed.length} records parsed · ${Object.keys(summary.byCompany).length} companies detected`, description: companyNames || 'No companies detected' });
 
       } else {
         // ── Standard format ──
@@ -764,12 +735,14 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const dateVal = row[dateCol!];
           const checkIn = checkInCol ? String(row[checkInCol] || '').trim() : '';
           const checkOut = checkOutCol ? String(row[checkOutCol] || '').trim() : '';
+          const excelDept = deptCol ? String(row[deptCol] || '').trim() : '';
           if (!name || !dateVal) continue;
 
           const parsedDate = parseDate(dateVal);
           if (!parsedDate) continue;
 
           const matchedUser = matchUser(name);
+          const classification = classifyDept(excelDept);
 
           const parseTime = (timeStr: string, dateBase: Date): string | null => {
             if (!timeStr || timeStr === '-' || timeStr === '--:--') return null;
@@ -795,6 +768,9 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const clockOutDate = clockOutISO ? new Date(clockOutISO) : null;
           const processed = processAttendanceRecord(clockInDate, clockOutDate, policyValues);
 
+          let resolvedDeptId = matchedUser?.department_id || classification.departmentId;
+          if (!resolvedDeptId) resolvedDeptId = departmentId;
+
           parsed.push({
             name, date: format(parsedDate, 'yyyy-MM-dd'), dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
             clockIn: clockInISO ? format(new Date(clockInISO), 'HH:mm') : '—',
@@ -806,7 +782,11 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             regularHours: processed.regularHours,
             overtimeHours: processed.overtimeHours,
             matched: !!matchedUser, matchedUser, userId: matchedUser?.id,
-            departmentId: matchedUser?.department_id || departmentId,
+            departmentId: resolvedDeptId,
+            excelDept,
+            classifiedCompany: classification.company?.companyName || null,
+            classifiedCompanyId: classification.company?.companyId || null,
+            classificationConfidence: classification.confidence,
           });
         }
 
@@ -815,8 +795,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           setIsParsing(false);
           return;
         }
+        const deptTextsStd = parsed.map(r => r.excelDept || '');
+        const { summary: summaryStd } = classifier.classifyBatch(deptTextsStd, fallbackCo);
+        setClassificationSummary(summaryStd);
         setUploadPreview(parsed);
-        toast({ title: `${parsed.length} records parsed`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
+        const companyNamesStd = Object.values(summaryStd.byCompany).map(c => c.companyName).join(', ');
+        toast({ title: `${parsed.length} records parsed · ${Object.keys(summaryStd.byCompany).length} companies`, description: companyNamesStd || 'No companies detected' });
       }
     } catch (err) {
       toast({ title: 'Failed to read file', description: String(err), variant: 'destructive' });
@@ -842,14 +826,70 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           total_hours: r.totalHours || 0,
           regular_hours: r.regularHours || 0,
           overtime_hours: r.overtimeHours || 0,
-          notes: `Imported from Excel | ${companies.find(c => c.id === selectedCompanyId)?.name || 'Unknown'} | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
+          notes: `Imported from Excel | ${r.classifiedCompany || 'Unclassified'} | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
         }))
       );
       setUploadPreview(null);
+      setClassificationSummary(null);
     } finally {
       setIsImporting(false);
     }
   };
+
+  const renderPreviewRow = (row: any, idx: number) => (
+    <tr key={`row-${idx}`} className={cn("border-b border-border/40 hover:bg-muted/20", !row.matched && "bg-red-50/30 dark:bg-red-900/10")}>
+      <td className="px-3 py-2.5 text-muted-foreground">{idx}</td>
+      <td className="px-3 py-2.5 font-medium">{row.name}</td>
+      <td className="px-3 py-2.5">
+        {row.matched ? (
+          <span className="inline-flex items-center gap-1 text-emerald-600 text-[10px] font-medium">
+            <CheckCircle2 className="h-3 w-3" /> {row.matchedUserName || row.matchedUser?.full_name}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 text-red-500 text-[10px] font-medium">
+            <AlertCircle className="h-3 w-3" /> Not Found
+          </span>
+        )}
+      </td>
+      <td className="px-3 py-2.5">
+        {row.classifiedCompany ? (
+          <Badge variant="outline" className="text-[10px] border-0 bg-primary/10 text-primary">{row.classifiedCompany}</Badge>
+        ) : (
+          <span className="text-muted-foreground text-[10px]">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-muted-foreground text-[10px]">{row.excelDept || '—'}</td>
+      <td className="px-3 py-2.5 text-center">{row.dateDisplay}</td>
+      <td className="px-3 py-2.5 text-center font-medium text-emerald-600">{row.clockIn}</td>
+      <td className="px-3 py-2.5 text-center font-medium text-info">{row.clockOut}</td>
+      <td className="px-3 py-2.5 text-center">
+        <Badge variant="outline" className={cn("text-[10px] border-0",
+          row.shiftType === 'day' ? "bg-amber-500/10 text-amber-600" : "bg-indigo-500/10 text-indigo-600"
+        )}>
+          {row.shiftType === 'day' ? <Sun className="h-3 w-3 mr-0.5 inline" /> : <Moon className="h-3 w-3 mr-0.5 inline" />}
+          {row.shiftType === 'day' ? 'Day' : 'Night'}
+        </Badge>
+      </td>
+      <td className="px-3 py-2.5 text-center font-bold">{row.totalHours?.toFixed(1) || '0'}h</td>
+      <td className="px-3 py-2.5 text-center">
+        {(row.overtimeHours || 0) > 0 ? (
+          <span className="font-bold text-orange-600">{row.overtimeHours?.toFixed(2)}h</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
+      </td>
+      <td className="px-3 py-2.5 text-center">
+        <Badge variant="outline" className={cn("text-[10px] border-0",
+          row.status === 'present' && "bg-emerald-500/10 text-emerald-600",
+          row.status === 'late' && "bg-amber-500/10 text-amber-600",
+          row.status === 'absent' && "bg-red-500/10 text-red-600",
+          row.status === 'half_day' && "bg-blue-500/10 text-blue-600",
+        )}>
+          {ATTENDANCE_STATUS_LABELS[row.status as AttendanceStatus] || row.status}
+        </Badge>
+      </td>
+    </tr>
+  );
 
   return (
     <div className="space-y-5">
@@ -870,20 +910,21 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               </div>
               <div>
                 <h3 className="text-sm font-semibold">Import Attendance</h3>
-                <p className="text-[10px] text-muted-foreground">Select company, then upload Excel</p>
+                <p className="text-[10px] text-muted-foreground">Upload mixed-company Excel · auto-classifies</p>
               </div>
             </div>
             <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
               <SelectTrigger className="w-full h-9 mb-2">
-                <SelectValue placeholder="Select Company..." />
+                <SelectValue placeholder="Default company (optional)" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="none">No default — auto-detect all</SelectItem>
                 {companies.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  <SelectItem key={c.id} value={c.id}>{c.name} {c.parent_id ? '(subsidiary)' : '(parent)'}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing || !selectedCompanyId} />
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing} />
             {isParsing ? (
               <div className="w-full text-center space-y-1.5">
                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -892,13 +933,13 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                 </div>
               </div>
             ) : (
-              <Button size="sm" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={!selectedCompanyId}>
+              <Button size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
                 <Upload className="h-4 w-4 mr-2" /> Upload Excel
               </Button>
             )}
-            {!selectedCompanyId && (
-              <p className="text-[10px] text-muted-foreground mt-1.5 text-center">Please select a company first</p>
-            )}
+            <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+              Auto-detects HQ Power, HQ Peat, HQ Service, Farmers
+            </p>
           </CardContent>
         </Card>
 
@@ -953,12 +994,27 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         <Card className="shadow-corporate border-l-4 border-l-info">
           <CardHeader className="pb-2 border-b bg-muted/30">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="space-y-2">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4 text-info" />
-                  Import Preview — {companies.find(c => c.id === selectedCompanyId)?.name || 'Unknown Company'} — {uploadPreview.length} records
+                  Import Preview — {uploadPreview.length} records
                 </CardTitle>
-                <div className="flex gap-3 mt-1 flex-wrap">
+                {/* Company classification chips */}
+                {classificationSummary && (
+                  <div className="flex gap-2 flex-wrap">
+                    {Object.entries(classificationSummary.byCompany).map(([companyId, info]) => (
+                      <Badge key={companyId} variant="secondary" className="text-[10px] font-semibold">
+                        {info.companyName}: {info.count}
+                      </Badge>
+                    ))}
+                    {classificationSummary.unclassified > 0 && (
+                      <Badge variant="destructive" className="text-[10px]">
+                        Unclassified: {classificationSummary.unclassified}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+                <div className="flex gap-3 flex-wrap">
                   <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
                     <CheckCircle2 className="h-3 w-3" /> {uploadPreview.filter(r => r.matched).length} matched
                   </span>
@@ -976,14 +1032,24 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                   </span>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="h-8" onClick={() => setUploadPreview(null)}>
-                  <X className="h-3.5 w-3.5 mr-1" /> Cancel
-                </Button>
-                <Button size="sm" className="h-8" onClick={handleImport} disabled={isImporting || uploadPreview.filter(r => r.matched).length === 0}>
-                  {isImporting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
-                  Import {uploadPreview.filter(r => r.matched).length}
-                </Button>
+              <div className="flex flex-col gap-2 items-end">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setUploadPreview(null); setClassificationSummary(null); }}>
+                    <X className="h-3.5 w-3.5 mr-1" /> Cancel
+                  </Button>
+                  <Button size="sm" className="h-8" onClick={handleImport} disabled={isImporting || uploadPreview.filter(r => r.matched).length === 0}>
+                    {isImporting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
+                    Import {uploadPreview.filter(r => r.matched).length}
+                  </Button>
+                </div>
+                <div className="flex items-center rounded-md border p-0.5">
+                  <Button variant={previewGroupBy === 'company' ? 'default' : 'ghost'} size="sm" className="h-6 text-[10px] px-2" onClick={() => setPreviewGroupBy('company')}>
+                    By Company
+                  </Button>
+                  <Button variant={previewGroupBy === 'flat' ? 'default' : 'ghost'} size="sm" className="h-6 text-[10px] px-2" onClick={() => setPreviewGroupBy('flat')}>
+                    Flat
+                  </Button>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -995,66 +1061,44 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                     <th className="px-3 py-2.5 text-left font-semibold border-b w-10">#</th>
                     <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[160px]">Name (Excel)</th>
                     <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[140px]">Matched Employee</th>
+                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[100px]">Company</th>
                     <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[100px]">Dept (Excel)</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[100px]">Date</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Check In</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Check Out</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[70px]">Shift</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[70px]">Total Hrs</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[70px]">Regular</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[60px]">OT Hrs</th>
                     <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {uploadPreview.map((row, idx) => (
-                    <tr key={idx} className={cn("border-b border-border/40 hover:bg-muted/20", !row.matched && "bg-red-50/30 dark:bg-red-900/10")}>
-                      <td className="px-3 py-2.5 text-muted-foreground">{idx + 1}</td>
-                      <td className="px-3 py-2.5 font-medium">{row.name}</td>
-                      <td className="px-3 py-2.5">
-                        {row.matched ? (
-                          <span className="inline-flex items-center gap-1 text-emerald-600 text-[10px] font-medium">
-                            <CheckCircle2 className="h-3 w-3" /> {row.matchedUserName || row.matchedUser?.full_name}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-red-500 text-[10px] font-medium">
-                            <AlertCircle className="h-3 w-3" /> Not Found
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-muted-foreground text-[10px]">{row.excelDept || '—'}</td>
-                      <td className="px-3 py-2.5 text-center">{row.dateDisplay}</td>
-                      <td className="px-3 py-2.5 text-center font-medium text-emerald-600">{row.clockIn}</td>
-                      <td className="px-3 py-2.5 text-center font-medium text-info">{row.clockOut}</td>
-                      <td className="px-3 py-2.5 text-center">
-                        <Badge variant="outline" className={cn("text-[10px] border-0",
-                          row.shiftType === 'day' ? "bg-amber-500/10 text-amber-600" : "bg-indigo-500/10 text-indigo-600"
-                        )}>
-                          {row.shiftType === 'day' ? <Sun className="h-3 w-3 mr-0.5 inline" /> : <Moon className="h-3 w-3 mr-0.5 inline" />}
-                          {row.shiftType === 'day' ? 'Day' : 'Night'}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2.5 text-center font-bold">{row.totalHours?.toFixed(1) || '0'}h</td>
-                      <td className="px-3 py-2.5 text-center text-muted-foreground">{row.regularHours?.toFixed(1) || '0'}h</td>
-                      <td className="px-3 py-2.5 text-center">
-                        {(row.overtimeHours || 0) > 0 ? (
-                          <span className="font-bold text-orange-600">{row.overtimeHours?.toFixed(2)}h</span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-center">
-                        <Badge variant="outline" className={cn("text-[10px] border-0",
-                          row.status === 'present' && "bg-emerald-500/10 text-emerald-600",
-                          row.status === 'late' && "bg-amber-500/10 text-amber-600",
-                          row.status === 'absent' && "bg-red-500/10 text-red-600",
-                          row.status === 'half_day' && "bg-blue-500/10 text-blue-600",
-                        )}>
-                          {ATTENDANCE_STATUS_LABELS[row.status as AttendanceStatus] || row.status}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    if (previewGroupBy === 'company') {
+                      // Group rows by classified company
+                      const grouped = new Map<string, any[]>();
+                      uploadPreview.forEach(row => {
+                        const key = row.classifiedCompany || 'Unclassified';
+                        if (!grouped.has(key)) grouped.set(key, []);
+                        grouped.get(key)!.push(row);
+                      });
+                      let globalIdx = 0;
+                      return Array.from(grouped.entries()).map(([companyName, rows]) => (
+                        <>
+                          <tr key={`company-${companyName}`} className="bg-primary/5">
+                            <td colSpan={12} className="px-3 py-2 font-bold text-xs text-primary border-b">
+                              ► {companyName.toUpperCase()} — {rows.length} records · {rows.filter(r => r.matched).length} matched
+                            </td>
+                          </tr>
+                          {rows.map((row) => {
+                            globalIdx++;
+                            return renderPreviewRow(row, globalIdx);
+                          })}
+                        </>
+                      ));
+                    }
+                    return uploadPreview.map((row, idx) => renderPreviewRow(row, idx + 1));
+                  })()}
                 </tbody>
               </table>
             </div>
