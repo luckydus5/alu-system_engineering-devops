@@ -404,7 +404,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -645,48 +645,56 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b bg-muted/50">
-                  <th className="text-left p-3 font-medium text-muted-foreground">Employee</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground hidden sm:table-cell">Department</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground hidden md:table-cell">Position</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground hidden lg:table-cell">Hire Date</th>
-                  <th className="text-left p-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-right p-3 font-medium text-muted-foreground w-20"></th>
+                <tr className="border-b bg-muted/30">
+                  <th className="text-left p-3 pl-4 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-14">ID</th>
+                  <th className="text-left p-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Name</th>
+                  <th className="text-left p-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider hidden sm:table-cell">Department</th>
+                  <th className="text-left p-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider hidden md:table-cell">Contact</th>
+                  <th className="text-left p-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider hidden lg:table-cell">Hire Date</th>
+                  <th className="text-left p-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">Status</th>
+                  <th className="text-center p-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider w-24">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(emp => {
+                {filtered.map((emp, idx) => {
                   const initials = getInitials(emp.full_name);
                   const gradient = getGradient(emp.full_name);
                   const status = STATUS_CONFIG[emp.employment_status] || STATUS_CONFIG.active;
 
                   return (
-                    <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => handleView(emp)}>
+                    <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group" onClick={() => handleView(emp)}>
+                      <td className="p-3 pl-4 text-muted-foreground font-mono text-xs">{idx + 1}</td>
                       <td className="p-3">
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-9 w-9">
-                            <AvatarFallback className={cn("text-xs text-white bg-gradient-to-br", gradient)}>
+                          <Avatar className="h-10 w-10 ring-2 ring-background shadow">
+                            <AvatarFallback className={cn("text-xs font-bold text-white bg-gradient-to-br", gradient)}>
                               {initials}
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <p className="font-medium truncate">{emp.full_name}</p>
+                            <p className="font-semibold text-primary truncate">{emp.full_name}</p>
                             <p className="text-xs text-muted-foreground font-mono">{emp.employee_number}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="p-3 hidden sm:table-cell text-muted-foreground">{emp.department_name || '—'}</td>
-                      <td className="p-3 hidden md:table-cell text-muted-foreground">{emp.position_name || '—'}</td>
-                      <td className="p-3 hidden lg:table-cell text-muted-foreground">{format(new Date(emp.hire_date), 'MMM d, yyyy')}</td>
+                      <td className="p-3 hidden sm:table-cell text-sm">{emp.department_name || '—'}</td>
+                      <td className="p-3 hidden md:table-cell">
+                        <div className="min-w-0">
+                          {emp.phone && <p className="text-sm truncate">{emp.phone}</p>}
+                          {emp.email && <p className="text-xs text-muted-foreground truncate">{emp.email}</p>}
+                          {!emp.phone && !emp.email && <span className="text-muted-foreground">—</span>}
+                        </div>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell text-sm text-muted-foreground">{format(new Date(emp.hire_date), 'yyyy-MM-dd')}</td>
                       <td className="p-3">
                         <Badge variant="outline" className={cn("text-[10px] border", status.color)}>{status.label}</Badge>
                       </td>
-                      <td className="p-3 text-right">
-                        <div className="flex justify-end gap-1">
+                      <td className="p-3 text-center">
+                        <div className="flex justify-center gap-1">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); handleView(emp); }}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={e => { e.stopPropagation(); handleDelete(emp); }}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => { e.stopPropagation(); handleDelete(emp); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>
