@@ -1984,6 +1984,8 @@ export type Database = {
         | "hr_reviewer"
         | "gm_approver"
         | "om_approver"
+        | "it_manager"
+        | "it_officer"
       leave_status:
         | "pending"
         | "manager_approved"
@@ -2167,6 +2169,8 @@ export const Constants = {
         "hr_reviewer",
         "gm_approver",
         "om_approver",
+        "it_manager",
+        "it_officer",
       ],
       leave_status: [
         "pending",
