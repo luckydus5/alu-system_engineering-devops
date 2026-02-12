@@ -13,6 +13,7 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { supabase } from '@/integrations/supabase/client';
 import { UserPlus, Users, Shield } from 'lucide-react';
 import { UserList } from '@/components/admin/UserList';
+import { SYSTEM_POSITIONS } from '@/lib/systemPositions';
 import { z } from 'zod';
 
 const emailSchema = z.string().email('Please enter a valid email address');
@@ -32,6 +33,7 @@ export default function Admin() {
     fullName: '',
     role: 'staff' as AppRole,
     departmentId: '',
+    systemPosition: '' as string,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -112,6 +114,7 @@ export default function Admin() {
           fullName: formData.fullName,
           role: formData.role,
           departmentId: formData.departmentId || null,
+          systemPosition: formData.systemPosition || null,
         },
       });
 
@@ -120,7 +123,7 @@ export default function Admin() {
 
       toast({
         title: "User created successfully",
-        description: `${formData.fullName} has been added as ${formData.role}.`,
+        description: `${formData.fullName} has been added as ${formData.role}.${formData.systemPosition ? ` Assigned as ${SYSTEM_POSITIONS.find(p => p.value === formData.systemPosition)?.label}.` : ''}`,
       });
 
       // Reset form
@@ -130,6 +133,7 @@ export default function Admin() {
         fullName: '',
         role: 'staff',
         departmentId: '',
+        systemPosition: '',
       });
       setErrors({});
 
@@ -280,6 +284,32 @@ export default function Admin() {
                     </p>
                   )}
                 </div>
+
+                {isSuperAdmin && (
+                  <div className="space-y-2">
+                    <Label htmlFor="systemPosition">System Position (Optional)</Label>
+                    <Select
+                      value={formData.systemPosition || 'none'}
+                      onValueChange={(value) => setFormData(prev => ({ ...prev, systemPosition: value === 'none' ? '' : value }))}
+                      disabled={isCreating}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="No special position" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No special position</SelectItem>
+                        {SYSTEM_POSITIONS.map((pos) => (
+                          <SelectItem key={pos.value} value={pos.value}>
+                            {pos.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Assigns a leave approval role. Only one user per position.
+                    </p>
+                  </div>
+                )}
 
                 <Button type="submit" className="w-full" disabled={isCreating}>
                   {isCreating ? 'Creating User...' : 'Create User'}

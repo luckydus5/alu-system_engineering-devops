@@ -6,7 +6,6 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -16,7 +15,6 @@ Deno.serve(async (req) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 
-    // Get the authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'No authorization header' }), {
@@ -25,17 +23,14 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Create a client with the user's token to verify them
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } }
     });
 
-    // Validate the JWT and get claims
     const token = authHeader.replace('Bearer ', '');
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
     
     if (claimsError || !claimsData?.claims) {
-      console.error('JWT validation failed:', claimsError);
       return new Response(JSON.stringify({ error: 'Invalid token' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -43,29 +38,24 @@ Deno.serve(async (req) => {
     }
 
     const requestingUserId = claimsData.claims.sub as string;
-    console.log('Requesting user ID:', requestingUserId);
 
     if (!supabaseUrl || !serviceRoleKey) {
-      console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
       return new Response(JSON.stringify({ error: 'Server misconfigured' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Create admin client for privileged operations
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    // Check if requesting user is admin or super_admin and get their department
     const { data: roleRows, error: roleError } = await supabaseAdmin
       .from('user_roles')
       .select('role, department_id')
       .eq('user_id', requestingUserId);
 
     if (roleError) {
-      console.error('Error fetching roles:', roleError);
       return new Response(JSON.stringify({ error: 'Failed to verify privileges' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -86,8 +76,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get request body
-    const { email, password, fullName, role, departmentId } = await req.json();
+    const { email, password, fullName, role, departmentId, systemPosition } = await req.json();
 
     if (!email || !password || !fullName || !role) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -96,7 +85,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Validate role assignment - admins cannot create admin or super_admin
     if (!isSuperAdmin && (role === 'admin' || role === 'super_admin')) {
       return new Response(JSON.stringify({ error: 'You cannot assign admin or super_admin roles' }), {
         status: 403,
@@ -104,7 +92,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Validate department assignment - admins can only create users in their department
     if (!isSuperAdmin && departmentId && departmentId !== adminDepartmentId) {
       return new Response(JSON.stringify({ error: 'You can only create users in your department' }), {
         status: 403,
@@ -112,12 +99,18 @@ Deno.serve(async (req) => {
       });
     }
 
-    // For non-super admins, force the department to be their own
+    // Only super admins can assign system positions
+    if (systemPosition && !isSuperAdmin) {
+      return new Response(JSON.stringify({ error: 'Only super admins can assign system positions' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const finalDepartmentId = isSuperAdmin ? departmentId : (adminDepartmentId || departmentId);
 
-    console.log('Creating user:', email, 'with role:', role, 'department:', finalDepartmentId);
+    console.log('Creating user:', email, 'with role:', role, 'department:', finalDepartmentId, 'position:', systemPosition);
 
-    // Create the user using admin API
     const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -126,7 +119,6 @@ Deno.serve(async (req) => {
     });
 
     if (createError) {
-      console.error('Error creating user:', createError);
       return new Response(JSON.stringify({ error: createError.message }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -135,7 +127,7 @@ Deno.serve(async (req) => {
 
     const newUserId = userData.user.id;
 
-    // Update the user's role (the trigger creates a default staff role)
+    // Update role
     const { error: updateRoleError } = await supabaseAdmin
       .from('user_roles')
       .update({ role, department_id: finalDepartmentId || null })
@@ -145,15 +137,37 @@ Deno.serve(async (req) => {
       console.error('Error updating role:', updateRoleError);
     }
 
-    // Update the profile with department
+    // Update profile with department
     if (finalDepartmentId) {
-      const { error: profileError } = await supabaseAdmin
+      await supabaseAdmin
         .from('profiles')
         .update({ department_id: finalDepartmentId })
         .eq('id', newUserId);
+    }
 
-      if (profileError) {
-        console.error('Error updating profile:', profileError);
+    // Assign system position (leave approver role) if provided
+    if (systemPosition) {
+      // First deactivate any existing user with this position
+      await supabaseAdmin
+        .from('leave_approvers')
+        .update({ is_active: false })
+        .eq('approver_role', systemPosition)
+        .eq('is_active', true);
+
+      // Assign the position to the new user
+      const { error: approverError } = await supabaseAdmin
+        .from('leave_approvers')
+        .upsert({
+          user_id: newUserId,
+          approver_role: systemPosition,
+          granted_by: requestingUserId,
+          is_active: true,
+        }, { onConflict: 'user_id,approver_role' });
+
+      if (approverError) {
+        console.error('Error assigning system position:', approverError);
+      } else {
+        console.log('System position assigned:', systemPosition, 'to user:', newUserId);
       }
     }
 

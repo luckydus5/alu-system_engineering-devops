@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUsers, UserWithRole } from '@/hooks/useUsers';
 import { useDepartments } from '@/hooks/useDepartments';
 import { AppRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useLeaveApprovers } from '@/hooks/useLeaveApprovers';
+import { SYSTEM_POSITIONS, POSITION_LABELS } from '@/lib/systemPositions';
 import {
   Table,
   TableBody,
@@ -68,6 +70,10 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
   const { departments } = useDepartments();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
+  const { approvers } = useLeaveApprovers();
+
+  // Build a map of user_id -> approver_role for display
+  const approverMap = new Map(approvers.map(a => [a.user_id, a.approver_role]));
 
   // Filter users based on admin's department access
   // Admins can only see users in their department, and cannot see super_admins
@@ -93,6 +99,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
     fullName: '',
     role: 'staff' as AppRole,
     departmentId: '',
+    systemPosition: '',
   });
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -103,6 +110,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
       fullName: user.full_name || '',
       role: user.role,
       departmentId: user.department_id || '',
+      systemPosition: approverMap.get(user.id) || '',
     });
   };
 
@@ -114,6 +122,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
       fullName: editForm.fullName,
       role: editForm.role,
       departmentId: editForm.departmentId || null,
+      systemPosition: editForm.systemPosition || null,
     });
 
     setIsUpdating(false);
@@ -192,6 +201,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
+                  <TableHead>Position</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -199,7 +209,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                       No users found in {adminDepartmentId ? 'your department' : 'the system'}
                     </TableCell>
                   </TableRow>
@@ -214,6 +224,15 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                         <Badge className={roleColors[user.role]}>
                           {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {approverMap.has(user.id) ? (
+                          <Badge variant="outline" className="text-xs bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30">
+                            {POSITION_LABELS[approverMap.get(user.id)!] || approverMap.get(user.id)}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       <TableCell>{user.department_name || '-'}</TableCell>
                       <TableCell className="text-right">
@@ -338,6 +357,30 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                 </p>
               )}
             </div>
+            {isSuperAdmin && (
+              <div className="space-y-2">
+                <Label htmlFor="edit-position">System Position</Label>
+                <Select
+                  value={editForm.systemPosition || 'none'}
+                  onValueChange={(value) => setEditForm((prev) => ({ ...prev, systemPosition: value === 'none' ? '' : value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="No special position" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No special position</SelectItem>
+                    {SYSTEM_POSITIONS.map((pos) => (
+                      <SelectItem key={pos.value} value={pos.value}>
+                        {pos.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Assigns a leave approval role. Only one user per position.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingUser(null)}>
