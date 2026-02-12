@@ -63,7 +63,7 @@ export default function MyDashboard() {
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [comment, setComment] = useState('');
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(isAnyApprover ? 'approvals' : 'overview');
 
   const primaryPosition = approverRoles[0] || null;
   const positionLabel = primaryPosition ? POSITION_LABELS[primaryPosition] : null;
@@ -265,11 +265,7 @@ export default function MyDashboard() {
 
         {/* Tabbed Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-4 h-11 bg-muted/60">
-            <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5">
-              <FileText className="h-3.5 w-3.5 hidden sm:block" />
-              My Leaves
-            </TabsTrigger>
+          <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 h-11 bg-muted/60">
             {isAnyApprover && (
               <TabsTrigger value="approvals" className="text-xs sm:text-sm gap-1.5 relative">
                 <ClipboardList className="h-3.5 w-3.5 hidden sm:block" />
@@ -281,9 +277,9 @@ export default function MyDashboard() {
                 )}
               </TabsTrigger>
             )}
-            <TabsTrigger value="attendance" className="text-xs sm:text-sm gap-1.5">
-              <Timer className="h-3.5 w-3.5 hidden sm:block" />
-              Attendance
+            <TabsTrigger value="overview" className="text-xs sm:text-sm gap-1.5">
+              <FileText className="h-3.5 w-3.5 hidden sm:block" />
+              My Leaves
             </TabsTrigger>
             {canFileForOthers && (
               <TabsTrigger value="filed" className="text-xs sm:text-sm gap-1.5">
@@ -421,19 +417,8 @@ export default function MyDashboard() {
             </TabsContent>
           )}
 
-          {/* ATTENDANCE TAB */}
-          <TabsContent value="attendance" className="mt-4">
-            {primaryDeptId ? (
-              <AttendanceTab departmentId={primaryDeptId} />
-            ) : (
-              <Card className="shadow-sm">
-                <CardContent className="py-12 text-center text-muted-foreground">
-                  <Timer className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No department assigned</p>
-                </CardContent>
-              </Card>
-            )}
-          </TabsContent>
+
+
 
           {/* FILED FOR OTHERS TAB */}
           {canFileForOthers && (
