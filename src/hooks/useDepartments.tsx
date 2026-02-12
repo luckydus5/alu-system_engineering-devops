@@ -8,6 +8,7 @@ export interface Department {
   description: string | null;
   icon: string | null;
   color: string | null;
+  company_id: string | null;
 }
 
 export function useDepartments() {

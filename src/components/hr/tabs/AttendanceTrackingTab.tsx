@@ -490,6 +490,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [isImporting, setIsImporting] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [parseProgress, setParseProgress] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -502,6 +503,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const { records, isLoading, refetch, bulkImportAttendance } = useAttendance(
     filterDepartment === 'all' ? undefined : filterDepartment
   );
+
+  // Departments filtered by selected company
+  const companyDepartments = useMemo(() => {
+    if (!selectedCompanyId) return departments;
+    return departments.filter(d => d.company_id === selectedCompanyId);
+  }, [departments, selectedCompanyId]);
 
   // Normalize column name for flexible matching
   const normalizeCol = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s/]+/g, " ").trim();
@@ -712,8 +719,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           // Apply business rules from policy engine
           const processed = processAttendanceRecord(earliestIn, latestOut, policyValues);
 
-          // Determine department: matched user's department > company match > fallback
-          const resolvedDeptId = matchedUser?.department_id || companyMatch.deptId || departmentId;
+          // Determine department: matched user's department > company match > selected company's first dept > fallback
+          let resolvedDeptId = matchedUser?.department_id || companyMatch.deptId;
+          if (!resolvedDeptId && selectedCompanyId) {
+            resolvedDeptId = companyDepartments[0]?.id || departmentId;
+          }
+          if (!resolvedDeptId) resolvedDeptId = departmentId;
 
           parsed.push({
             name, date: dateStr, dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
@@ -831,7 +842,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           total_hours: r.totalHours || 0,
           regular_hours: r.regularHours || 0,
           overtime_hours: r.overtimeHours || 0,
-          notes: `Imported from Excel | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
+          notes: `Imported from Excel | ${companies.find(c => c.id === selectedCompanyId)?.name || 'Unknown'} | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
         }))
       );
       setUploadPreview(null);
@@ -859,10 +870,20 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               </div>
               <div>
                 <h3 className="text-sm font-semibold">Import Attendance</h3>
-                <p className="text-[10px] text-muted-foreground">Upload Excel from machine</p>
+                <p className="text-[10px] text-muted-foreground">Select company, then upload Excel</p>
               </div>
             </div>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing} />
+            <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+              <SelectTrigger className="w-full h-9 mb-2">
+                <SelectValue placeholder="Select Company..." />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing || !selectedCompanyId} />
             {isParsing ? (
               <div className="w-full text-center space-y-1.5">
                 <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -871,9 +892,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                 </div>
               </div>
             ) : (
-              <Button size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
+              <Button size="sm" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={!selectedCompanyId}>
                 <Upload className="h-4 w-4 mr-2" /> Upload Excel
               </Button>
+            )}
+            {!selectedCompanyId && (
+              <p className="text-[10px] text-muted-foreground mt-1.5 text-center">Please select a company first</p>
             )}
           </CardContent>
         </Card>
@@ -932,7 +956,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               <div>
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4 text-info" />
-                  Import Preview — {uploadPreview.length} records
+                  Import Preview — {companies.find(c => c.id === selectedCompanyId)?.name || 'Unknown Company'} — {uploadPreview.length} records
                 </CardTitle>
                 <div className="flex gap-3 mt-1 flex-wrap">
                   <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
