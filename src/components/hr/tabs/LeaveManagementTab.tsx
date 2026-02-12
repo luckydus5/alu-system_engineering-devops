@@ -23,6 +23,7 @@ import { LeaveApplicationForm } from '../LeaveApplicationForm';
 import { LeaveRequestDetailDialog } from '../LeaveRequestDetailDialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { useCompanyPolicies } from '@/hooks/useCompanyPolicies';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -436,17 +437,21 @@ function LeaveDateCalculator() {
 }
 
 // Leave Allowance & Balance Tracker (Excel Page 4)
-function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch, onSearchChange, onInitialize, canEditBalances }: {
+function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch, onSearchChange, onInitialize, canEditBalances, policyValues }: {
   employeeBalances: any[];
   leaveRequests: any[];
   balanceSearch: string;
   onSearchChange: (v: string) => void;
   onInitialize: () => void;
   canEditBalances: boolean;
+  policyValues?: { annualAllowance: number; monthlyAccrual: number; capAccrual: boolean };
 }) {
   const { toast } = useToast();
   const currentYear = new Date().getFullYear();
-  const annualAllowance = 18; // Default
+  const currentMonth = new Date().getMonth() + 1; // 1-12
+  const annualAllowance = policyValues?.annualAllowance ?? 18;
+  const monthlyAccrual = policyValues?.monthlyAccrual ?? 1.5;
+  const capAccrual = policyValues?.capAccrual ?? true;
   const [editingEmployee, setEditingEmployee] = useState<{ userId: string; name: string; currentTotal: number } | null>(null);
   const [newAllowance, setNewAllowance] = useState('');
   const [saving, setSaving] = useState(false);
@@ -500,7 +505,8 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
               📊 Leave Allowance & Balance Tracker {currentYear}
             </CardTitle>
             <CardDescription>
-              Annual Leave Allowance: {annualAllowance} days per employee | Formula: Mon-Fri = 1 day, Saturday = 0.5 day, Sunday = 0
+              Annual Leave: {annualAllowance} days | Monthly Accrual: {monthlyAccrual} days/month | 
+              Accrued so far ({currentMonth} months): <strong>{Math.min(currentMonth * monthlyAccrual, capAccrual ? annualAllowance : Infinity)} days</strong>
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -526,24 +532,25 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
             <div className="overflow-x-auto">
               <table className="w-full text-xs border-collapse min-w-[900px]">
                 <thead>
-                  <tr className="bg-muted/50 border-b">
-                    <th className="sticky left-0 z-10 bg-muted/90 px-2 py-2 text-left font-semibold w-8">No</th>
-                    <th className="px-2 py-2 text-left font-semibold w-16">Dept</th>
-                    <th className="sticky left-8 z-10 bg-muted/90 px-2 py-2 text-left font-semibold min-w-[160px]">Employee Name</th>
-                    <th className="px-2 py-2 text-center font-semibold bg-amber-50 dark:bg-amber-900/20">Carry Over</th>
-                    <th className="px-2 py-2 text-center font-semibold bg-emerald-50 dark:bg-emerald-900/20">Allowance</th>
-                    <th className="px-2 py-2 text-center font-semibold bg-blue-50 dark:bg-blue-900/20">TOTAL Entitlement</th>
-                    <th className="px-2 py-2 text-center font-semibold bg-orange-50 dark:bg-orange-900/20">Days Used</th>
-                    <th className="px-2 py-2 text-center font-semibold bg-violet-50 dark:bg-violet-900/20">Balance</th>
-                    <th className="px-2 py-2 text-center font-semibold">Status</th>
-                    <th className="px-2 py-2 text-left font-semibold min-w-[100px]">Notes</th>
-                  </tr>
+                 <tr className="bg-muted/50 border-b">
+                     <th className="sticky left-0 z-10 bg-muted/90 px-2 py-2 text-left font-semibold w-8">No</th>
+                     <th className="px-2 py-2 text-left font-semibold w-16">Dept</th>
+                     <th className="sticky left-8 z-10 bg-muted/90 px-2 py-2 text-left font-semibold min-w-[160px]">Employee Name</th>
+                     <th className="px-2 py-2 text-center font-semibold bg-amber-50 dark:bg-amber-900/20">Carry Over</th>
+                     <th className="px-2 py-2 text-center font-semibold bg-emerald-50 dark:bg-emerald-900/20">Allowance</th>
+                     <th className="px-2 py-2 text-center font-semibold bg-cyan-50 dark:bg-cyan-900/20">Accrued ({currentMonth}mo)</th>
+                     <th className="px-2 py-2 text-center font-semibold bg-blue-50 dark:bg-blue-900/20">TOTAL Entitlement</th>
+                     <th className="px-2 py-2 text-center font-semibold bg-orange-50 dark:bg-orange-900/20">Days Used</th>
+                     <th className="px-2 py-2 text-center font-semibold bg-violet-50 dark:bg-violet-900/20">Balance</th>
+                     <th className="px-2 py-2 text-center font-semibold">Status</th>
+                     <th className="px-2 py-2 text-left font-semibold min-w-[100px]">Actions</th>
+                   </tr>
                 </thead>
                 <tbody>
                   {Array.from(grouped.entries()).map(([deptName, deptEmployees]) => (
                     <>
                       <tr key={`dept-${deptName}`} className="bg-primary/5 border-b">
-                        <td colSpan={10} className="px-2 py-1.5 font-bold text-sm text-primary">
+                        <td colSpan={11} className="px-2 py-1.5 font-bold text-sm text-primary">
                           ► {deptName.toUpperCase()}
                         </td>
                       </tr>
@@ -552,7 +559,13 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
                         const annualBal = emp.balances.find((b: any) => b.leave_type === 'annual');
                         const totalEntitlement = annualBal ? annualBal.total_days : annualAllowance;
                         const usedDays = annualBal ? annualBal.used_days : 0;
-                        const balance = totalEntitlement - usedDays;
+                        
+                        // Accrued days = months elapsed × monthly accrual, capped at allowance
+                        const accruedDays = capAccrual 
+                          ? Math.min(currentMonth * monthlyAccrual, totalEntitlement)
+                          : currentMonth * monthlyAccrual;
+                        
+                        const balance = accruedDays - usedDays;
                         
                         // Check active leave
                         const activeLeave = leaveRequests.find((r: any) => {
@@ -570,6 +583,7 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
                             <td className="sticky left-8 z-10 bg-background px-2 py-1.5 font-medium truncate max-w-[160px]">{emp.full_name || emp.email}</td>
                             <td className="px-2 py-1.5 text-center bg-amber-50/50 dark:bg-amber-900/10">0</td>
                             <td className="px-2 py-1.5 text-center font-medium bg-emerald-50/50 dark:bg-emerald-900/10">{totalEntitlement}</td>
+                            <td className="px-2 py-1.5 text-center font-semibold bg-cyan-50/50 dark:bg-cyan-900/10 text-cyan-700 dark:text-cyan-400">{accruedDays}</td>
                             <td className="px-2 py-1.5 text-center font-bold bg-blue-50/50 dark:bg-blue-900/10">{totalEntitlement}</td>
                             <td className="px-2 py-1.5 text-center font-medium bg-orange-50/50 dark:bg-orange-900/10">{usedDays}</td>
                             <td className={cn(
@@ -591,8 +605,8 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
                                 <Badge className="bg-emerald-500/10 text-emerald-600 text-[10px]">Available</Badge>
                               )}
                             </td>
-                            <td className="px-2 py-1.5 text-muted-foreground flex items-center gap-1">
-                              {activeLeave && `Until ${format(parseISO(activeLeave.end_date), 'MMM d')}`}
+                            <td className="px-2 py-1.5 flex items-center gap-1">
+                              {activeLeave && <span className="text-muted-foreground text-[10px]">Until {format(parseISO(activeLeave.end_date), 'MMM d')}</span>}
                               {canEditBalances && (
                                 <Button
                                   variant="ghost"
@@ -623,7 +637,8 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
           <div className="p-4 border-t bg-muted/30">
             <div className="flex flex-wrap gap-6 text-sm">
               <span>📊 Total Employees: <strong>{filteredEmployees.length}</strong></span>
-              <span>📅 Annual Leave Allowance: <strong>{annualAllowance} days</strong> per employee (default)</span>
+              <span>📅 Annual Allowance: <strong>{annualAllowance} days</strong></span>
+              <span>📈 Monthly Accrual: <strong>{monthlyAccrual} days/month</strong></span>
               <span>📝 Formula: Mon-Fri = 1 day, Saturday = 0.5 day, Sunday = 0</span>
             </div>
           </div>
@@ -684,6 +699,14 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   const { canEditBalances: userCanEditBalances } = useCurrentUserLeavePermissions();
   const { hasRole } = useUserRole();
   const isHROrAdmin = hasRole('admin') || hasRole('super_admin');
+
+  // Fetch leave policy values
+  const { getPolicyValue } = useCompanyPolicies();
+  const policyValues = useMemo(() => ({
+    annualAllowance: Number(getPolicyValue('leave', 'default_annual_days', '18')) || 18,
+    monthlyAccrual: Number(getPolicyValue('leave', 'monthly_accrual_days', '1.5')) || 1.5,
+    capAccrual: getPolicyValue('leave', 'accrual_cap_to_annual', 'true') === 'true',
+  }), [getPolicyValue]);
   const canEditBalances = isHROrAdmin || userCanEditBalances;
 
   const filteredRequests = useMemo(() => {
@@ -893,6 +916,7 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
           onSearchChange={setBalanceSearch}
           onInitialize={initializeBalances}
           canEditBalances={canEditBalances}
+          policyValues={policyValues}
         />
       ) : (
         <LeaveDateCalculator />

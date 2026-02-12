@@ -157,10 +157,10 @@ export function EmployeeLeaveDashboard({ departmentId }: { departmentId: string 
             <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mx-auto mb-2">
               <Palmtree className="h-5 w-5 text-emerald-600" />
             </div>
-            <p className="text-2xl font-bold text-emerald-600">{annualBalance.remaining}</p>
-            <p className="text-xs text-muted-foreground">Annual Days Left</p>
+            <p className="text-2xl font-bold text-emerald-600">{annualBalance.remaining} <span className="text-sm font-normal">days</span></p>
+            <p className="text-xs text-muted-foreground">Annual Leave Balance</p>
             <Progress value={(annualBalance.used / annualBalance.total) * 100} className="mt-2 h-1.5" />
-            <p className="text-[10px] text-muted-foreground mt-1">{annualBalance.used} of {annualBalance.total} used</p>
+            <p className="text-[10px] text-muted-foreground mt-1">{annualBalance.used} of {annualBalance.total} days used</p>
           </CardContent>
         </Card>
 
@@ -173,7 +173,7 @@ export function EmployeeLeaveDashboard({ departmentId }: { departmentId: string 
                 <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center mx-auto mb-2", LEAVE_COLORS[bal.leave_type as LeaveType])}>
                   <Icon className="h-5 w-5" />
                 </div>
-                <p className="text-2xl font-bold">{remaining}</p>
+                <p className="text-2xl font-bold">{remaining} <span className="text-sm font-normal">days</span></p>
                 <p className="text-xs text-muted-foreground">{LEAVE_TYPE_LABELS[bal.leave_type as LeaveType]}</p>
               </CardContent>
             </Card>
