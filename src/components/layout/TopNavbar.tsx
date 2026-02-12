@@ -65,7 +65,7 @@ export function TopNavbar() {
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center px-4 md:px-6">
         {/* Logo */}
-        <NavLink to="/" className="flex items-center gap-3 mr-8">
+        <NavLink to="/" className="flex items-center gap-3 mr-4">
           <img 
             src={hqPowerLogo} 
             alt="HQ Power" 
@@ -73,6 +73,19 @@ export function TopNavbar() {
           />
           <span className="font-bold text-lg text-foreground hidden sm:block">HQ Power</span>
         </NavLink>
+
+        {/* My Dashboard Button */}
+        {(isSuperAdmin || isAdmin) && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="mr-4 hidden sm:flex items-center gap-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+            onClick={() => navigate('/my-dashboard')}
+          >
+            <Shield className="h-4 w-4" />
+            My Dashboard
+          </Button>
+        )}
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1 flex-1">
