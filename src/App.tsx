@@ -23,6 +23,7 @@ import ProfileSettings from "./pages/ProfileSettings";
 import NotFound from "./pages/NotFound";
 import PeatAdmin from "./pages/PeatAdmin";
 import LeaveApproval from "./pages/LeaveApproval";
+import MyDashboard from "./pages/MyDashboard";
 
 
 const queryClient = new QueryClient({
@@ -61,6 +62,7 @@ const App = () => (
               <Route path="/settings" element={<ProfileSettings />} />
               <Route path="/peat-admin" element={<PeatAdmin />} />
               <Route path="/leave-approval" element={<LeaveApproval />} />
+              <Route path="/my-dashboard" element={<MyDashboard />} />
               {/* Catch-all route for 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>

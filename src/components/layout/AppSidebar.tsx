@@ -50,6 +50,7 @@ export function AppSidebar() {
 
   const mainNavItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+    ...((canFileForOthers || isAnyApprover) ? [{ title: 'My Position', url: '/my-dashboard', icon: Shield }] : []),
     ...(canFileForOthers ? [{ title: 'Peat Admin', url: '/peat-admin', icon: CalendarDays }] : []),
     ...(isAnyApprover ? [{ title: 'Leave Approval', url: '/leave-approval', icon: Shield }] : []),
   ];
