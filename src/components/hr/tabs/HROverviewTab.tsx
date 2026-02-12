@@ -2,10 +2,10 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Users, Calendar, Clock, Building2,
-  ClipboardList, Target,
-  Hand, Wine, Heart, UserPlus, BarChart3,
-  Briefcase, ChevronRight
+  Users, Building2, ClipboardList,
+  Hand, Wine, Heart, BarChart3,
+  Briefcase, CalendarDays, Timer,
+  UserRoundPlus, Award, PieChart, Landmark
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useCompanies } from '@/hooks/useCompanies';
@@ -76,17 +76,17 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
 
   // Quick-access navigation cards
   const WORKBENCH_ITEMS = [
-    { label: 'Leave Management', icon: Calendar, tab: 'leave', color: 'text-[hsl(187,71%,45%)]', bg: 'bg-[hsl(187,71%,95%)]', badge: metrics.pendingLeaveRequests > 0 ? metrics.pendingLeaveRequests : undefined },
-    { label: 'Attendance', icon: Clock, tab: 'attendance', color: 'text-[hsl(262,60%,50%)]', bg: 'bg-[hsl(262,60%,95%)]' },
-    { label: 'Onboarding / Offboarding', icon: UserPlus, tab: 'onboarding', color: 'text-[hsl(340,82%,52%)]', bg: 'bg-[hsl(340,82%,95%)]' },
-    { label: 'Performance', icon: Target, tab: 'performance', color: 'text-[hsl(88,50%,40%)]', bg: 'bg-[hsl(88,50%,93%)]' },
+    { label: 'Leave Management', icon: CalendarDays, tab: 'leave', color: 'text-[hsl(187,71%,45%)]', bg: 'bg-[hsl(187,71%,92%)]', badge: metrics.pendingLeaveRequests > 0 ? metrics.pendingLeaveRequests : undefined },
+    { label: 'Attendance', icon: Timer, tab: 'attendance', color: 'text-[hsl(262,60%,50%)]', bg: 'bg-[hsl(262,60%,93%)]' },
+    { label: 'Onboarding / Offboarding', icon: UserRoundPlus, tab: 'onboarding', color: 'text-[hsl(340,82%,52%)]', bg: 'bg-[hsl(340,82%,93%)]' },
+    { label: 'Performance', icon: Award, tab: 'performance', color: 'text-[hsl(88,50%,40%)]', bg: 'bg-[hsl(88,50%,90%)]' },
   ];
 
   const GENERAL_ITEMS = [
-    { label: 'Employee Hub', icon: Users, tab: 'employees', color: 'text-[hsl(207,90%,54%)]', bg: 'bg-[hsl(207,90%,95%)]' },
-    { label: 'Analytics & Reports', icon: BarChart3, tab: 'analytics', color: 'text-[hsl(36,100%,50%)]', bg: 'bg-[hsl(36,100%,93%)]' },
-    { label: 'Positions & Roles', icon: Briefcase, tab: 'employees', color: 'text-[hsl(262,60%,50%)]', bg: 'bg-[hsl(262,60%,95%)]' },
-    { label: 'Company Overview', icon: Building2, tab: 'employees', color: 'text-[hsl(187,71%,45%)]', bg: 'bg-[hsl(187,71%,95%)]' },
+    { label: 'Employee Hub', icon: Users, tab: 'employees', color: 'text-[hsl(207,90%,54%)]', bg: 'bg-[hsl(207,90%,93%)]' },
+    { label: 'Analytics & Reports', icon: PieChart, tab: 'analytics', color: 'text-[hsl(36,100%,50%)]', bg: 'bg-[hsl(36,100%,90%)]' },
+    { label: 'Positions & Roles', icon: Briefcase, tab: 'employees', color: 'text-[hsl(262,60%,50%)]', bg: 'bg-[hsl(262,60%,93%)]' },
+    { label: 'Company Overview', icon: Landmark, tab: 'employees', color: 'text-[hsl(187,71%,45%)]', bg: 'bg-[hsl(187,71%,92%)]' },
   ];
 
   return (
