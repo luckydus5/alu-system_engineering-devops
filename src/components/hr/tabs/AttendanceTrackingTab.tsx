@@ -493,111 +493,201 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     filterDepartment === 'all' ? undefined : filterDepartment
   );
 
-  // Parse Excel file
+  // Normalize column name for flexible matching
+  const normalizeCol = (name: string) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[_\s/]+/g, " ").trim();
+
+  const findCol = (headers: string[], patterns: RegExp[]) => {
+    const normalized = headers.map(h => h ? normalizeCol(String(h)) : '');
+    for (const pat of patterns) {
+      const idx = normalized.findIndex(h => pat.test(h));
+      if (idx !== -1) return headers[idx];
+    }
+    return null;
+  };
+
+  // Parse Excel file — supports machine format: Department | Name | No. | Date/Time | Status (C/In, C/Out)
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data, { type: 'array' });
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
       
       if (jsonData.length === 0) {
         toast({ title: 'Empty file', description: 'The Excel file has no data rows', variant: 'destructive' });
         return;
       }
 
-      const nameCol = Object.keys(jsonData[0] as object).find(h => /name|employee|staff|person/i.test(h));
-      const dateCol = Object.keys(jsonData[0] as object).find(h => /date|day|attendance/i.test(h));
-      const checkInCol = Object.keys(jsonData[0] as object).find(h => /check.?in|clock.?in|in.?time|arrival|start/i.test(h));
-      const checkOutCol = Object.keys(jsonData[0] as object).find(h => /check.?out|clock.?out|out.?time|departure|end|leave/i.test(h));
+      const headers = Object.keys(jsonData[0] as object);
+      
+      // Detect format: Machine format has "Status" column with C/In, C/Out and combined "Date/Time"
+      const nameCol = findCol(headers, [/^name$/, /name/, /employee/, /staff/]);
+      const statusCol = findCol(headers, [/^status$/, /status/]);
+      const dateTimeCol = findCol(headers, [/date.?time/, /date.*time/, /time.*date/]);
+      const dateCol = findCol(headers, [/^date$/, /date/, /day/, /attendance/]);
+      const checkInCol = findCol(headers, [/check.?in/, /clock.?in/, /in.?time/, /arrival/]);
+      const checkOutCol = findCol(headers, [/check.?out/, /clock.?out/, /out.?time/, /departure/]);
 
-      if (!nameCol || !dateCol) {
-        toast({ title: 'Invalid format', description: 'Excel must have columns for Name/Employee and Date. Found: ' + Object.keys(jsonData[0] as object).join(', '), variant: 'destructive' });
+      const isMachineFormat = !!statusCol && !!dateTimeCol;
+
+      if (!nameCol) {
+        toast({ title: 'Invalid format', description: 'Could not find a Name/Employee column. Found: ' + headers.join(', '), variant: 'destructive' });
+        return;
+      }
+      if (!isMachineFormat && !dateCol) {
+        toast({ title: 'Invalid format', description: 'Could not find a Date column. Found: ' + headers.join(', '), variant: 'destructive' });
         return;
       }
 
-      const parsed: any[] = [];
-      for (const row of jsonData as Record<string, any>[]) {
-        const name = String(row[nameCol!] || '').trim();
-        const dateVal = row[dateCol!];
-        const checkIn = checkInCol ? String(row[checkInCol] || '').trim() : '';
-        const checkOut = checkOutCol ? String(row[checkOutCol] || '').trim() : '';
-        if (!name || !dateVal) continue;
-
-        let parsedDate: Date | null = null;
-        if (typeof dateVal === 'number') {
-          parsedDate = new Date((dateVal - 25569) * 86400 * 1000);
-        } else {
-          const dateStr = String(dateVal).trim();
-          for (const fmt of ['yyyy-MM-dd', 'dd/MM/yyyy', 'MM/dd/yyyy', 'dd-MM-yyyy', 'dd-MMM-yyyy']) {
-            try {
-              parsedDate = parse(dateStr, fmt, new Date());
-              if (!isNaN(parsedDate.getTime())) break;
-              parsedDate = null;
-            } catch { parsedDate = null; }
-          }
-          if (!parsedDate) {
-            parsedDate = new Date(dateStr);
-            if (isNaN(parsedDate.getTime())) parsedDate = null;
-          }
+      // Helper to parse date strings
+      const parseDate = (val: any): Date | null => {
+        if (!val) return null;
+        if (val instanceof Date && !isNaN(val.getTime())) return val;
+        if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000);
+        const str = String(val).trim();
+        // Try common formats
+        for (const fmt of ['dd-MMM-yy HH:mm:ss', 'dd-MMM-yyyy HH:mm:ss', 'yyyy-MM-dd HH:mm:ss', 'dd/MM/yyyy HH:mm:ss', 'MM/dd/yyyy HH:mm:ss', 'yyyy-MM-dd', 'dd/MM/yyyy', 'dd-MM-yyyy', 'dd-MMM-yyyy', 'dd-MMM-yy']) {
+          try {
+            const d = parse(str, fmt, new Date());
+            if (!isNaN(d.getTime()) && d.getFullYear() > 1970) return d;
+          } catch { /* skip */ }
         }
-        if (!parsedDate) continue;
+        const fallback = new Date(str);
+        return isNaN(fallback.getTime()) ? null : fallback;
+      };
 
-        const matchedUser = users.find(u =>
-          u.full_name?.toLowerCase() === name.toLowerCase() ||
-          u.full_name?.toLowerCase().includes(name.toLowerCase()) ||
-          name.toLowerCase().includes(u.full_name?.toLowerCase() || '___')
-        );
+      if (isMachineFormat) {
+        // ── Machine format: each row is one event (C/In or C/Out) ──
+        // Group by employee+date, then pair C/In and C/Out
+        const events: { name: string; dateTime: Date; isCheckIn: boolean }[] = [];
+        
+        for (const row of jsonData as Record<string, any>[]) {
+          const name = String(row[nameCol!] || '').trim();
+          const dtVal = row[dateTimeCol!];
+          const statusVal = String(row[statusCol!] || '').trim().toLowerCase();
+          if (!name || !dtVal) continue;
 
-        const parseTime = (timeStr: string, dateBase: Date): string | null => {
-          if (!timeStr || timeStr === '-' || timeStr === '--:--') return null;
-          if (!isNaN(Number(timeStr)) && Number(timeStr) < 1) {
-            const totalMinutes = Math.round(Number(timeStr) * 24 * 60);
-            const hours = Math.floor(totalMinutes / 60);
-            const minutes = totalMinutes % 60;
-            const d = new Date(dateBase);
-            d.setHours(hours, minutes, 0, 0);
-            return d.toISOString();
-          }
-          const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
-          if (match) {
-            const d = new Date(dateBase);
-            d.setHours(parseInt(match[1]), parseInt(match[2]), 0, 0);
-            return d.toISOString();
-          }
-          return null;
-        };
+          const dateTime = parseDate(dtVal);
+          if (!dateTime) continue;
 
-        const clockIn = parseTime(checkIn, parsedDate);
-        const clockOut = parseTime(checkOut, parsedDate);
-
-        let status: AttendanceStatus = 'present';
-        if (!clockIn && !clockOut) {
-          status = 'absent';
-        } else if (clockIn) {
-          const inHour = new Date(clockIn).getHours();
-          if (inHour >= 9) status = 'late';
+          const isCheckIn = /c\/in|c.in|check.?in|clock.?in|in$/i.test(statusVal);
+          events.push({ name, dateTime, isCheckIn });
         }
 
-        parsed.push({
-          name, date: format(parsedDate, 'yyyy-MM-dd'), dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
-          clockIn: clockIn ? format(new Date(clockIn), 'HH:mm') : '—',
-          clockOut: clockOut ? format(new Date(clockOut), 'HH:mm') : '—',
-          clockInRaw: clockIn, clockOutRaw: clockOut, status,
-          matched: !!matchedUser, matchedUser, userId: matchedUser?.id,
-          departmentId: matchedUser?.department_id || departmentId,
+        // Group by name + date
+        const grouped = new Map<string, { checkIns: Date[]; checkOuts: Date[] }>();
+        events.forEach(ev => {
+          const dateKey = `${ev.name}|||${format(ev.dateTime, 'yyyy-MM-dd')}`;
+          if (!grouped.has(dateKey)) grouped.set(dateKey, { checkIns: [], checkOuts: [] });
+          const group = grouped.get(dateKey)!;
+          if (ev.isCheckIn) group.checkIns.push(ev.dateTime);
+          else group.checkOuts.push(ev.dateTime);
         });
-      }
 
-      if (parsed.length === 0) {
-        toast({ title: 'No valid records', description: 'Could not parse any attendance records from the file', variant: 'destructive' });
-        return;
+        const parsed: any[] = [];
+        grouped.forEach((group, key) => {
+          const [name, dateStr] = key.split('|||');
+          const parsedDate = new Date(dateStr);
+          
+          // Take earliest check-in, latest check-out
+          const earliestIn = group.checkIns.length > 0 ? group.checkIns.sort((a, b) => a.getTime() - b.getTime())[0] : null;
+          const latestOut = group.checkOuts.length > 0 ? group.checkOuts.sort((a, b) => b.getTime() - a.getTime())[0] : null;
+
+          const matchedUser = users.find(u => {
+            const fullName = u.full_name?.toLowerCase() || '';
+            const searchName = name.toLowerCase();
+            return fullName === searchName || fullName.includes(searchName) || searchName.includes(fullName);
+          });
+
+          let status: AttendanceStatus = 'present';
+          if (!earliestIn && !latestOut) status = 'absent';
+          else if (earliestIn) {
+            const inHour = earliestIn.getHours();
+            if (inHour >= 9) status = 'late';
+          }
+
+          parsed.push({
+            name, date: dateStr, dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
+            clockIn: earliestIn ? format(earliestIn, 'HH:mm') : '—',
+            clockOut: latestOut ? format(latestOut, 'HH:mm') : '—',
+            clockInRaw: earliestIn?.toISOString() || null,
+            clockOutRaw: latestOut?.toISOString() || null,
+            status, matched: !!matchedUser, matchedUser, userId: matchedUser?.id,
+            departmentId: matchedUser?.department_id || departmentId,
+          });
+        });
+
+        if (parsed.length === 0) {
+          toast({ title: 'No valid records', description: 'Could not parse any attendance records from the file', variant: 'destructive' });
+          return;
+        }
+        parsed.sort((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date));
+        setUploadPreview(parsed);
+        toast({ title: `${parsed.length} daily records parsed from ${events.length} events`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
+
+      } else {
+        // ── Standard format: separate columns for Date, Check In, Check Out ──
+        const parsed: any[] = [];
+        for (const row of jsonData as Record<string, any>[]) {
+          const name = String(row[nameCol!] || '').trim();
+          const dateVal = row[dateCol!];
+          const checkIn = checkInCol ? String(row[checkInCol] || '').trim() : '';
+          const checkOut = checkOutCol ? String(row[checkOutCol] || '').trim() : '';
+          if (!name || !dateVal) continue;
+
+          const parsedDate = parseDate(dateVal);
+          if (!parsedDate) continue;
+
+          const matchedUser = users.find(u => {
+            const fullName = u.full_name?.toLowerCase() || '';
+            const searchName = name.toLowerCase();
+            return fullName === searchName || fullName.includes(searchName) || searchName.includes(fullName);
+          });
+
+          const parseTime = (timeStr: string, dateBase: Date): string | null => {
+            if (!timeStr || timeStr === '-' || timeStr === '--:--') return null;
+            if (!isNaN(Number(timeStr)) && Number(timeStr) < 1) {
+              const totalMinutes = Math.round(Number(timeStr) * 24 * 60);
+              const d = new Date(dateBase);
+              d.setHours(Math.floor(totalMinutes / 60), totalMinutes % 60, 0, 0);
+              return d.toISOString();
+            }
+            const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
+            if (match) {
+              const d = new Date(dateBase);
+              d.setHours(parseInt(match[1]), parseInt(match[2]), 0, 0);
+              return d.toISOString();
+            }
+            return null;
+          };
+
+          const clockIn = parseTime(checkIn, parsedDate);
+          const clockOut = parseTime(checkOut, parsedDate);
+
+          let status: AttendanceStatus = 'present';
+          if (!clockIn && !clockOut) status = 'absent';
+          else if (clockIn && new Date(clockIn).getHours() >= 9) status = 'late';
+
+          parsed.push({
+            name, date: format(parsedDate, 'yyyy-MM-dd'), dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
+            clockIn: clockIn ? format(new Date(clockIn), 'HH:mm') : '—',
+            clockOut: clockOut ? format(new Date(clockOut), 'HH:mm') : '—',
+            clockInRaw: clockIn, clockOutRaw: clockOut, status,
+            matched: !!matchedUser, matchedUser, userId: matchedUser?.id,
+            departmentId: matchedUser?.department_id || departmentId,
+          });
+        }
+
+        if (parsed.length === 0) {
+          toast({ title: 'No valid records', description: 'Could not parse any attendance records from the file', variant: 'destructive' });
+          return;
+        }
+        setUploadPreview(parsed);
+        toast({ title: `${parsed.length} records parsed`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
       }
-      setUploadPreview(parsed);
-      toast({ title: `${parsed.length} records parsed`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
     } catch (err) {
       toast({ title: 'Failed to read file', description: String(err), variant: 'destructive' });
     }
