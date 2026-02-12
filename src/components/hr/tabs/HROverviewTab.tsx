@@ -7,7 +7,7 @@ import {
   Briefcase, CalendarDays, Timer,
   UserRoundPlus, Award, PieChart, Landmark
 } from 'lucide-react';
-import { useLeaveRequests } from '@/hooks/useLeaveRequests';
+import { useLeaveRequests, useLeaveBalances } from '@/hooks/useLeaveRequests';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
@@ -33,25 +33,20 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
   const { companies } = useCompanies();
   const { user } = useAuth();
 
-  // Compute current user's own leave balance (accrued - used)
+  // Use leave_balances table for the current user's balance
+  const { balances } = useLeaveBalances(user?.id);
+
   const leaveStats = useMemo(() => {
-    if (!user) return { annualBalance: 0, personalDays: 0 };
-    const now = new Date();
-    const completedMonths = now.getMonth(); // Jan=0 means 0 completed, Feb=1 means 1 completed
-    const monthlyAccrual = 1.5;
-    const accrued = completedMonths * monthlyAccrual; // 1 completed month = 1.5 days
+    const annualBal = balances.find(b => b.leave_type === 'annual');
+    const annualBalance = annualBal ? Math.max(0, annualBal.total_days - annualBal.used_days) : 0;
 
-    const myApproved = leaveRequests.filter(r => r.status === 'approved' && r.requester_id === user.id);
-    const annualUsed = myApproved
-      .filter(r => r.leave_type === 'annual')
-      .reduce((sum, r) => sum + r.total_days, 0);
-    const personalDays = myApproved
-      .filter(r => r.leave_type === 'personal' || r.leave_type === 'sick')
-      .reduce((sum, r) => sum + r.total_days, 0);
+    const personalBal = balances.find(b => b.leave_type === 'personal');
+    const sickBal = balances.find(b => b.leave_type === 'sick');
+    const personalRemaining = (personalBal ? Math.max(0, personalBal.total_days - personalBal.used_days) : 0)
+      + (sickBal ? Math.max(0, sickBal.total_days - sickBal.used_days) : 0);
 
-    const annualBalance = Math.max(0, accrued - annualUsed);
-    return { annualBalance, personalDays };
-  }, [leaveRequests, user]);
+    return { annualBalance, personalDays: personalRemaining };
+  }, [balances]);
 
   const STAT_CARDS = [
     { 

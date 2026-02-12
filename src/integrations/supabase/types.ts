@@ -1882,6 +1882,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accrue_monthly_annual_leave: { Args: never; Returns: undefined }
       check_pending_password_reset: {
         Args: { email_to_check: string }
         Returns: {

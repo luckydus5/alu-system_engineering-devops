@@ -446,7 +446,7 @@ export function LeaveApplicationForm({
               {/* Leave Balance Info */}
               <div className="grid grid-cols-3 gap-2">
                 <div className="p-2.5 rounded-lg bg-muted/50 text-center">
-                  <p className="text-[10px] text-muted-foreground font-medium">Total</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Accrued</p>
                   <p className="text-sm font-bold">{leaveBalance.total}</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-muted/50 text-center">
@@ -454,12 +454,22 @@ export function LeaveApplicationForm({
                   <p className="text-sm font-bold">{leaveBalance.used}</p>
                 </div>
                 <div className="p-2.5 rounded-lg bg-muted/50 text-center">
-                  <p className="text-[10px] text-muted-foreground font-medium">Remaining</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Available</p>
                   <p className={cn("text-sm font-bold", leaveBalance.remaining > 0 ? "text-emerald-600" : "text-destructive")}>
                     {leaveBalance.remaining}
                   </p>
                 </div>
               </div>
+
+              {/* Balance warning for annual leave */}
+              {selectedLeaveType === 'annual' && totalDays > 0 && totalDays > leaveBalance.remaining && (
+                <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <p className="text-xs text-destructive font-medium">
+                    ⚠️ You're requesting {totalDays} days but only have {leaveBalance.remaining} days available. 
+                    You can only apply for your current accrued balance.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Dates */}
@@ -585,7 +595,7 @@ export function LeaveApplicationForm({
             <Button
               size="sm"
               onClick={handleSubmit}
-              disabled={!lastDateOfWork || !returnDate || isSubmitting || (filingForOther && !selectedEmployee)}
+              disabled={!lastDateOfWork || !returnDate || isSubmitting || (filingForOther && !selectedEmployee) || (selectedLeaveType === 'annual' && totalDays > leaveBalance.remaining)}
             >
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {filingForOther ? 'Submit on Behalf' : 'Submit Leave Request'}
