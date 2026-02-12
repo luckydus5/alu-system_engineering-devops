@@ -1,21 +1,15 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import { 
   Users, Calendar, Clock, Building2,
-  ClipboardList, Target, Star, Settings,
+  ClipboardList, Target,
   Hand, Wine, Heart, UserPlus, BarChart3,
-  Briefcase, FolderKanban, Palette, Wrench,
-  Share2, ChevronRight, FileText, TrendingUp
+  Briefcase, ChevronRight
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
-import { useUsers } from '@/hooks/useUsers';
 import { useCompanies } from '@/hooks/useCompanies';
-import { usePerformanceReviews } from '@/hooks/usePerformanceReviews';
-import { useEmployees } from '@/hooks/useEmployees';
 import { cn } from '@/lib/utils';
-import { format, parseISO } from 'date-fns';
 
 interface HROverviewTabProps {
   departmentId: string;
@@ -35,10 +29,7 @@ interface HROverviewTabProps {
 
 export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }: HROverviewTabProps) {
   const { leaveRequests } = useLeaveRequests(undefined, true);
-  const { users } = useUsers();
   const { companies } = useCompanies();
-  const { reviews, goals } = usePerformanceReviews();
-  const { employees } = useEmployees();
 
   // Compute leave stats
   const leaveStats = useMemo(() => {
@@ -130,165 +121,60 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
         ))}
       </div>
 
-      {/* Main Layout: Left Nav Cards + Right Performance */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-        {/* Left Column - Quick Access Cards */}
-        <div className="space-y-5">
-          {/* Workbench */}
-          <Card className="shadow-sm rounded-xl border">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Workbench</CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div className="space-y-1">
-                {WORKBENCH_ITEMS.map(item => (
-                  <button
-                    key={item.label}
-                    onClick={() => onNavigate(item.tab)}
-                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/60 transition-colors group text-left"
-                  >
-                    <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
-                      <item.icon className={cn("h-4.5 w-4.5", item.color)} />
-                    </div>
-                    <span className="text-sm font-medium flex-1">{item.label}</span>
-                    {item.badge && (
-                      <Badge className="bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
-                        {item.badge}
-                      </Badge>
-                    )}
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* General */}
-          <Card className="shadow-sm rounded-xl border">
-            <CardHeader className="pb-2 pt-4 px-5">
-              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">General</CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div className="space-y-1">
-                {GENERAL_ITEMS.map(item => (
-                  <button
-                    key={item.label}
-                    onClick={() => onNavigate(item.tab)}
-                    className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/60 transition-colors group text-left"
-                  >
-                    <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
-                      <item.icon className={cn("h-4.5 w-4.5", item.color)} />
-                    </div>
-                    <span className="text-sm font-medium flex-1">{item.label}</span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column - Performance & Goals */}
-        <div className="space-y-5">
-          {/* My Performance */}
-          <Card className="shadow-sm rounded-xl border">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold uppercase tracking-wide">My Performance</CardTitle>
-                <Settings className="h-5 w-5 text-muted-foreground/50 cursor-pointer hover:text-muted-foreground transition-colors" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-0">
-              {(() => {
-                const completedReviews = reviews.filter(r => r.status === 'completed');
-                const pendingReviews = reviews.filter(r => r.status === 'pending');
-                const latestCompleted = completedReviews[0];
-                const nextPending = pendingReviews[0];
-                const activeGoals = goals.filter(g => g.status === 'active').length;
-                const actionPlans = goals.length;
-                return (
-                  <div className="divide-y divide-border">
-                    <div className="flex items-center justify-between py-4">
-                      <span className="text-sm text-muted-foreground font-semibold uppercase tracking-wide">Next Review</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">{nextPending ? format(parseISO(nextPending.created_at), 'dd MMMM yyyy') : 'None scheduled'}</span>
-                        {nextPending && (
-                          <Badge className="text-[10px] bg-[hsl(207,90%,95%)] text-[hsl(207,90%,40%)] border-[hsl(207,90%,80%)]">
-                            Not Yet Opened
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between py-4">
-                      <span className="text-sm text-muted-foreground font-semibold uppercase tracking-wide">Last Review</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">{latestCompleted ? format(parseISO(latestCompleted.created_at), 'dd MMMM yyyy') : 'None yet'}</span>
-                        {latestCompleted && (
-                          <Badge className="text-[10px] bg-[hsl(122,39%,95%)] text-[hsl(122,39%,35%)] border-[hsl(122,39%,75%)]">
-                            Completed
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between py-4">
-                      <span className="text-sm text-muted-foreground font-semibold uppercase tracking-wide">Current Goals</span>
-                      <span className="text-sm font-bold">{activeGoals}</span>
-                    </div>
-                    <div className="flex items-center justify-between py-4">
-                      <span className="text-sm text-muted-foreground font-semibold uppercase tracking-wide">Action Plans</span>
-                      <span className="text-sm font-bold">{actionPlans}</span>
-                    </div>
+      {/* Quick Access Cards */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* Workbench */}
+        <Card className="shadow-sm rounded-xl border">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Workbench</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className="space-y-1">
+              {WORKBENCH_ITEMS.map(item => (
+                <button
+                  key={item.label}
+                  onClick={() => onNavigate(item.tab)}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/60 transition-colors group text-left"
+                >
+                  <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
+                    <item.icon className={cn("h-4.5 w-4.5", item.color)} />
                   </div>
-                );
-              })()}
-            </CardContent>
-          </Card>
+                  <span className="text-sm font-medium flex-1">{item.label}</span>
+                  {item.badge && (
+                    <Badge className="bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
+                      {item.badge}
+                    </Badge>
+                  )}
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-          {/* Goals */}
-          <Card className="shadow-sm rounded-xl border">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg font-bold uppercase tracking-wide">Goals</CardTitle>
-                <Settings className="h-5 w-5 text-muted-foreground/50 cursor-pointer hover:text-muted-foreground transition-colors" />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {goals.length === 0 ? (
-                <div className="text-center py-10">
-                  <Target className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
-                  <p className="text-xs text-muted-foreground">No goals defined yet</p>
-                </div>
-              ) : (
-                <div className="space-y-0 divide-y divide-border">
-                  <div className="flex items-center justify-between py-3">
-                    <span className="text-xs font-semibold text-muted-foreground uppercase">Goal Name</span>
-                    <span className="text-xs font-semibold text-muted-foreground uppercase">Progress</span>
+        {/* General */}
+        <Card className="shadow-sm rounded-xl border">
+          <CardHeader className="pb-2 pt-4 px-5">
+            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">General</CardTitle>
+          </CardHeader>
+          <CardContent className="px-3 pb-3">
+            <div className="space-y-1">
+              {GENERAL_ITEMS.map(item => (
+                <button
+                  key={item.label}
+                  onClick={() => onNavigate(item.tab)}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/60 transition-colors group text-left"
+                >
+                  <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
+                    <item.icon className={cn("h-4.5 w-4.5", item.color)} />
                   </div>
-                  {goals.slice(0, 6).map((goal, i) => (
-                    <div key={goal.id} className="flex items-center justify-between py-4 gap-4">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium">{goal.title}</p>
-                      </div>
-                      <div className="shrink-0 w-48">
-                        <div className="h-2.5 w-full rounded-full bg-muted overflow-hidden">
-                          <div 
-                            className={cn(
-                              "h-full rounded-full transition-all",
-                              i % 2 === 0 
-                                ? "bg-[hsl(174,72%,56%)]" 
-                                : "bg-[hsl(199,84%,55%)]"
-                            )}
-                            style={{ width: `${goal.progress}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  <span className="text-sm font-medium flex-1">{item.label}</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                </button>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Company Overview */}
