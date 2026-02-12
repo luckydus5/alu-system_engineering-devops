@@ -1,20 +1,24 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
 import { 
   Users, Calendar, Clock, ChevronRight, UserPlus,
   CalendarCheck, CheckCircle2,
   Award, PieChart, Building2,
-  ArrowRight, AlertTriangle, TrendingUp
+  ArrowRight, AlertTriangle, TrendingUp,
+  ClipboardList, Search, Target, Star
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS } from '@/hooks/useLeaveRequests';
 import { useUsers } from '@/hooks/useUsers';
 import { useAttendance } from '@/hooks/useAttendance';
 import { useCompanies } from '@/hooks/useCompanies';
+import { usePerformanceReviews } from '@/hooks/usePerformanceReviews';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
 import { format, parseISO, isWithinInterval, startOfWeek, endOfWeek } from 'date-fns';
 
 interface HROverviewTabProps {
@@ -38,6 +42,9 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
   const { users } = useUsers();
   const { records: todayAttendance } = useAttendance(undefined, new Date());
   const { companies } = useCompanies();
+  const { reviews, goals } = usePerformanceReviews();
+  const [taskTab, setTaskTab] = useState<'today' | 'upcoming' | 'overdue'>('today');
+  const [taskSearch, setTaskSearch] = useState('');
 
   const recentRequests = useMemo(() => {
     return leaveRequests
@@ -291,6 +298,202 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Tasks & Notifications */}
+      <Card className="shadow-corporate rounded-xl">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base font-semibold uppercase tracking-wide">Tasks & Notifications</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-1 mb-4 border-b border-border">
+            {(['today', 'upcoming', 'overdue'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setTaskTab(tab)}
+                className={cn(
+                  "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors capitalize",
+                  taskTab === tab 
+                    ? "border-primary text-primary" 
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <div className="relative max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Search..." 
+                className="pl-9 h-9 text-sm"
+                value={taskSearch}
+                onChange={e => setTaskSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {(() => {
+            const now = new Date();
+            const todayStr = format(now, 'yyyy-MM-dd');
+            const filtered = leaveRequests.filter(r => {
+              if (taskTab === 'today') return r.status === 'pending' || r.status === 'manager_approved';
+              if (taskTab === 'upcoming') return r.status === 'approved' && r.start_date > todayStr;
+              if (taskTab === 'overdue') return (r.status === 'pending' || r.status === 'manager_approved') && r.created_at < new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+              return true;
+            }).filter(r => {
+              if (!taskSearch) return true;
+              const q = taskSearch.toLowerCase();
+              return r.requester?.full_name?.toLowerCase().includes(q) || 
+                     LEAVE_TYPE_LABELS[r.leave_type]?.toLowerCase().includes(q);
+            }).slice(0, 10);
+
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Request</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Assigned To</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Date</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="text-center py-8 text-sm text-muted-foreground">No items found</td>
+                      </tr>
+                    ) : filtered.map(r => (
+                      <tr key={r.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors cursor-pointer" onClick={() => onNavigate('leave')}>
+                        <td className="py-3 px-3">
+                          <p className="text-sm font-medium">{LEAVE_TYPE_LABELS[r.leave_type]}</p>
+                          <p className="text-xs text-muted-foreground">{r.total_days} day(s)</p>
+                        </td>
+                        <td className="py-3 px-3">
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-7 w-7">
+                              <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                                {r.requester?.full_name?.split(' ').map((n: string) => n[0]).join('') || '?'}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm">{r.requester?.full_name || 'Unknown'}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-3 text-sm text-destructive font-medium">
+                          {format(parseISO(r.start_date), 'MM/dd/yyyy')}
+                        </td>
+                        <td className="py-3 px-3">
+                          <Badge className={cn(
+                            "text-[10px] font-semibold",
+                            r.status === 'pending' ? "bg-warning/15 text-warning border-warning/30" :
+                            r.status === 'manager_approved' ? "bg-info/15 text-info border-info/30" :
+                            r.status === 'approved' ? "bg-success/15 text-success border-success/30" :
+                            "bg-muted text-muted-foreground"
+                          )}>
+                            {r.status === 'pending' ? 'Pending' : r.status === 'manager_approved' ? 'Manager OK' : r.status === 'approved' ? 'Approved' : r.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </CardContent>
+      </Card>
+
+      {/* Performance & Goals */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="shadow-corporate rounded-xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold uppercase tracking-wide">Performance Overview</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-0">
+            {(() => {
+              const completedReviews = reviews.filter(r => r.status === 'completed');
+              const pendingReviews = reviews.filter(r => r.status === 'pending');
+              const latestCompleted = completedReviews[0];
+              const nextPending = pendingReviews[0];
+              const activeGoals = goals.filter(g => g.status === 'active').length;
+              const avgScore = completedReviews.length > 0 
+                ? Math.round(completedReviews.reduce((sum, r) => sum + (r.score || 0), 0) / completedReviews.length * 10) / 10
+                : null;
+              return (
+                <div className="divide-y divide-border">
+                  <div className="flex items-center justify-between py-4">
+                    <span className="text-sm text-muted-foreground font-medium">NEXT REVIEW</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{nextPending ? format(parseISO(nextPending.created_at), 'dd MMM yyyy') : 'None scheduled'}</span>
+                      <Badge className={cn("text-[10px]", nextPending ? "bg-info/15 text-info" : "bg-muted text-muted-foreground")}>{nextPending ? 'Pending' : 'N/A'}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between py-4">
+                    <span className="text-sm text-muted-foreground font-medium">LAST REVIEW</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold">{latestCompleted ? format(parseISO(latestCompleted.created_at), 'dd MMM yyyy') : 'None yet'}</span>
+                      <Badge className="text-[10px] bg-success/15 text-success">{latestCompleted ? 'Completed' : 'N/A'}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between py-4">
+                    <span className="text-sm text-muted-foreground font-medium">ACTIVE GOALS</span>
+                    <span className="text-sm font-bold">{activeGoals}</span>
+                  </div>
+                  <div className="flex items-center justify-between py-4">
+                    <span className="text-sm text-muted-foreground font-medium">AVG SCORE</span>
+                    <div className="flex items-center gap-1.5">
+                      <Star className="h-4 w-4 text-warning fill-warning" />
+                      <span className="text-sm font-bold">{avgScore ?? '—'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between py-4">
+                    <span className="text-sm text-muted-foreground font-medium">TOTAL REVIEWS</span>
+                    <span className="text-sm font-bold">{reviews.length}</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+
+        <Card className="shadow-corporate rounded-xl">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold uppercase tracking-wide">Goals</CardTitle>
+              <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onNavigate('performance')}>View all</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {goals.length === 0 ? (
+              <div className="text-center py-10">
+                <Target className="h-10 w-10 mx-auto text-muted-foreground/20 mb-2" />
+                <p className="text-xs text-muted-foreground">No goals defined yet</p>
+              </div>
+            ) : (
+              <div className="space-y-0 divide-y divide-border">
+                <div className="flex items-center justify-between py-3">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase">Goal Name</span>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase">Progress</span>
+                </div>
+                {goals.slice(0, 6).map(goal => (
+                  <div key={goal.id} className="flex items-center justify-between py-3 gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{goal.title}</p>
+                      {goal.employee_name && <p className="text-[10px] text-muted-foreground">{goal.employee_name}</p>}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <Progress value={goal.progress} className="w-32 h-2" />
+                      <span className="text-xs font-semibold w-8 text-right">{goal.progress}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Company Overview */}
