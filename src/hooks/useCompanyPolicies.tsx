@@ -100,22 +100,45 @@ export function useCompanyPolicies(companyId?: string | null) {
   const bulkUpdatePolicies = useMutation({
     mutationFn: async (updates: { policy_category: string; policy_key: string; policy_value: string; company_id?: string | null }[]) => {
       const { data: user } = await supabase.auth.getUser();
-      
-      const records = updates.map(u => ({
-        company_id: u.company_id || null,
-        policy_category: u.policy_category,
-        policy_key: u.policy_key,
-        policy_value: u.policy_value,
-        updated_by: user.user?.id || null,
-      }));
+      const userId = user.user?.id || null;
 
-      const { error } = await supabase
-        .from('company_policies')
-        .upsert(records, {
-          onConflict: 'company_id,policy_category,policy_key',
-        });
+      for (const u of updates) {
+        const cid = u.company_id || null;
 
-      if (error) throw error;
+        // Check if the policy already exists
+        let query = supabase
+          .from('company_policies')
+          .select('id')
+          .eq('policy_category', u.policy_category)
+          .eq('policy_key', u.policy_key);
+
+        if (cid) {
+          query = query.eq('company_id', cid);
+        } else {
+          query = query.is('company_id', null);
+        }
+
+        const { data: existing } = await query.maybeSingle();
+
+        if (existing) {
+          const { error } = await supabase
+            .from('company_policies')
+            .update({ policy_value: u.policy_value, updated_by: userId })
+            .eq('id', existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('company_policies')
+            .insert({
+              company_id: cid,
+              policy_category: u.policy_category,
+              policy_key: u.policy_key,
+              policy_value: u.policy_value,
+              updated_by: userId,
+            });
+          if (error) throw error;
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['company-policies'] });
