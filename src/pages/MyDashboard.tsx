@@ -125,7 +125,7 @@ export default function MyDashboard() {
 
   if (approverLoading || permLoading) {
     return (
-      <DashboardLayout title="My Dashboard">
+      <DashboardLayout title="Leave Management">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -136,24 +136,31 @@ export default function MyDashboard() {
   // If user has no position, show a friendly message
   if (!isAnyApprover && !canFileForOthers) {
     return (
-      <DashboardLayout title="My Dashboard">
-        <Card className="shadow-corporate border-muted">
-          <CardContent className="py-12 text-center">
-            <ShieldAlert className="h-12 w-12 mx-auto text-muted-foreground/40 mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No Special Position Assigned</h3>
-            <p className="text-muted-foreground mb-6">
-              You don't have a system position yet.<br />
-              Contact your Super Admin to get assigned.
-            </p>
-            <Button variant="outline" onClick={() => navigate('/')}>Return to Dashboard</Button>
-          </CardContent>
-        </Card>
+      <DashboardLayout title="Leave Management">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <Card className="shadow-lg border-destructive/20 max-w-md w-full">
+            <CardContent className="py-14 text-center">
+              <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-5">
+                <ShieldAlert className="h-8 w-8 text-destructive" />
+              </div>
+              <h3 className="text-xl font-bold text-foreground mb-2">Access Denied</h3>
+              <p className="text-muted-foreground mb-6">
+                No special position has been assigned to you.<br />
+                Please contact your Super Admin to get a system position assigned.
+              </p>
+              <Button variant="outline" onClick={() => navigate('/')} className="gap-2">
+                <ArrowRight className="h-4 w-4 rotate-180" />
+                Return to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </DashboardLayout>
     );
   }
 
   return (
-    <DashboardLayout title={positionLabel || 'My Dashboard'}>
+    <DashboardLayout title={positionLabel || 'Leave Management'}>
       <div className="space-y-6 animate-fade-in">
         {/* Hero Header with Position Identity */}
         <div className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${positionGradient} p-5 sm:p-6`}>

@@ -9,7 +9,8 @@ import {
   Menu,
   X,
   Bell,
-  KeyRound
+  KeyRound,
+  CalendarDays
 } from 'lucide-react';
 import { ChangePasswordDialog } from '@/components/profile/ChangePasswordDialog';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
@@ -78,18 +79,16 @@ export function TopNavbar() {
           <span className="font-bold text-lg text-foreground hidden sm:block">HQ Power</span>
         </NavLink>
 
-        {/* My Dashboard Button */}
-        {(canFileForOthers || isAnyApprover) && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="mr-4 hidden sm:flex items-center gap-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
-            onClick={() => navigate('/my-dashboard')}
-          >
-            <Shield className="h-4 w-4" />
-            My Dashboard
-          </Button>
-        )}
+        {/* Leave Management Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          className="mr-4 hidden sm:flex items-center gap-2 border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all"
+          onClick={() => navigate('/my-dashboard')}
+        >
+          <CalendarDays className="h-4 w-4" />
+          Leave Management
+        </Button>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1 flex-1">
