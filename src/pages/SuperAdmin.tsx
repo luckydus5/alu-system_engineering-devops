@@ -940,7 +940,7 @@ export default function SuperAdmin() {
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <ScrollArea className="h-[calc(100vh-380px)]">
+              <ScrollArea className="h-[calc(100vh-280px)]">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
@@ -1020,7 +1020,7 @@ export default function SuperAdmin() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col h-[calc(100vh-120px)]">
+      <div className="flex flex-col min-h-[calc(100vh-120px)]">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-1 py-3 border-b bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900 rounded-t-xl -mx-1 mb-4">
           <div className="flex items-center gap-3 px-4">
