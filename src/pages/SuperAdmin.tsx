@@ -1020,7 +1020,7 @@ export default function SuperAdmin() {
 
   return (
     <DashboardLayout>
-      <div className="flex flex-col min-h-[calc(100vh-120px)]">
+      <div className="flex flex-col min-h-[calc(100vh-120px)] bg-background/95 backdrop-blur-sm rounded-xl p-4 -m-4 md:-m-6 md:p-6">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-1 py-3 border-b bg-gradient-to-r from-slate-900 to-slate-800 dark:from-slate-950 dark:to-slate-900 rounded-t-xl -mx-1 mb-4">
           <div className="flex items-center gap-3 px-4">
