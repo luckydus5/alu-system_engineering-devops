@@ -20,6 +20,8 @@ import {
 import { useAttendance, useMyAttendance, ATTENDANCE_STATUS_LABELS, AttendanceStatus } from '@/hooks/useAttendance';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useUsers } from '@/hooks/useUsers';
+import { useEmployees } from '@/hooks/useEmployees';
+import { useCompanies } from '@/hooks/useCompanies';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
@@ -491,6 +493,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
   const { departments } = useDepartments();
   const { users } = useUsers();
+  const { employees } = useEmployees();
+  const { companies } = useCompanies();
   const { records, isLoading, refetch, bulkImportAttendance } = useAttendance(
     filterDepartment === 'all' ? undefined : filterDepartment
   );
@@ -546,6 +550,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const dateCol = findCol(headers, [/^date$/, /date/, /day/, /attendance/]);
       const checkInCol = findCol(headers, [/check.?in/, /clock.?in/, /in.?time/, /arrival/]);
       const checkOutCol = findCol(headers, [/check.?out/, /clock.?out/, /out.?time/, /departure/]);
+      const deptCol = findCol(headers, [/^department$/, /department/, /dept/, /division/, /section/]);
+      const noCol = findCol(headers, [/^no\.?$/, /^no$/, /^number$/, /employee.?no/, /emp.?no/, /id.?no/]);
 
       const isMachineFormat = !!statusCol && !!dateTimeCol;
 
@@ -576,19 +582,86 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         return isNaN(fallback.getTime()) ? null : fallback;
       };
 
-      // Pre-build a lowercase user lookup map for fast matching
-      const userLookup = users.map(u => ({ ...u, nameLower: u.full_name?.toLowerCase() || '' }));
+      // Pre-build lookup maps for fast matching
+      const userLookup = users.map(u => ({ ...u, nameLower: u.full_name?.toLowerCase().trim() || '' }));
+      const employeeLookup = employees.map(e => ({ ...e, nameLower: e.full_name?.toLowerCase().trim() || '' }));
 
-      const matchUser = (name: string) => {
-        const searchName = name.toLowerCase();
-        return userLookup.find(u =>
-          u.nameLower === searchName || u.nameLower.includes(searchName) || searchName.includes(u.nameLower)
-        );
+      // Company/department matching from Excel department column
+      const matchCompany = (excelDept: string): { companyName: string | null; companyId: string | null; deptId: string | null } => {
+        if (!excelDept) return { companyName: null, companyId: null, deptId: null };
+        const search = excelDept.toLowerCase().trim();
+        // Try to match against companies
+        for (const c of companies) {
+          const cName = c.name.toLowerCase();
+          if (search.includes(cName) || cName.includes(search) || search.includes(c.code.toLowerCase())) {
+            return { companyName: c.name, companyId: c.id, deptId: null };
+          }
+        }
+        // Try keywords
+        if (search.includes('farmer') || search.includes('peatshed') || search.includes('farm')) {
+          const c = companies.find(co => co.code === 'FARM');
+          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
+        }
+        if (search.includes('peat') && !search.includes('farmer')) {
+          const c = companies.find(co => co.code === 'HQPEAT');
+          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
+        }
+        if (search.includes('service') || search.includes('svc')) {
+          const c = companies.find(co => co.code === 'HQSVC');
+          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
+        }
+        if (search.includes('power') || search.includes('hqp')) {
+          const c = companies.find(co => co.code === 'HQP');
+          if (c) return { companyName: c.name, companyId: c.id, deptId: null };
+        }
+        // Try department matching
+        for (const d of departments) {
+          const dName = d.name.toLowerCase();
+          if (search.includes(dName) || dName.includes(search)) {
+            return { companyName: null, companyId: null, deptId: d.id };
+          }
+        }
+        return { companyName: excelDept, companyId: null, deptId: null };
+      };
+
+      const matchUser = (name: string, empNo?: string) => {
+        const searchName = name.toLowerCase().trim();
+        // Try exact employee number match first
+        if (empNo) {
+          const byNo = employeeLookup.find(e => e.employee_number === `EMP-${empNo.padStart(4, '0')}` || e.employee_number === empNo);
+          if (byNo) return { type: 'employee' as const, ...byNo };
+        }
+        // Try exact name match against employees first
+        let match = employeeLookup.find(e => e.nameLower === searchName);
+        if (match) return { type: 'employee' as const, ...match };
+        // Try partial match against employees
+        match = employeeLookup.find(e => e.nameLower.includes(searchName) || searchName.includes(e.nameLower));
+        if (match) return { type: 'employee' as const, ...match };
+        // Try profiles/users
+        let uMatch = userLookup.find(u => u.nameLower === searchName);
+        if (uMatch) return { type: 'user' as const, ...uMatch };
+        uMatch = userLookup.find(u => u.nameLower.includes(searchName) || searchName.includes(u.nameLower));
+        if (uMatch) return { type: 'user' as const, ...uMatch };
+        // Try last name only match (for single-name entries like "MANIRAKOZE")
+        const parts = searchName.split(/\s+/);
+        if (parts.length === 1) {
+          match = employeeLookup.find(e => {
+            const eParts = e.nameLower.split(/\s+/);
+            return eParts.some(p => p === searchName);
+          });
+          if (match) return { type: 'employee' as const, ...match };
+          uMatch = userLookup.find(u => {
+            const uParts = u.nameLower.split(/\s+/);
+            return uParts.some(p => p === searchName);
+          });
+          if (uMatch) return { type: 'user' as const, ...uMatch };
+        }
+        return null;
       };
 
       if (isMachineFormat) {
         // ── Machine format: each row is one event (C/In or C/Out) ──
-        const grouped = new Map<string, { checkIns: Date[]; checkOuts: Date[] }>();
+        const grouped = new Map<string, { checkIns: Date[]; checkOuts: Date[]; excelDept: string; empNo: string }>();
         const CHUNK = 2000;
 
         for (let i = 0; i < jsonData.length; i += CHUNK) {
@@ -602,19 +675,24 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             const dateTime = parseDate(dtVal);
             if (!dateTime) continue;
 
+            const excelDept = deptCol ? String(row[deptCol] || '').trim() : '';
+            const empNo = noCol ? String(row[noCol] || '').trim() : '';
+
             const isCheckIn = /c\/in|c.in|check.?in|clock.?in|in$/i.test(statusVal);
             const dateKey = `${name}|||${format(dateTime, 'yyyy-MM-dd')}`;
-            if (!grouped.has(dateKey)) grouped.set(dateKey, { checkIns: [], checkOuts: [] });
+            if (!grouped.has(dateKey)) grouped.set(dateKey, { checkIns: [], checkOuts: [], excelDept, empNo });
             const group = grouped.get(dateKey)!;
             if (isCheckIn) group.checkIns.push(dateTime);
             else group.checkOuts.push(dateTime);
+            if (!group.excelDept && excelDept) group.excelDept = excelDept;
+            if (!group.empNo && empNo) group.empNo = empNo;
           }
 
           setParseProgress(`Processed ${Math.min(i + CHUNK, jsonData.length).toLocaleString()} / ${jsonData.length.toLocaleString()} rows...`);
           await yieldToUI();
         }
 
-        setParseProgress('Grouping attendance records...');
+        setParseProgress('Matching employees & departments...');
         await yieldToUI();
 
         const parsed: any[] = [];
@@ -624,11 +702,15 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const earliestIn = group.checkIns.length > 0 ? group.checkIns.sort((a, b) => a.getTime() - b.getTime())[0] : null;
           const latestOut = group.checkOuts.length > 0 ? group.checkOuts.sort((a, b) => b.getTime() - a.getTime())[0] : null;
 
-          const matchedUser = matchUser(name);
+          const matchedUser = matchUser(name, group.empNo);
+          const companyMatch = matchCompany(group.excelDept);
 
           let status: AttendanceStatus = 'present';
           if (!earliestIn && !latestOut) status = 'absent';
           else if (earliestIn && earliestIn.getHours() >= 9) status = 'late';
+
+          // Determine department: matched user's department > company match > fallback
+          const resolvedDeptId = matchedUser?.department_id || companyMatch.deptId || departmentId;
 
           parsed.push({
             name, date: dateStr, dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
@@ -636,8 +718,13 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             clockOut: latestOut ? format(latestOut, 'HH:mm') : '—',
             clockInRaw: earliestIn?.toISOString() || null,
             clockOutRaw: latestOut?.toISOString() || null,
-            status, matched: !!matchedUser, matchedUser, userId: matchedUser?.id,
-            departmentId: matchedUser?.department_id || departmentId,
+            status, matched: !!matchedUser, matchedUser,
+            userId: matchedUser?.id,
+            matchedUserName: matchedUser?.full_name || null,
+            departmentId: resolvedDeptId,
+            excelDept: group.excelDept,
+            matchedCompany: companyMatch.companyName,
+            empNo: group.empNo,
           });
         });
 
@@ -850,28 +937,30 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             </div>
           </CardHeader>
           <CardContent className="p-0">
-            <ScrollArea className="max-h-[350px]">
+            <div className="overflow-auto max-h-[600px]">
               <table className="w-full text-xs border-collapse">
-                <thead>
-                  <tr className="bg-muted/40">
-                    <th className="px-3 py-2.5 text-left font-semibold border-b">#</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-b">Name (Excel)</th>
-                    <th className="px-3 py-2.5 text-left font-semibold border-b">Matched Employee</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-b">Date</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-b">Check In</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-b">Check Out</th>
-                    <th className="px-3 py-2.5 text-center font-semibold border-b">Status</th>
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-muted/90">
+                    <th className="px-3 py-2.5 text-left font-semibold border-b w-10">#</th>
+                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[160px]">Name (Excel)</th>
+                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[140px]">Matched Employee</th>
+                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[140px]">Department (Excel)</th>
+                    <th className="px-3 py-2.5 text-left font-semibold border-b min-w-[120px]">Matched Company</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[100px]">Date</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Check In</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Check Out</th>
+                    <th className="px-3 py-2.5 text-center font-semibold border-b min-w-[80px]">Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {uploadPreview.map((row, idx) => (
                     <tr key={idx} className={cn("border-b border-border/40 hover:bg-muted/20", !row.matched && "bg-red-50/30 dark:bg-red-900/10")}>
-                      <td className="px-3 py-2 text-muted-foreground">{idx + 1}</td>
-                      <td className="px-3 py-2 font-medium">{row.name}</td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2.5 text-muted-foreground">{idx + 1}</td>
+                      <td className="px-3 py-2.5 font-medium">{row.name}</td>
+                      <td className="px-3 py-2.5">
                         {row.matched ? (
                           <span className="inline-flex items-center gap-1 text-emerald-600 text-[10px] font-medium">
-                            <CheckCircle2 className="h-3 w-3" /> {row.matchedUser?.full_name}
+                            <CheckCircle2 className="h-3 w-3" /> {row.matchedUserName || row.matchedUser?.full_name}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-red-500 text-[10px] font-medium">
@@ -879,10 +968,20 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2 text-center">{row.dateDisplay}</td>
-                      <td className="px-3 py-2 text-center font-medium text-emerald-600">{row.clockIn}</td>
-                      <td className="px-3 py-2 text-center font-medium text-info">{row.clockOut}</td>
-                      <td className="px-3 py-2 text-center">
+                      <td className="px-3 py-2.5 text-muted-foreground text-[10px]">{row.excelDept || '—'}</td>
+                      <td className="px-3 py-2.5">
+                        {row.matchedCompany ? (
+                          <span className="inline-flex items-center gap-1 text-primary text-[10px] font-medium">
+                            <CheckCircle2 className="h-3 w-3" /> {row.matchedCompany}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground text-[10px]">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">{row.dateDisplay}</td>
+                      <td className="px-3 py-2.5 text-center font-medium text-emerald-600">{row.clockIn}</td>
+                      <td className="px-3 py-2.5 text-center font-medium text-info">{row.clockOut}</td>
+                      <td className="px-3 py-2.5 text-center">
                         <Badge variant="outline" className={cn("text-[10px] border-0",
                           row.status === 'present' && "bg-emerald-500/10 text-emerald-600",
                           row.status === 'late' && "bg-amber-500/10 text-amber-600",
@@ -895,7 +994,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                   ))}
                 </tbody>
               </table>
-            </ScrollArea>
+            </div>
           </CardContent>
         </Card>
       )}
