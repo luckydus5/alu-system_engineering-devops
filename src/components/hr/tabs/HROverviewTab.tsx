@@ -8,7 +8,7 @@ import {
   Users, Calendar, Clock, ChevronRight, UserPlus,
   CalendarCheck, CheckCircle2,
   Award, PieChart, Building2,
-  ArrowRight, AlertTriangle
+  ArrowRight, AlertTriangle, TrendingUp
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS } from '@/hooks/useLeaveRequests';
 import { useUsers } from '@/hooks/useUsers';
@@ -70,18 +70,25 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
     ? Math.round((attendanceSummary.present / attendanceSummary.total) * 100) 
     : 0;
 
+  const KPI_CARDS = [
+    { label: 'Total People', value: metrics.activeEmployees, icon: Users, variant: 'kpi-blue' as const, onClick: () => onNavigate('employees') },
+    { label: 'Pending Requests', value: metrics.pendingLeaveRequests, icon: Clock, variant: 'kpi-gold' as const, onClick: () => onNavigate('leave') },
+    { label: 'On Leave Today', value: metrics.employeesOnLeaveToday || 0, icon: Calendar, variant: 'kpi-warning' as const, onClick: () => onNavigate('leave') },
+    { label: 'Departments', value: metrics.departmentCount, icon: Building2, variant: 'kpi-success' as const, onClick: () => onNavigate('employees') },
+  ];
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Alert Banner */}
       {urgentItems.length > 0 && (
-        <div className="flex items-center gap-3 p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50 dark:border-amber-800/30">
-          <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-          <p className="text-sm text-amber-800 dark:text-amber-200 flex-1">
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-warning/10 border border-warning/20">
+          <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+          <p className="text-sm text-foreground flex-1 font-medium">
             {urgentItems.map(item => item.title).join(' · ')}
           </p>
           <Button 
-            size="sm" variant="ghost" 
-            className="text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 shrink-0 text-xs h-8"
+            size="sm" variant="outline"
+            className="shrink-0 text-xs h-8 border-warning/30 hover:bg-warning/10"
             onClick={urgentItems[0]?.action}
           >
             Review <ArrowRight className="h-3.5 w-3.5 ml-1" />
@@ -89,24 +96,27 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
         </div>
       )}
 
-      {/* Stats Row */}
+      {/* KPI Cards */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {[
-          { label: 'Total People', value: metrics.activeEmployees, sub: 'Active employees', onClick: () => onNavigate('employees') },
-          { label: 'Pending Requests', value: metrics.pendingLeaveRequests, sub: 'Needs review', onClick: () => onNavigate('leave') },
-          { label: 'On Leave Today', value: metrics.employeesOnLeaveToday || 0, sub: 'Currently away', onClick: () => onNavigate('leave') },
-          { label: 'Departments', value: metrics.departmentCount, sub: `${companies.length} companies`, onClick: () => onNavigate('employees') },
-        ].map(stat => (
+        {KPI_CARDS.map(stat => (
           <button 
             key={stat.label}
             onClick={stat.onClick}
-            className="text-left p-5 rounded-2xl bg-card border hover:border-foreground/10 hover:shadow-sm transition-all group"
+            className={cn(
+              "text-left p-5 rounded-xl transition-all group shadow-corporate hover:shadow-corporate-lg",
+              stat.variant
+            )}
           >
-            <p className="text-xs text-muted-foreground font-medium tracking-wide">{stat.label}</p>
-            <p className="text-3xl font-semibold tracking-tight mt-1">{stat.value}</p>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              {stat.sub}
-              <ChevronRight className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{stat.label}</p>
+                <p className="text-3xl font-bold tracking-tight mt-1.5">{stat.value}</p>
+              </div>
+              <stat.icon className="h-5 w-5 text-muted-foreground/50" />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              View details
+              <ChevronRight className="h-3 w-3" />
             </p>
           </button>
         ))}
@@ -115,44 +125,44 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
       {/* Main Grid */}
       <div className="grid gap-6 lg:grid-cols-5">
         {/* Attendance Snapshot */}
-        <Card className="lg:col-span-2 border rounded-2xl shadow-none">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-base font-semibold">Today's Attendance</CardTitle>
-            <p className="text-xs text-muted-foreground">{format(new Date(), 'EEEE, MMMM d')}</p>
+        <Card className="lg:col-span-2 shadow-corporate rounded-xl">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold">Today's Attendance</CardTitle>
+              <Badge variant="outline" className="text-[10px] font-mono">{format(new Date(), 'EEE, MMM d')}</Badge>
+            </div>
           </CardHeader>
           <CardContent className="space-y-5">
-            {/* Ring-style display */}
+            {/* Ring display */}
             <div className="flex items-center justify-center">
-              <div className="relative h-32 w-32">
-                <svg className="h-32 w-32 -rotate-90" viewBox="0 0 120 120">
-                  <circle cx="60" cy="60" r="52" fill="none" strokeWidth="8" className="stroke-muted" />
+              <div className="relative h-36 w-36">
+                <svg className="h-36 w-36 -rotate-90" viewBox="0 0 120 120">
+                  <circle cx="60" cy="60" r="50" fill="none" strokeWidth="10" className="stroke-muted" />
                   <circle 
-                    cx="60" cy="60" r="52" fill="none" strokeWidth="8" 
+                    cx="60" cy="60" r="50" fill="none" strokeWidth="10" 
                     strokeLinecap="round"
-                    className="stroke-foreground"
-                    strokeDasharray={`${attendanceRate * 3.27} ${327 - attendanceRate * 3.27}`}
+                    className="stroke-primary"
+                    strokeDasharray={`${attendanceRate * 3.14} ${314 - attendanceRate * 3.14}`}
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-2xl font-bold">{attendanceRate}%</span>
-                  <span className="text-[10px] text-muted-foreground">Present</span>
+                  <span className="text-3xl font-bold">{attendanceRate}%</span>
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Present</span>
                 </div>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="text-lg font-semibold text-emerald-600">{attendanceSummary.present}</p>
-                <p className="text-[10px] text-muted-foreground">Present</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-amber-600">{attendanceSummary.late}</p>
-                <p className="text-[10px] text-muted-foreground">Late</p>
-              </div>
-              <div>
-                <p className="text-lg font-semibold text-red-600">{attendanceSummary.absent}</p>
-                <p className="text-[10px] text-muted-foreground">Absent</p>
-              </div>
+              {[
+                { label: 'Present', value: attendanceSummary.present, color: 'text-success' },
+                { label: 'Late', value: attendanceSummary.late, color: 'text-warning' },
+                { label: 'Absent', value: attendanceSummary.absent, color: 'text-destructive' },
+              ].map(s => (
+                <div key={s.label} className="p-2 rounded-lg bg-muted/30">
+                  <p className={cn("text-lg font-bold", s.color)}>{s.value}</p>
+                  <p className="text-[10px] text-muted-foreground">{s.label}</p>
+                </div>
+              ))}
             </div>
 
             <Button variant="ghost" className="w-full text-xs h-9 text-muted-foreground hover:text-foreground" onClick={() => onNavigate('attendance')}>
@@ -162,33 +172,33 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
         </Card>
 
         {/* Pending Requests */}
-        <Card className="lg:col-span-3 border rounded-2xl shadow-none">
+        <Card className="lg:col-span-3 shadow-corporate rounded-xl">
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-base font-semibold">Pending Requests</CardTitle>
               <p className="text-xs text-muted-foreground mt-0.5">Awaiting your review</p>
             </div>
-            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => onNavigate('leave')}>
+            <Button variant="outline" size="sm" className="text-xs h-8" onClick={() => onNavigate('leave')}>
               View all
             </Button>
           </CardHeader>
           <CardContent>
             {recentRequests.length === 0 ? (
               <div className="text-center py-12">
-                <CheckCircle2 className="h-10 w-10 mx-auto text-muted-foreground/20 mb-3" />
-                <p className="font-medium text-sm text-foreground">All caught up</p>
-                <p className="text-xs text-muted-foreground mt-0.5">No pending requests</p>
+                <CheckCircle2 className="h-12 w-12 mx-auto text-success/30 mb-3" />
+                <p className="font-semibold text-sm">All caught up</p>
+                <p className="text-xs text-muted-foreground mt-0.5">No pending requests right now</p>
               </div>
             ) : (
               <div className="space-y-1">
                 {recentRequests.map((request) => (
                   <button 
                     key={request.id}
-                    className="flex items-center gap-3 w-full p-3 rounded-xl hover:bg-muted/50 transition-colors text-left"
+                    className="flex items-center gap-3 w-full p-3 rounded-lg hover:bg-muted/50 transition-colors text-left"
                     onClick={() => onNavigate('leave')}
                   >
-                    <Avatar className="h-9 w-9">
-                      <AvatarFallback className="bg-muted text-muted-foreground text-xs font-medium">
+                    <Avatar className="h-10 w-10 shadow-sm">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
                         {request.requester?.full_name?.split(' ').map((n: string) => n[0]).join('') || '?'}
                       </AvatarFallback>
                     </Avatar>
@@ -199,10 +209,10 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
                       </p>
                     </div>
                     <Badge variant="outline" className={cn(
-                      "text-[10px] font-medium shrink-0",
+                      "text-[10px] font-medium shrink-0 border",
                       request.status === 'pending' 
-                        ? "text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30" 
-                        : "text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950/30"
+                        ? "text-warning border-warning/30 bg-warning/5" 
+                        : "text-info border-info/30 bg-info/5"
                     )}>
                       {request.status === 'pending' ? 'New' : 'Manager OK'}
                     </Badge>
@@ -218,24 +228,24 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Quick Actions */}
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-3">Quick Actions</h3>
-          <div className="grid grid-cols-2 gap-2">
+          <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">Quick Actions</h3>
+          <div className="grid grid-cols-2 gap-3">
             {[
-              { title: 'Add Employee', desc: 'Onboard new staff', icon: UserPlus, tab: 'employees' },
-              { title: 'Review Leave', desc: 'Process approvals', icon: CalendarCheck, tab: 'leave' },
-              { title: 'Performance', desc: 'Run evaluations', icon: Award, tab: 'performance' },
-              { title: 'Analytics', desc: 'View insights', icon: PieChart, tab: 'analytics' },
+              { title: 'Add Employee', desc: 'Onboard new staff', icon: UserPlus, tab: 'employees', gradient: 'gradient-primary' },
+              { title: 'Review Leave', desc: 'Process approvals', icon: CalendarCheck, tab: 'leave', gradient: 'gradient-gold' },
+              { title: 'Performance', desc: 'Run evaluations', icon: Award, tab: 'performance', gradient: 'gradient-primary' },
+              { title: 'Analytics', desc: 'View insights', icon: PieChart, tab: 'analytics', gradient: 'gradient-gold' },
             ].map(action => (
               <button
                 key={action.title}
                 onClick={() => onNavigate(action.tab)}
-                className="flex items-center gap-3 p-4 rounded-2xl bg-card border hover:border-foreground/10 hover:shadow-sm transition-all text-left group"
+                className="flex items-center gap-3 p-4 rounded-xl bg-card border shadow-corporate hover:shadow-corporate-lg transition-all text-left group"
               >
-                <div className="h-9 w-9 rounded-xl bg-muted flex items-center justify-center shrink-0 group-hover:bg-foreground/5 transition-colors">
-                  <action.icon className="h-4 w-4 text-muted-foreground" />
+                <div className={cn("h-10 w-10 rounded-lg flex items-center justify-center shrink-0", action.gradient)}>
+                  <action.icon className="h-5 w-5 text-primary-foreground" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium">{action.title}</p>
+                  <p className="text-sm font-semibold">{action.title}</p>
                   <p className="text-xs text-muted-foreground">{action.desc}</p>
                 </div>
               </button>
@@ -246,23 +256,23 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
         {/* On Leave This Week */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-foreground">On Leave This Week</h3>
-            <span className="text-xs text-muted-foreground">{onLeaveThisWeek.length} scheduled</span>
+            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide">On Leave This Week</h3>
+            <Badge variant="secondary" className="text-[10px]">{onLeaveThisWeek.length} scheduled</Badge>
           </div>
-          <Card className="border rounded-2xl shadow-none">
+          <Card className="shadow-corporate rounded-xl">
             <CardContent className="p-0">
               {onLeaveThisWeek.length === 0 ? (
                 <div className="text-center py-10">
-                  <Users className="h-8 w-8 mx-auto text-muted-foreground/15 mb-2" />
+                  <Users className="h-10 w-10 mx-auto text-muted-foreground/15 mb-2" />
                   <p className="text-xs text-muted-foreground">No scheduled leaves this week</p>
                 </div>
               ) : (
-                <ScrollArea className="h-[200px]">
-                  <div className="p-2 space-y-0.5">
+                <ScrollArea className="h-[220px]">
+                  <div className="p-3 space-y-0.5">
                     {onLeaveThisWeek.slice(0, 8).map((leave) => (
-                      <div key={leave.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/40 transition-colors">
+                      <div key={leave.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/40 transition-colors">
                         <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-[10px] font-medium bg-muted text-muted-foreground">
+                          <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
                             {leave.requester?.full_name?.split(' ').map((n: string) => n[0]).join('') || '?'}
                           </AvatarFallback>
                         </Avatar>
@@ -272,7 +282,7 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
                             {format(parseISO(leave.start_date), 'MMM d')} – {format(parseISO(leave.end_date), 'MMM d')}
                           </p>
                         </div>
-                        <span className="text-[10px] text-muted-foreground">{LEAVE_TYPE_LABELS[leave.leave_type]}</span>
+                        <Badge variant="outline" className="text-[10px]">{LEAVE_TYPE_LABELS[leave.leave_type]}</Badge>
                       </div>
                     ))}
                   </div>
@@ -286,17 +296,21 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
       {/* Company Overview */}
       {companies.length > 1 && (
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-3">Companies</h3>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">Companies</h3>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {companies.map(company => (
-              <div key={company.id} className="flex items-center gap-3 p-4 rounded-2xl bg-card border">
+              <div key={company.id} className="flex items-center gap-3 p-4 rounded-xl bg-card border shadow-corporate">
                 <div className={cn(
-                  "h-2.5 w-2.5 rounded-full shrink-0",
-                  company.parent_id ? 'bg-muted-foreground/30' : 'bg-foreground'
-                )} />
+                  "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                  company.parent_id ? 'bg-muted' : 'gradient-primary'
+                )}>
+                  <Building2 className={cn("h-5 w-5", company.parent_id ? 'text-muted-foreground' : 'text-primary-foreground')} />
+                </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{company.name}</p>
-                  <p className="text-[10px] text-muted-foreground">{company.parent_id ? 'Subsidiary' : 'Parent'}</p>
+                  <p className="text-sm font-semibold truncate">{company.name}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                    {company.parent_id ? 'Subsidiary' : 'Parent'}
+                  </p>
                 </div>
               </div>
             ))}
