@@ -46,10 +46,10 @@ export const ATTENDANCE_STATUS_COLORS: Record<AttendanceStatus, string> = {
 export function useAttendance(departmentId?: string, date?: Date) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const dateStr = date ? format(date, 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd');
+  const dateStr = date ? format(date, 'yyyy-MM-dd') : undefined;
 
   const { data: records = [], isLoading, refetch } = useQuery({
-    queryKey: ['attendance', departmentId, dateStr],
+    queryKey: ['attendance', departmentId, dateStr || 'all'],
     queryFn: async () => {
       let query = supabase
         .from('attendance_records')
@@ -57,14 +57,17 @@ export function useAttendance(departmentId?: string, date?: Date) {
           *,
           department:departments(name)
         `)
-        .eq('attendance_date', dateStr)
-        .order('clock_in', { ascending: true });
+        .order('attendance_date', { ascending: false });
+
+      if (dateStr) {
+        query = query.eq('attendance_date', dateStr);
+      }
 
       if (departmentId) {
         query = query.eq('department_id', departmentId);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query.limit(1000);
       if (error) throw error;
       
       // Fetch user profiles separately
@@ -165,6 +168,38 @@ export function useAttendance(departmentId?: string, date?: Date) {
     },
   });
 
+  const bulkImportAttendance = useMutation({
+    mutationFn: async (importRecords: {
+      user_id: string;
+      department_id: string;
+      attendance_date: string;
+      clock_in: string | null;
+      clock_out: string | null;
+      status: AttendanceStatus;
+      notes?: string;
+    }[]) => {
+      // Upsert in batches of 50
+      const batchSize = 50;
+      let totalInserted = 0;
+      for (let i = 0; i < importRecords.length; i += batchSize) {
+        const batch = importRecords.slice(i, i + batchSize);
+        const { error } = await supabase
+          .from('attendance_records')
+          .upsert(batch as any, { onConflict: 'user_id,attendance_date' });
+        if (error) throw error;
+        totalInserted += batch.length;
+      }
+      return { totalInserted };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['attendance'] });
+      toast({ title: `${data.totalInserted} attendance records imported successfully` });
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to import attendance', description: error.message, variant: 'destructive' });
+    },
+  });
+
   return {
     records,
     isLoading,
@@ -172,9 +207,9 @@ export function useAttendance(departmentId?: string, date?: Date) {
     clockIn,
     clockOut,
     updateAttendance,
+    bulkImportAttendance,
   };
 }
-
 export function useMyAttendance() {
   const today = format(new Date(), 'yyyy-MM-dd');
 
