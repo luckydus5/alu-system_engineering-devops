@@ -34,13 +34,13 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
   // Compute leave stats
   const leaveStats = useMemo(() => {
     const approved = leaveRequests.filter(r => r.status === 'approved');
-    const annualHours = approved
+    const annualDays = approved
       .filter(r => r.leave_type === 'annual')
-      .reduce((sum, r) => sum + r.total_days * 8, 0);
-    const personalHours = approved
+      .reduce((sum, r) => sum + r.total_days, 0);
+    const personalDays = approved
       .filter(r => r.leave_type === 'personal' || r.leave_type === 'sick')
-      .reduce((sum, r) => sum + r.total_days * 8, 0);
-    return { annualHours, personalHours };
+      .reduce((sum, r) => sum + r.total_days, 0);
+    return { annualDays, personalDays };
   }, [leaveRequests]);
 
   const STAT_CARDS = [
@@ -53,14 +53,14 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
     },
     { 
       label: 'ANNUAL LEAVE', 
-      value: `${leaveStats.annualHours} hr`, 
+      value: `${leaveStats.annualDays} days`, 
       icon: Hand,
       gradient: 'bg-gradient-to-br from-[hsl(187,71%,45%)] to-[hsl(187,71%,35%)]',
       onClick: () => onNavigate('leave')
     },
     { 
       label: 'PERSONAL LEAVE', 
-      value: `${leaveStats.personalHours} hr`, 
+      value: `${leaveStats.personalDays} days`, 
       icon: Wine,
       gradient: 'bg-gradient-to-br from-[hsl(88,50%,53%)] to-[hsl(88,50%,40%)]',
       onClick: () => onNavigate('leave')
