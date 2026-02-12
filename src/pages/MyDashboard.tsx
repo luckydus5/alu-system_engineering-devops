@@ -125,7 +125,7 @@ export default function MyDashboard() {
 
   if (approverLoading || permLoading) {
     return (
-      <DashboardLayout title="Leave Management">
+      <DashboardLayout title="Leave Management" noBackground>
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -136,7 +136,7 @@ export default function MyDashboard() {
   // If user has no position, show a friendly message
   if (!isAnyApprover && !canFileForOthers) {
     return (
-      <DashboardLayout title="Leave Management">
+      <DashboardLayout title="Leave Management" noBackground>
         <div className="flex items-center justify-center min-h-[60vh]">
           <Card className="shadow-lg border-destructive/20 max-w-md w-full">
             <CardContent className="py-14 text-center">
@@ -160,7 +160,7 @@ export default function MyDashboard() {
   }
 
   return (
-    <DashboardLayout title={positionLabel || 'Leave Management'}>
+    <DashboardLayout title={positionLabel || 'Leave Management'} noBackground>
       <div className="space-y-6 animate-fade-in">
         {/* Hero Header with Position Identity */}
         <div className={`relative overflow-hidden rounded-2xl border bg-gradient-to-br ${positionGradient} p-5 sm:p-6`}>

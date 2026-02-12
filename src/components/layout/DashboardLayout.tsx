@@ -9,16 +9,17 @@ interface DashboardLayoutProps {
   children: ReactNode;
   title?: string;
   showBackButton?: boolean;
+  noBackground?: boolean;
 }
 
-export function DashboardLayout({ children, title, showBackButton = true }: DashboardLayoutProps) {
+export function DashboardLayout({ children, title, showBackButton = true, noBackground = false }: DashboardLayoutProps) {
   const location = useLocation();
   const isHomePage = location.pathname === '/';
 
   return (
-    <div className="min-h-screen w-full relative">
+    <div className={`min-h-screen w-full relative ${noBackground ? 'bg-background' : ''}`}>
       {/* Sliding Background */}
-      <BackgroundSlideshow />
+      {!noBackground && <BackgroundSlideshow />}
       
       <TopNavbar />
       
