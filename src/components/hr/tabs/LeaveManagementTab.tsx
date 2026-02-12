@@ -151,62 +151,154 @@ function LeaveCalendarView({ leaveRequests, selectedMonth, onMonthChange }: {
   );
 }
 
-function LeaveRequestItem({ request, onView, onApprove, onReject }: {
-  request: any;
-  onView: () => void;
-  onApprove?: () => void;
-  onReject?: () => void;
+function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBalances }: {
+  requests: any[];
+  onView: (id: string) => void;
+  onApprove: (id: string, status: LeaveStatus) => void;
+  onReject: (id: string) => void;
+  employeeBalances: any[];
 }) {
-  const statusConfig = STATUS_CONFIG[request.status as LeaveStatus];
-  const StatusIcon = statusConfig.icon;
-  const initials = request.requester?.full_name?.split(' ').map((n: string) => n[0]).join('') || '?';
+  const today = new Date();
 
   return (
-    <div className="flex items-center gap-4 p-4 rounded-xl bg-white dark:bg-slate-800/50 border hover:shadow-md transition-all">
-      <Avatar className="h-12 w-12">
-        <AvatarFallback className="bg-gradient-to-br from-violet-500 to-purple-600 text-white">
-          {initials}
-        </AvatarFallback>
-      </Avatar>
-      
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <h4 className="font-semibold truncate">{request.requester?.full_name || 'Unknown'}</h4>
-          <Badge className={cn("text-xs", statusConfig.bgColor, statusConfig.color)}>
-            <StatusIcon className="h-3 w-3 mr-1" />
-            {LEAVE_STATUS_LABELS[request.status as LeaveStatus]}
-          </Badge>
-        </div>
-        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-          <span className="flex items-center gap-1">
-            <div className={cn("h-2 w-2 rounded-full", LEAVE_TYPE_COLORS[request.leave_type as LeaveType])} />
-            {LEAVE_TYPE_LABELS[request.leave_type as LeaveType]}
-          </span>
-          <span>•</span>
-          <span>{request.total_days} day(s)</span>
-          <span>•</span>
-          <span>{format(parseISO(request.start_date), 'MMM d')} - {format(parseISO(request.end_date), 'MMM d')}</span>
-        </div>
-      </div>
-      
-      <div className="flex items-center gap-2">
-        {(request.status === 'pending' || request.status === 'manager_approved') && onApprove && (
-          <Button size="sm" variant="outline" className="text-emerald-600 border-emerald-600 hover:bg-emerald-50" onClick={onApprove}>
-            <CheckCircle2 className="h-4 w-4 mr-1" />
-            Approve
-          </Button>
-        )}
-        {(request.status === 'pending' || request.status === 'manager_approved') && onReject && (
-          <Button size="sm" variant="outline" className="text-red-600 border-red-600 hover:bg-red-50" onClick={onReject}>
-            <XCircle className="h-4 w-4 mr-1" />
-            Reject
-          </Button>
-        )}
-        <Button size="sm" variant="ghost" onClick={onView}>
-          <Eye className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
+    <Card>
+      <CardContent className="p-0">
+        <ScrollArea className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse min-w-[1100px]">
+              <thead>
+                <tr className="bg-muted/60 border-b">
+                  <th className="sticky left-0 z-10 bg-muted/90 px-3 py-2.5 text-left font-semibold w-8">#</th>
+                  <th className="sticky left-8 z-10 bg-muted/90 px-3 py-2.5 text-left font-semibold min-w-[160px]">Employee</th>
+                  <th className="px-3 py-2.5 text-left font-semibold min-w-[100px]">Leave Type</th>
+                  <th className="px-3 py-2.5 text-center font-semibold">Start Date</th>
+                  <th className="px-3 py-2.5 text-center font-semibold">End Date</th>
+                  <th className="px-3 py-2.5 text-center font-semibold bg-blue-50 dark:bg-blue-900/20">Total Days</th>
+                  <th className="px-3 py-2.5 text-center font-semibold bg-amber-50 dark:bg-amber-900/20">Days Elapsed</th>
+                  <th className="px-3 py-2.5 text-center font-semibold bg-orange-50 dark:bg-orange-900/20">Days Left</th>
+                  <th className="px-3 py-2.5 text-center font-semibold bg-emerald-50 dark:bg-emerald-900/20">Balance Remaining</th>
+                  <th className="px-3 py-2.5 text-center font-semibold min-w-[110px]">Status</th>
+                  <th className="px-3 py-2.5 text-center font-semibold min-w-[140px]">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requests.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="text-center py-16 text-muted-foreground">
+                      <CalendarIcon className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                      <p className="text-sm font-medium">No leave requests found</p>
+                    </td>
+                  </tr>
+                ) : (
+                  requests.map((request, idx) => {
+                    const startDate = parseISO(request.start_date);
+                    const endDate = parseISO(request.end_date);
+                    const isActive = request.status === 'approved' && isWithinInterval(today, { start: startDate, end: endDate });
+                    const isUpcoming = request.status === 'approved' && startDate > today;
+                    const isPast = endDate < today;
+
+                    // Days elapsed (only for active/past approved leaves)
+                    let daysElapsed = 0;
+                    let daysLeft = 0;
+                    if (request.status === 'approved') {
+                      if (isActive) {
+                        daysElapsed = Math.max(0, differenceInDays(today, startDate) + 1);
+                        daysLeft = Math.max(0, differenceInDays(endDate, today));
+                      } else if (isPast) {
+                        daysElapsed = request.total_days;
+                        daysLeft = 0;
+                      } else if (isUpcoming) {
+                        daysElapsed = 0;
+                        daysLeft = request.total_days;
+                      }
+                    }
+
+                    // Find balance remaining for this employee
+                    const empBalance = employeeBalances.find(e => e.user_id === request.requester_id);
+                    const leaveTypeBal = empBalance?.balances?.find((b: any) => b.leave_type === request.leave_type);
+                    const balanceRemaining = leaveTypeBal ? leaveTypeBal.remaining : '—';
+
+                    const statusConfig = STATUS_CONFIG[request.status as LeaveStatus];
+                    const StatusIcon = statusConfig.icon;
+                    const canAct = request.status === 'pending' || request.status === 'manager_approved';
+
+                    return (
+                      <tr 
+                        key={request.id} 
+                        className={cn(
+                          "border-b hover:bg-muted/30 transition-colors cursor-pointer",
+                          isActive && "bg-amber-50/40 dark:bg-amber-900/10",
+                        )}
+                        onClick={() => onView(request.id)}
+                      >
+                        <td className="sticky left-0 z-10 bg-background px-3 py-2 text-muted-foreground">{idx + 1}</td>
+                        <td className="sticky left-8 z-10 bg-background px-3 py-2">
+                          <div className="font-medium truncate max-w-[160px]">{request.requester?.full_name || 'Unknown'}</div>
+                          <div className="text-[10px] text-muted-foreground">{request.department?.name || ''}</div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5">
+                            <div className={cn("h-2 w-2 rounded-full shrink-0", LEAVE_TYPE_COLORS[request.leave_type as LeaveType])} />
+                            <span className="truncate">{LEAVE_TYPE_LABELS[request.leave_type as LeaveType]}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2 text-center whitespace-nowrap">{format(startDate, 'dd-MMM-yy')}</td>
+                        <td className="px-3 py-2 text-center whitespace-nowrap">{format(endDate, 'dd-MMM-yy')}</td>
+                        <td className="px-3 py-2 text-center font-bold bg-blue-50/30 dark:bg-blue-900/5">{request.total_days}</td>
+                        <td className={cn(
+                          "px-3 py-2 text-center font-medium bg-amber-50/30 dark:bg-amber-900/5",
+                          isActive && "text-amber-700 font-bold"
+                        )}>
+                          {request.status === 'approved' ? (
+                            <span>{daysElapsed}{isActive && <span className="text-[10px] ml-0.5">▶</span>}</span>
+                          ) : '—'}
+                        </td>
+                        <td className={cn(
+                          "px-3 py-2 text-center font-medium bg-orange-50/30 dark:bg-orange-900/5",
+                          isActive && daysLeft <= 2 && "text-red-600 font-bold"
+                        )}>
+                          {request.status === 'approved' ? daysLeft : '—'}
+                        </td>
+                        <td className={cn(
+                          "px-3 py-2 text-center font-bold bg-emerald-50/30 dark:bg-emerald-900/5",
+                          typeof balanceRemaining === 'number' && balanceRemaining <= 5 && "text-red-600",
+                          typeof balanceRemaining === 'number' && balanceRemaining > 5 && "text-emerald-600"
+                        )}>
+                          {balanceRemaining}
+                        </td>
+                        <td className="px-3 py-2 text-center">
+                          <Badge className={cn("text-[10px] px-2", statusConfig.bgColor, statusConfig.color)}>
+                            <StatusIcon className="h-3 w-3 mr-0.5" />
+                            {LEAVE_STATUS_LABELS[request.status as LeaveStatus]}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center justify-center gap-1">
+                            {canAct && (
+                              <>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-emerald-600 hover:bg-emerald-50" onClick={() => onApprove(request.id, request.status)}>
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-red-600 hover:bg-red-50" onClick={() => onReject(request.id)}>
+                                  <XCircle className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
+                            )}
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onView(request.id)}>
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -674,35 +766,13 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
 
       {/* Content */}
       {activeView === 'requests' ? (
-        <div className="space-y-3">
-          {filteredRequests.length === 0 ? (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <CalendarIcon className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-semibold mb-1">No leave requests found</h3>
-                <p className="text-muted-foreground">
-                  {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
-                    ? 'Try adjusting your filters'
-                    : 'No leave requests have been submitted yet'}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <ScrollArea className="h-[600px]">
-              <div className="space-y-3 pr-4">
-                {filteredRequests.map(request => (
-                  <LeaveRequestItem
-                    key={request.id}
-                    request={request}
-                    onView={() => setSelectedRequest(request.id)}
-                    onApprove={() => handleApprove(request.id, request.status)}
-                    onReject={() => handleReject(request.id)}
-                  />
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </div>
+        <LeaveRequestsTable
+          requests={filteredRequests}
+          onView={(id) => setSelectedRequest(id)}
+          onApprove={handleApprove}
+          onReject={handleReject}
+          employeeBalances={employeeBalances}
+        />
       ) : activeView === 'calendar' ? (
         <LeaveCalendarView
           leaveRequests={leaveRequests}
