@@ -121,60 +121,47 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
         ))}
       </div>
 
-      {/* Quick Access Cards */}
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Workbench */}
-        <Card className="shadow-sm rounded-xl border">
-          <CardHeader className="pb-2 pt-4 px-5">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Workbench</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <div className="space-y-1">
-              {WORKBENCH_ITEMS.map(item => (
-                <button
-                  key={item.label}
-                  onClick={() => onNavigate(item.tab)}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/60 transition-colors group text-left"
-                >
-                  <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
-                    <item.icon className={cn("h-4.5 w-4.5", item.color)} />
-                  </div>
-                  <span className="text-sm font-medium flex-1">{item.label}</span>
-                  {item.badge && (
-                    <Badge className="bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
-                      {item.badge}
-                    </Badge>
-                  )}
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Workbench */}
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">Workbench</h3>
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          {WORKBENCH_ITEMS.map(item => (
+            <button
+              key={item.label}
+              onClick={() => onNavigate(item.tab)}
+              className="relative flex flex-col items-center gap-3 p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group text-center"
+            >
+              {item.badge && (
+                <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
+                  {item.badge}
+                </Badge>
+              )}
+              <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", item.bg)}>
+                <item.icon className={cn("h-5 w-5", item.color)} />
+              </div>
+              <span className="text-sm font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* General */}
-        <Card className="shadow-sm rounded-xl border">
-          <CardHeader className="pb-2 pt-4 px-5">
-            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">General</CardTitle>
-          </CardHeader>
-          <CardContent className="px-3 pb-3">
-            <div className="space-y-1">
-              {GENERAL_ITEMS.map(item => (
-                <button
-                  key={item.label}
-                  onClick={() => onNavigate(item.tab)}
-                  className="w-full flex items-center gap-3 px-3 py-3 rounded-lg hover:bg-muted/60 transition-colors group text-left"
-                >
-                  <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0", item.bg)}>
-                    <item.icon className={cn("h-4.5 w-4.5", item.color)} />
-                  </div>
-                  <span className="text-sm font-medium flex-1">{item.label}</span>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* General */}
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">General</h3>
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+          {GENERAL_ITEMS.map(item => (
+            <button
+              key={item.label}
+              onClick={() => onNavigate(item.tab)}
+              className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group text-center"
+            >
+              <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", item.bg)}>
+                <item.icon className={cn("h-5 w-5", item.color)} />
+              </div>
+              <span className="text-sm font-medium">{item.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Company Overview */}
