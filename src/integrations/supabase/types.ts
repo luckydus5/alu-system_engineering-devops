@@ -762,6 +762,9 @@ export type Database = {
           department_id: string
           employee_id: string | null
           end_date: string
+          gm_action_at: string | null
+          gm_comment: string | null
+          gm_reviewer_id: string | null
           hr_action_at: string | null
           hr_comment: string | null
           hr_reviewer_id: string | null
@@ -784,6 +787,9 @@ export type Database = {
           department_id: string
           employee_id?: string | null
           end_date: string
+          gm_action_at?: string | null
+          gm_comment?: string | null
+          gm_reviewer_id?: string | null
           hr_action_at?: string | null
           hr_comment?: string | null
           hr_reviewer_id?: string | null
@@ -806,6 +812,9 @@ export type Database = {
           department_id?: string
           employee_id?: string | null
           end_date?: string
+          gm_action_at?: string | null
+          gm_comment?: string | null
+          gm_reviewer_id?: string | null
           hr_action_at?: string | null
           hr_comment?: string | null
           hr_reviewer_id?: string | null
@@ -1878,6 +1887,7 @@ export type Database = {
         | "approved"
         | "rejected"
         | "cancelled"
+        | "gm_pending"
       leave_type:
         | "annual"
         | "sick"
@@ -2055,6 +2065,7 @@ export const Constants = {
         "approved",
         "rejected",
         "cancelled",
+        "gm_pending",
       ],
       leave_type: [
         "annual",

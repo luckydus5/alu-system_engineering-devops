@@ -36,6 +36,7 @@ interface LeaveManagementTabProps {
 const STATUS_CONFIG: Record<LeaveStatus, { color: string; bgColor: string; icon: React.ElementType }> = {
   pending: { color: 'text-amber-600', bgColor: 'bg-amber-500/10', icon: Clock },
   manager_approved: { color: 'text-blue-600', bgColor: 'bg-blue-500/10', icon: AlertCircle },
+  gm_pending: { color: 'text-indigo-600', bgColor: 'bg-indigo-500/10', icon: ArrowUpRight },
   approved: { color: 'text-emerald-600', bgColor: 'bg-emerald-500/10', icon: CheckCircle2 },
   rejected: { color: 'text-red-600', bgColor: 'bg-red-500/10', icon: XCircle },
   cancelled: { color: 'text-slate-600', bgColor: 'bg-slate-500/10', icon: XCircle },
@@ -226,7 +227,7 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
 
                     const statusConfig = STATUS_CONFIG[request.status as LeaveStatus];
                     const StatusIcon = statusConfig.icon;
-                    const canAct = request.status === 'pending' || request.status === 'manager_approved';
+                    const canAct = request.status === 'pending' || request.status === 'manager_approved' || request.status === 'gm_pending';
 
                     return (
                       <tr 
@@ -701,12 +702,20 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   const stats = useMemo(() => ({
     pending: leaveRequests.filter(r => r.status === 'pending').length,
     managerApproved: leaveRequests.filter(r => r.status === 'manager_approved').length,
+    gmPending: leaveRequests.filter(r => r.status === 'gm_pending').length,
     approved: leaveRequests.filter(r => r.status === 'approved').length,
     rejected: leaveRequests.filter(r => r.status === 'rejected').length,
   }), [leaveRequests]);
 
   const handleApprove = async (id: string, currentStatus: LeaveStatus) => {
-    const newStatus: LeaveStatus = currentStatus === 'pending' ? 'manager_approved' : 'approved';
+    let newStatus: LeaveStatus;
+    if (currentStatus === 'pending') {
+      newStatus = 'manager_approved';
+    } else if (currentStatus === 'manager_approved') {
+      newStatus = 'gm_pending';
+    } else {
+      newStatus = 'approved';
+    }
     await updateRequestStatus.mutateAsync({ id, status: newStatus, isManager: currentStatus === 'pending' });
   };
 
@@ -717,7 +726,7 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   return (
     <div className="space-y-6">
       {/* Header Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card className={cn("cursor-pointer transition-all hover:shadow-md", statusFilter === 'pending' && "ring-2 ring-amber-500")} onClick={() => setStatusFilter('pending')}>
           <CardContent className="p-4 flex items-center gap-4">
             <div className="h-12 w-12 rounded-xl bg-amber-500/10 flex items-center justify-center">
@@ -737,7 +746,19 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
             </div>
             <div>
               <p className="text-2xl font-bold">{stats.managerApproved}</p>
-              <p className="text-sm text-muted-foreground">Awaiting HR</p>
+              <p className="text-sm text-muted-foreground">Mgr Approved</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={cn("cursor-pointer transition-all hover:shadow-md", statusFilter === 'gm_pending' && "ring-2 ring-indigo-500")} onClick={() => setStatusFilter('gm_pending')}>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+              <ArrowUpRight className="h-6 w-6 text-indigo-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{stats.gmPending}</p>
+              <p className="text-sm text-muted-foreground">Awaiting GM</p>
             </div>
           </CardContent>
         </Card>

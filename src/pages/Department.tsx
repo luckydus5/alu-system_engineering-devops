@@ -10,6 +10,7 @@ import { OperationsDashboard } from '@/components/operations/OperationsDashboard
 import { OfficeDashboard } from '@/components/office/OfficeDashboard';
 import { ITDashboard } from '@/components/it/ITDashboard';
 import { HRCommandCenter } from '@/components/hr/HRCommandCenter';
+import { EmployeeLeaveDashboard } from '@/components/hr/EmployeeLeaveDashboard';
 import { ShieldAlert } from 'lucide-react';
 
 export default function Department() {
@@ -119,10 +120,12 @@ export default function Department() {
   }
 
   // Default: Office Dashboard for office-based departments (FIN, SAF, ENG, etc.)
-  // These departments track meetings, tasks, announcements, and office activities
   return (
     <DashboardLayout title={department.name}>
       <OfficeDashboard department={department} canManage={canManage} />
+      <div className="mt-6">
+        <EmployeeLeaveDashboard departmentId={department.id} />
+      </div>
     </DashboardLayout>
   );
 }
