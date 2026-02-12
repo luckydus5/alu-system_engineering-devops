@@ -41,6 +41,9 @@ import {
   TrendingUp,
   ArrowUpCircle,
   ArrowDownCircle,
+  ChevronLeft,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import {
   Table,
@@ -156,6 +159,8 @@ export default function SuperAdmin() {
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
   const [activeTool, setActiveTool] = useState('audit');
+  const [currentPage, setCurrentPage] = useState(1);
+  const LOGS_PER_PAGE = 50;
   const [autoReportEnabled, setAutoReportEnabled] = useState(true);
   const [nextReportIn, setNextReportIn] = useState(AUTO_REPORT_INTERVAL);
   const [generatingReport, setGeneratingReport] = useState(false);
@@ -341,6 +346,9 @@ export default function SuperAdmin() {
       supabase.removeChannel(channel);
     };
   }, [highestRole, fetchData]);
+
+  // Reset page when filters change
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, tableFilter, actionFilter, departmentFilter]);
 
   if (!roleLoading && highestRole !== 'super_admin') {
     return (
@@ -940,78 +948,117 @@ export default function SuperAdmin() {
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <div className="overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-[50px]">#</TableHead>
-                      <TableHead className="w-[120px]">Department</TableHead>
-                      <TableHead>User</TableHead>
-                      <TableHead className="w-[100px]">Action</TableHead>
-                      <TableHead className="min-w-[200px]">Action Details</TableHead>
-                      <TableHead>Table</TableHead>
-                      <TableHead className="w-[150px]">Timestamp</TableHead>
-                      <TableHead className="w-[60px] text-center">View</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredLogs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
-                          <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                          No audit logs found
-                        </TableCell>
+              <>
+                <div className="overflow-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50">
+                        <TableHead className="w-[50px]">#</TableHead>
+                        <TableHead className="w-[120px]">Department</TableHead>
+                        <TableHead>User</TableHead>
+                        <TableHead className="w-[100px]">Action</TableHead>
+                        <TableHead className="min-w-[200px]">Action Details</TableHead>
+                        <TableHead>Table</TableHead>
+                        <TableHead className="w-[150px]">Timestamp</TableHead>
+                        <TableHead className="w-[60px] text-center">View</TableHead>
                       </TableRow>
-                    ) : (
-                      filteredLogs.map((log, index) => (
-                        <TableRow 
-                          key={log.id}
-                          className="cursor-pointer hover:bg-muted/30 transition-colors"
-                          onClick={() => setSelectedLog(log)}
-                        >
-                          <TableCell className="font-mono text-xs text-muted-foreground">{index + 1}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-normal text-xs">
-                              {getDepartmentName(log.department_id)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
-                                <User className="w-3.5 h-3.5 text-muted-foreground" />
-                              </div>
-                              <div>
-                                <div className="font-medium text-sm leading-tight">{log.user_name || 'Unknown'}</div>
-                                <div className="text-xs text-muted-foreground">{log.user_email?.split('@')[0] || 'unknown'}</div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={cn('text-xs gap-1', actionColors[log.action])}>
-                              {actionIcons[log.action]}
-                              {log.action}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <span className="text-sm text-muted-foreground">{getActionDetails(log)}</span>
-                          </TableCell>
-                          <TableCell>
-                            <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{log.table_name}</code>
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">
-                            {format(new Date(log.created_at), 'MMM dd, HH:mm')}
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                              <Eye className="w-3.5 h-3.5" />
-                            </Button>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredLogs.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center text-muted-foreground py-12">
+                            <Database className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            No audit logs found
                           </TableCell>
                         </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+                      ) : (
+                        (() => {
+                          const totalPages = Math.ceil(filteredLogs.length / LOGS_PER_PAGE);
+                          const safePage = Math.min(currentPage, totalPages);
+                          const startIdx = (safePage - 1) * LOGS_PER_PAGE;
+                          const paginatedLogs = filteredLogs.slice(startIdx, startIdx + LOGS_PER_PAGE);
+                          return paginatedLogs.map((log, index) => (
+                            <TableRow 
+                              key={log.id}
+                              className="cursor-pointer hover:bg-muted/30 transition-colors"
+                              onClick={() => setSelectedLog(log)}
+                            >
+                              <TableCell className="font-mono text-xs text-muted-foreground">{startIdx + index + 1}</TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className="font-normal text-xs">
+                                  {getDepartmentName(log.department_id)}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center">
+                                    <User className="w-3.5 h-3.5 text-muted-foreground" />
+                                  </div>
+                                  <div>
+                                    <div className="font-medium text-sm leading-tight">{log.user_name || 'Unknown'}</div>
+                                    <div className="text-xs text-muted-foreground">{log.user_email?.split('@')[0] || 'unknown'}</div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={cn('text-xs gap-1', actionColors[log.action])}>
+                                  {actionIcons[log.action]}
+                                  {log.action}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <span className="text-sm text-muted-foreground">{getActionDetails(log)}</span>
+                              </TableCell>
+                              <TableCell>
+                                <code className="text-xs bg-muted px-2 py-0.5 rounded font-mono">{log.table_name}</code>
+                              </TableCell>
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {format(new Date(log.created_at), 'MMM dd, HH:mm')}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                  <Eye className="w-3.5 h-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ));
+                        })()
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                {/* Pagination Controls */}
+                {filteredLogs.length > LOGS_PER_PAGE && (() => {
+                  const totalPages = Math.ceil(filteredLogs.length / LOGS_PER_PAGE);
+                  const safePage = Math.min(currentPage, totalPages);
+                  const startIdx = (safePage - 1) * LOGS_PER_PAGE;
+                  return (
+                    <div className="flex items-center justify-between pt-3 border-t">
+                      <span className="text-sm text-muted-foreground">
+                        Showing {startIdx + 1}–{Math.min(startIdx + LOGS_PER_PAGE, filteredLogs.length)} of {filteredLogs.length}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={safePage <= 1} onClick={() => setCurrentPage(1)}>
+                          <ChevronsLeft className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={safePage <= 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>
+                          <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <span className="px-3 text-sm font-medium">
+                          Page {safePage} of {totalPages}
+                        </span>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={safePage >= totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled={safePage >= totalPages} onClick={() => setCurrentPage(totalPages)}>
+                          <ChevronsRight className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
             )}
           </div>
         );
