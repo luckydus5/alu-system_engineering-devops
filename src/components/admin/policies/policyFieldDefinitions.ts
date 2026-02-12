@@ -43,7 +43,9 @@ export const ATTENDANCE_FIELDS: PolicyField[] = [
 ];
 
 export const LEAVE_FIELDS: PolicyField[] = [
-  { key: 'default_annual_days', label: 'Annual Leave', type: 'number', unit: 'days', icon: CalendarDays, description: 'Default annual leave per year' },
+  { key: 'default_annual_days', label: 'Annual Leave Allowance', type: 'number', unit: 'days', icon: CalendarDays, description: 'Default annual leave days per year (e.g. 18)' },
+  { key: 'monthly_accrual_days', label: 'Monthly Accrual', type: 'number', unit: 'days/month', icon: TrendingUp, description: 'Days accrued per month per employee (e.g. 1.5). Max = Annual Leave Allowance' },
+  { key: 'accrual_cap_to_annual', label: 'Cap Accrual to Allowance', type: 'boolean', icon: AlertTriangle, description: 'Accrued days never exceed annual allowance unless HR overrides' },
   { key: 'default_sick_days', label: 'Sick Leave', type: 'number', unit: 'days', icon: Heart, description: 'Default sick days per year' },
   { key: 'default_personal_days', label: 'Personal Leave', type: 'number', unit: 'days', icon: Briefcase, description: 'Default personal days per year' },
   { key: 'default_maternity_days', label: 'Maternity Leave', type: 'number', unit: 'days', icon: Baby, description: 'Maternity leave days' },
