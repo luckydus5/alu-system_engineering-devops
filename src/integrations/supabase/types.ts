@@ -725,6 +725,36 @@ export type Database = {
         }
         Relationships: []
       }
+      leave_managers: {
+        Row: {
+          can_edit_balances: boolean
+          can_file_for_others: boolean
+          created_at: string
+          granted_by: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_edit_balances?: boolean
+          can_file_for_others?: boolean
+          created_at?: string
+          granted_by: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_edit_balances?: boolean
+          can_file_for_others?: boolean
+          created_at?: string
+          granted_by?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       leave_requests: {
         Row: {
           company_id: string | null

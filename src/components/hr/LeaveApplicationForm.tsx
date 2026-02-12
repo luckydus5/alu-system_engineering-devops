@@ -7,16 +7,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Loader2, FileText, User, Printer, Palmtree, Thermometer, Baby, Heart, Clock, BookOpen } from 'lucide-react';
+import { CalendarIcon, Loader2, FileText, User, Printer, Palmtree, Thermometer, Baby, Heart, Clock, BookOpen, Users } from 'lucide-react';
 import { format, differenceInBusinessDays, addDays, isWeekend } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useLeaveRequests, LeaveType, LEAVE_TYPE_LABELS, useLeaveBalances } from '@/hooks/useLeaveRequests';
+import { useCurrentUserLeavePermissions } from '@/hooks/useLeaveManagers';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 
 interface LeaveApplicationFormProps {
   open: boolean;
@@ -45,6 +46,14 @@ interface EmployeeInfo {
   department: string;
 }
 
+interface EmployeeOption {
+  id: string;
+  full_name: string;
+  email: string;
+  department_id: string | null;
+  department_name: string | null;
+}
+
 const LEAVE_TYPE_CONFIG: { value: LeaveType; label: string; icon: React.ElementType; color: string }[] = [
   { value: 'annual', label: 'Annual Leave', icon: Palmtree, color: 'text-emerald-600' },
   { value: 'sick', label: 'Sick Leave', icon: Thermometer, color: 'text-red-500' },
@@ -63,8 +72,21 @@ export function LeaveApplicationForm({
   mode = 'create' 
 }: LeaveApplicationFormProps) {
   const { user } = useAuth();
+  const { hasRole, highestRole } = useUserRole();
   const { createRequest } = useLeaveRequests();
-  const { balances } = useLeaveBalances();
+  const { canFileForOthers } = useCurrentUserLeavePermissions();
+  
+  const isHRUser = useMemo(() => {
+    return hasRole('admin') || hasRole('super_admin') || highestRole === 'admin' || highestRole === 'super_admin';
+  }, [hasRole, highestRole]);
+
+  // Can file for others: HR users, super admins, or explicitly granted users
+  const canFileOnBehalf = isHRUser || canFileForOthers;
+
+  const [filingForOther, setFilingForOther] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
+  const [employeeSearch, setEmployeeSearch] = useState('');
   
   const [employeeInfo, setEmployeeInfo] = useState<EmployeeInfo>({
     firstName: '',
@@ -79,6 +101,10 @@ export function LeaveApplicationForm({
   const [reason, setReason] = useState('');
   const [isUrgent, setIsUrgent] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Fetch balances for the target user (self or selected employee)
+  const targetUserId = filingForOther && selectedEmployee ? selectedEmployee : user?.id;
+  const { balances } = useLeaveBalances(targetUserId);
 
   // Calculate working days
   const totalDays = useMemo(() => {
@@ -96,18 +122,51 @@ export function LeaveApplicationForm({
         remaining: bal.total_days - bal.used_days,
       };
     }
-    return { total: 21, used: 0, remaining: 21 };
+    return { total: 18, used: 0, remaining: 18 };
   }, [balances, selectedLeaveType]);
 
-  // Load current user info
+  // Fetch employees list when filing for others
+  useEffect(() => {
+    async function loadEmployees() {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, department_id')
+        .order('full_name');
+
+      if (profiles) {
+        // Fetch department names
+        const deptIds = [...new Set(profiles.filter(p => p.department_id).map(p => p.department_id!))];
+        const { data: depts } = await supabase
+          .from('departments')
+          .select('id, name')
+          .in('id', deptIds);
+        const deptMap = new Map(depts?.map(d => [d.id, d.name]) || []);
+
+        setEmployees(profiles.map(p => ({
+          id: p.id,
+          full_name: p.full_name || p.email,
+          email: p.email,
+          department_id: p.department_id,
+          department_name: p.department_id ? deptMap.get(p.department_id) || null : null,
+        })));
+      }
+    }
+
+    if (open && canFileOnBehalf) {
+      loadEmployees();
+    }
+  }, [open, canFileOnBehalf]);
+
+  // Load current user info or selected employee info
   useEffect(() => {
     async function loadUserInfo() {
-      if (!user) return;
+      const userId = filingForOther && selectedEmployee ? selectedEmployee : user?.id;
+      if (!userId) return;
       
       const { data: profile } = await supabase
         .from('profiles')
         .select('full_name, email, phone')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
       
       if (profile) {
@@ -124,7 +183,7 @@ export function LeaveApplicationForm({
       const { data: userRole } = await supabase
         .from('user_roles')
         .select('role, department:departments(name)')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .single();
       
       if (userRole) {
@@ -139,22 +198,33 @@ export function LeaveApplicationForm({
     if (open && mode === 'create') {
       loadUserInfo();
     }
-  }, [open, user, mode]);
+  }, [open, user, mode, filingForOther, selectedEmployee]);
 
   const handleSubmit = async () => {
     if (!lastDateOfWork || !returnDate) return;
     
     setIsSubmitting(true);
     try {
-      await createRequest.mutateAsync({
+      const requestData: any = {
         leave_type: selectedLeaveType,
         start_date: format(lastDateOfWork, 'yyyy-MM-dd'),
         end_date: format(returnDate, 'yyyy-MM-dd'),
         total_days: totalDays,
         reason: isUrgent ? `URGENT: ${reason}` : reason || undefined,
         department_id: departmentId,
-      });
+      };
 
+      // If filing for another employee, set the employee_id
+      if (filingForOther && selectedEmployee) {
+        requestData.employee_id = selectedEmployee;
+        // Find the employee's department
+        const emp = employees.find(e => e.id === selectedEmployee);
+        if (emp?.department_id) {
+          requestData.department_id = emp.department_id;
+        }
+      }
+
+      await createRequest.mutateAsync(requestData);
       onOpenChange(false);
       resetForm();
     } catch (error) {
@@ -170,7 +240,19 @@ export function LeaveApplicationForm({
     setReason('');
     setIsUrgent(false);
     setSelectedLeaveType('annual');
+    setFilingForOther(false);
+    setSelectedEmployee('');
+    setEmployeeSearch('');
   };
+
+  const filteredEmployees = useMemo(() => {
+    if (!employeeSearch) return employees.slice(0, 20);
+    const search = employeeSearch.toLowerCase();
+    return employees.filter(e => 
+      e.full_name.toLowerCase().includes(search) || 
+      e.email.toLowerCase().includes(search)
+    ).slice(0, 20);
+  }, [employees, employeeSearch]);
 
   const handlePrint = () => {
     window.print();
@@ -191,7 +273,7 @@ export function LeaveApplicationForm({
                   Leave Application
                 </DialogTitle>
                 <p className="text-white/70 text-xs mt-0.5">
-                  Fill in the details to submit your request
+                  {filingForOther ? 'Filing on behalf of an employee' : 'Fill in the details to submit your request'}
                 </p>
               </div>
             </div>
@@ -206,6 +288,73 @@ export function LeaveApplicationForm({
 
         <ScrollArea className="max-h-[calc(95vh-180px)]">
           <div className="p-5 space-y-5">
+            {/* File on Behalf Toggle */}
+            {canFileOnBehalf && mode === 'create' && (
+              <div className="p-3 rounded-lg border bg-muted/30 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="file-for-other"
+                    checked={filingForOther}
+                    onCheckedChange={(checked) => {
+                      setFilingForOther(checked as boolean);
+                      if (!checked) {
+                        setSelectedEmployee('');
+                        setEmployeeSearch('');
+                      }
+                    }}
+                  />
+                  <Label htmlFor="file-for-other" className="text-sm font-medium cursor-pointer flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-primary" />
+                    File leave on behalf of another employee
+                  </Label>
+                </div>
+
+                {filingForOther && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Select Employee</Label>
+                    <Input
+                      placeholder="Search employee by name or email..."
+                      value={employeeSearch}
+                      onChange={(e) => setEmployeeSearch(e.target.value)}
+                      className="h-9 text-sm"
+                    />
+                    {(employeeSearch || !selectedEmployee) && (
+                      <div className="max-h-[150px] overflow-y-auto border rounded-lg divide-y">
+                        {filteredEmployees.map(emp => (
+                          <button
+                            key={emp.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedEmployee(emp.id);
+                              setEmployeeSearch('');
+                            }}
+                            className={cn(
+                              "w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors text-sm",
+                              selectedEmployee === emp.id && "bg-primary/10"
+                            )}
+                          >
+                            <div className="font-medium">{emp.full_name}</div>
+                            <div className="text-xs text-muted-foreground">{emp.email} {emp.department_name && `• ${emp.department_name}`}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {selectedEmployee && !employeeSearch && (
+                      <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20">
+                        <User className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-medium">
+                          {employees.find(e => e.id === selectedEmployee)?.full_name}
+                        </span>
+                        <Badge variant="secondary" className="ml-auto text-[10px]">
+                          {employees.find(e => e.id === selectedEmployee)?.department_name || 'No dept'}
+                        </Badge>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Employee Details */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
@@ -436,10 +585,10 @@ export function LeaveApplicationForm({
             <Button
               size="sm"
               onClick={handleSubmit}
-              disabled={!lastDateOfWork || !returnDate || isSubmitting}
+              disabled={!lastDateOfWork || !returnDate || isSubmitting || (filingForOther && !selectedEmployee)}
             >
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Submit Leave Request
+              {filingForOther ? 'Submit on Behalf' : 'Submit Leave Request'}
             </Button>
           )}
         </div>
