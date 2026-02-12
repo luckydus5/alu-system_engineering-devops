@@ -748,6 +748,47 @@ export type Database = {
           },
         ]
       }
+      leave_approvers: {
+        Row: {
+          approver_role: Database["public"]["Enums"]["leave_approver_role"]
+          company_id: string | null
+          created_at: string
+          granted_by: string
+          id: string
+          is_active: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          approver_role: Database["public"]["Enums"]["leave_approver_role"]
+          company_id?: string | null
+          created_at?: string
+          granted_by: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          approver_role?: Database["public"]["Enums"]["leave_approver_role"]
+          company_id?: string | null
+          created_at?: string
+          granted_by?: string
+          id?: string
+          is_active?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leave_approvers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leave_balances: {
         Row: {
           created_at: string
@@ -1938,6 +1979,11 @@ export type Database = {
         | "waiting_parts"
         | "decommissioned"
       fleet_status: "operational" | "under_maintenance" | "out_of_service"
+      leave_approver_role:
+        | "peat_manager"
+        | "hr_reviewer"
+        | "gm_approver"
+        | "om_approver"
       leave_status:
         | "pending"
         | "manager_approved"
@@ -2116,6 +2162,12 @@ export const Constants = {
         "decommissioned",
       ],
       fleet_status: ["operational", "under_maintenance", "out_of_service"],
+      leave_approver_role: [
+        "peat_manager",
+        "hr_reviewer",
+        "gm_approver",
+        "om_approver",
+      ],
       leave_status: [
         "pending",
         "manager_approved",

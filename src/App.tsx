@@ -21,7 +21,8 @@ import Notifications from "./pages/Notifications";
 import InstallApp from "./pages/InstallApp";
 import ProfileSettings from "./pages/ProfileSettings";
 import NotFound from "./pages/NotFound";
-import LeaveAdmin from "./pages/LeaveAdmin";
+import PeatAdmin from "./pages/PeatAdmin";
+import LeaveApproval from "./pages/LeaveApproval";
 
 
 const queryClient = new QueryClient({
@@ -58,7 +59,8 @@ const App = () => (
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/install" element={<InstallApp />} />
               <Route path="/settings" element={<ProfileSettings />} />
-              <Route path="/leave-admin" element={<LeaveAdmin />} />
+              <Route path="/peat-admin" element={<PeatAdmin />} />
+              <Route path="/leave-approval" element={<LeaveApproval />} />
               {/* Catch-all route for 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
   CalendarDays, Building2, Users, FileText, Plus, 
-  ShieldAlert, Loader2, ArrowRight
+  ShieldAlert, Loader2, ArrowRight, Leaf
 } from 'lucide-react';
 import { useCurrentUserLeavePermissions } from '@/hooks/useLeaveManagers';
 import { useUserRole } from '@/hooks/useUserRole';
@@ -28,7 +28,7 @@ const STATUS_COLORS: Record<LeaveStatus, string> = {
   cancelled: 'text-muted-foreground bg-muted',
 };
 
-export default function LeaveAdmin() {
+export default function PeatAdmin() {
   const navigate = useNavigate();
   const { canFileForOthers, isLoading: permLoading } = useCurrentUserLeavePermissions();
   const { roles, profile, grantedDepartmentIds, loading: roleLoading } = useUserRole();
@@ -52,7 +52,7 @@ export default function LeaveAdmin() {
 
   if (permLoading || roleLoading) {
     return (
-      <DashboardLayout title="Leave Admin">
+      <DashboardLayout title="Peat Admin">
         <div className="flex items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -68,7 +68,7 @@ export default function LeaveAdmin() {
             <ShieldAlert className="h-12 w-12 mx-auto text-destructive mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Access Denied</h3>
             <p className="text-muted-foreground mb-6">
-              You don't have Leave Admin permissions.<br />
+              You don't have Peat Admin permissions.<br />
               Contact your Super Admin to get access.
             </p>
             <Button variant="outline" onClick={() => navigate('/')}>Return to Dashboard</Button>
@@ -79,22 +79,28 @@ export default function LeaveAdmin() {
   }
 
   return (
-    <DashboardLayout title="Leave Admin">
+    <DashboardLayout title="Peat Admin">
       <div className="space-y-6 animate-fade-in">
         {/* Hero Header */}
-        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-primary/10 via-primary/5 to-secondary/10 p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-emerald-600/15 via-green-500/10 to-lime-500/5 p-6">
+          <div className="absolute top-3 right-3 opacity-10">
+            <Leaf className="h-24 w-24 text-emerald-700" />
+          </div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 relative z-10">
             <div>
-              <h1 className="text-2xl font-bold text-foreground tracking-tight">
-                Leave Admin Dashboard
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                File leave applications on behalf of employees & access your departments
+              <div className="flex items-center gap-2 mb-1">
+                <Leaf className="h-6 w-6 text-emerald-600" />
+                <h1 className="text-2xl font-bold text-foreground tracking-tight">
+                  Peat Admin Dashboard
+                </h1>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Manage HQ Peat & Farmers leave applications and department access
               </p>
             </div>
             <Button 
               onClick={() => setLeaveDialogOpen(true)}
-              className="gap-2 rounded-xl shadow-md"
+              className="gap-2 rounded-xl shadow-md bg-emerald-600 hover:bg-emerald-700"
               size="lg"
             >
               <Plus className="h-5 w-5" />
@@ -107,8 +113,8 @@ export default function LeaveAdmin() {
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
           <Card className="shadow-corporate">
             <CardContent className="p-4 text-center">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                <FileText className="h-5 w-5 text-primary" />
+              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mx-auto mb-2">
+                <FileText className="h-5 w-5 text-emerald-600" />
               </div>
               <p className="text-2xl font-bold">{filedByMe.length}</p>
               <p className="text-xs text-muted-foreground">Filed for Others</p>
@@ -120,7 +126,7 @@ export default function LeaveAdmin() {
                 <CalendarDays className="h-5 w-5 text-amber-600" />
               </div>
               <p className="text-2xl font-bold">{filedByMe.filter(r => r.status === 'pending').length}</p>
-              <p className="text-xs text-muted-foreground">Pending</p>
+              <p className="text-xs text-muted-foreground">Pending Approval</p>
             </CardContent>
           </Card>
           <Card className="shadow-corporate">
@@ -153,7 +159,7 @@ export default function LeaveAdmin() {
           <Card className="shadow-corporate">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <Building2 className="h-5 w-5 text-primary" />
+                <Building2 className="h-5 w-5 text-emerald-600" />
                 Your Departments
               </CardTitle>
             </CardHeader>
@@ -169,10 +175,10 @@ export default function LeaveAdmin() {
                       to={`/department/${dept.code.toLowerCase()}`}
                       className="group"
                     >
-                      <Card className="transition-all hover:shadow-lg hover:border-primary/30 cursor-pointer">
+                      <Card className="transition-all hover:shadow-lg hover:border-emerald-500/30 cursor-pointer">
                         <CardContent className="p-4 flex items-center gap-4">
-                          <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                            <Icon className="h-6 w-6 text-primary" />
+                          <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/20 transition-colors">
+                            <Icon className="h-6 w-6 text-emerald-600" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-semibold text-sm truncate">{dept.name}</p>
@@ -196,7 +202,7 @@ export default function LeaveAdmin() {
           <Card className="shadow-corporate">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">
-                <FileText className="h-5 w-5 text-primary" />
+                <FileText className="h-5 w-5 text-emerald-600" />
                 Recently Filed for Others
               </CardTitle>
             </CardHeader>
