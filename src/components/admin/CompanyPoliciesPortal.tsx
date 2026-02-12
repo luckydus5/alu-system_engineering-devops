@@ -24,6 +24,7 @@ export function CompanyPoliciesPortal() {
   const { policies, isLoading, getPolicyValue, bulkUpdatePolicies, refetch } = useCompanyPolicies(companyId);
   const { companies } = useCompanies();
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
+  const [originalValues, setOriginalValues] = useState<Record<string, string>>({});
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export function CompanyPoliciesPortal() {
         vals[`${p.policy_category}:${p.policy_key}`] = p.policy_value;
       });
       setLocalValues(vals);
+      setOriginalValues(vals);
       setHasChanges(false);
     }
   }, [policies]);
@@ -47,10 +49,17 @@ export function CompanyPoliciesPortal() {
   };
 
   const handleSaveAll = async () => {
-    const updates = Object.entries(localValues).map(([compositeKey, value]) => {
-      const [category, key] = compositeKey.split(':');
-      return { policy_category: category, policy_key: key, policy_value: value, company_id: companyId };
-    });
+    // Only save policies that actually changed
+    const updates = Object.entries(localValues)
+      .filter(([key, value]) => originalValues[key] !== value)
+      .map(([compositeKey, value]) => {
+        const [category, key] = compositeKey.split(':');
+        return { policy_category: category, policy_key: key, policy_value: value, company_id: companyId };
+      });
+    if (updates.length === 0) {
+      setHasChanges(false);
+      return;
+    }
     await bulkUpdatePolicies.mutateAsync(updates);
     setHasChanges(false);
   };
