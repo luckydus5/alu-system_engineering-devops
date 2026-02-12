@@ -49,12 +49,12 @@ function OnboardingChecklistView({ employeeId, employeeName, checklists, onToggl
   const categories = [...new Set(checklists.map(c => c.category))];
 
   return (
-    <Card className="border rounded-2xl shadow-none">
+    <Card className="shadow-corporate rounded-xl">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9">
-              <AvatarFallback className="text-xs font-medium bg-muted text-muted-foreground">
+            <Avatar className="h-10 w-10">
+              <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
                 {employeeName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
               </AvatarFallback>
             </Avatar>
@@ -63,30 +63,33 @@ function OnboardingChecklistView({ employeeId, employeeName, checklists, onToggl
               <CardDescription className="text-xs">{completedCount}/{checklists.length} completed</CardDescription>
             </div>
           </div>
+          <Badge variant={completedCount === checklists.length ? 'default' : 'outline'} className="text-[10px]">
+            {completedCount === checklists.length ? 'Complete' : 'In Progress'}
+          </Badge>
         </div>
       </CardHeader>
       <CardContent>
-        <Progress value={checklists.length > 0 ? (completedCount / checklists.length) * 100 : 0} className="h-1 mb-5" />
+        <Progress value={checklists.length > 0 ? (completedCount / checklists.length) * 100 : 0} className="h-1.5 mb-5" />
         <div className="space-y-5">
           {categories.map(category => {
             const items = checklists.filter(c => c.category === category);
             const Icon = CATEGORY_ICONS[category] || Shield;
             return (
               <div key={category}>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Icon className="h-3 w-3" />
                   {CATEGORY_LABELS[category] || category}
                 </p>
                 <div className="space-y-0.5">
                   {items.map(item => (
                     <div
                       key={item.id}
-                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer"
+                      className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/40 transition-colors cursor-pointer"
                       onClick={() => onToggle(item.id, !item.is_completed)}
                     >
                       <Checkbox checked={item.is_completed} onCheckedChange={() => onToggle(item.id, !item.is_completed)} />
-                      <Icon className={cn("h-3.5 w-3.5", item.is_completed ? "text-emerald-600" : "text-muted-foreground")} />
-                      <span className={cn("text-xs", item.is_completed && "line-through text-muted-foreground")}>{item.task_label}</span>
-                      {item.is_completed && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 ml-auto" />}
+                      <span className={cn("text-xs flex-1", item.is_completed && "line-through text-muted-foreground")}>{item.task_label}</span>
+                      {item.is_completed && <CheckCircle2 className="h-3.5 w-3.5 text-success" />}
                     </div>
                   ))}
                 </div>
@@ -107,7 +110,6 @@ export function OnboardingTab({ departmentId }: OnboardingTabProps) {
 
   const loading = employeesLoading || checklistsLoading;
 
-  // Recent hires = hired in last 90 days
   const recentHires = useMemo(() => {
     const now = new Date();
     return employees.filter(e => {
@@ -116,7 +118,6 @@ export function OnboardingTab({ departmentId }: OnboardingTabProps) {
     }).sort((a, b) => new Date(b.hire_date).getTime() - new Date(a.hire_date).getTime());
   }, [employees]);
 
-  // Employees with onboarding checklists
   const employeesWithChecklists = useMemo(() => {
     const ids = new Set(checklists.map(c => c.employee_id));
     return [...ids];
@@ -162,28 +163,28 @@ export function OnboardingTab({ departmentId }: OnboardingTabProps) {
     return (
       <div className="space-y-4">
         <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
-        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Stats */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
         {[
-          { label: 'Recent Hires', value: recentHires.length, icon: UserPlus },
-          { label: 'In Progress', value: inProgress, icon: Clock },
-          { label: 'Pending', value: pendingCount, icon: Calendar },
-          { label: 'Completed', value: completedCount, icon: CheckCircle2 },
-        ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="p-5 rounded-2xl bg-card border">
+          { label: 'Recent Hires', value: recentHires.length, icon: UserPlus, variant: 'kpi-blue' },
+          { label: 'In Progress', value: inProgress, icon: Clock, variant: 'kpi-gold' },
+          { label: 'Pending', value: pendingCount, icon: Calendar, variant: 'kpi-warning' },
+          { label: 'Completed', value: completedCount, icon: CheckCircle2, variant: 'kpi-success' },
+        ].map(({ label, value, icon: Icon, variant }) => (
+          <div key={label} className={cn("p-5 rounded-xl shadow-corporate", variant)}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground font-medium">{label}</p>
-                <p className="text-2xl font-semibold tracking-tight mt-1">{value}</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+                <p className="text-2xl font-bold tracking-tight mt-1">{value}</p>
               </div>
               <Icon className="h-5 w-5 text-muted-foreground/40" />
             </div>
@@ -193,13 +194,13 @@ export function OnboardingTab({ departmentId }: OnboardingTabProps) {
 
       {/* Recent Hires */}
       <div>
-        <h3 className="text-base font-semibold mb-4">Recent Hires (Last 90 Days)</h3>
+        <h3 className="text-base font-bold mb-4">Recent Hires (Last 90 Days)</h3>
         {recentHires.length === 0 ? (
-          <div className="text-center py-16 rounded-2xl bg-card border">
-            <Rocket className="h-10 w-10 mx-auto text-muted-foreground/20 mb-4" />
-            <h3 className="text-lg font-semibold">No Recent Hires</h3>
+          <div className="text-center py-16 rounded-xl bg-card border shadow-corporate">
+            <Rocket className="h-12 w-12 mx-auto text-secondary/30 mb-4" />
+            <h3 className="text-lg font-bold">No Recent Hires</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              Employees hired in the last 90 days will appear here. Add employees in the People tab.
+              Employees hired in the last 90 days will appear here.
             </p>
           </div>
         ) : (
@@ -213,49 +214,49 @@ export function OnboardingTab({ departmentId }: OnboardingTabProps) {
               const progress = tasks.length > 0 ? Math.round((tasks.filter(t => t.is_completed).length / tasks.length) * 100) : 0;
 
               return (
-                <div key={hire.id} className="p-5 rounded-2xl bg-card border space-y-3">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10">
-                      <AvatarFallback className="text-xs font-medium bg-muted text-muted-foreground">
-                        {hire.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm">{hire.full_name}</p>
-                      <p className="text-xs text-muted-foreground">{hire.position_name || hire.employment_type}</p>
+                <Card key={hire.id} className="shadow-corporate rounded-xl">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-10 w-10">
+                        <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                          {hire.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{hire.full_name}</p>
+                        <p className="text-xs text-muted-foreground">{hire.position_name || hire.employment_type}</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{hire.department_name || '—'} · {hire.company_name || '—'}</span>
-                    <Badge variant="outline" className="text-[10px]">
-                      {hire.employment_status}
-                    </Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-muted-foreground">
-                        {isStarted ? `Started ${daysSinceHire}d ago` : `Starts ${format(new Date(hire.hire_date), 'MMM d')}`}
-                      </span>
-                      {hasChecklist && (
-                        <span className={progress === 100 ? "text-emerald-600 font-medium" : "text-muted-foreground"}>
-                          {progress}%
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>{hire.department_name || '—'} · {hire.company_name || '—'}</span>
+                      <Badge variant="outline" className="text-[10px]">{hire.employment_status}</Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">
+                          {isStarted ? `Started ${daysSinceHire}d ago` : `Starts ${format(new Date(hire.hire_date), 'MMM d')}`}
                         </span>
-                      )}
+                        {hasChecklist && (
+                          <span className={progress === 100 ? "text-success font-bold" : "text-muted-foreground font-medium"}>
+                            {progress}%
+                          </span>
+                        )}
+                      </div>
+                      {hasChecklist && <Progress value={progress} className="h-1.5" />}
                     </div>
-                    {hasChecklist && <Progress value={progress} className="h-1" />}
-                  </div>
-                  {!hasChecklist && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs h-8"
-                      disabled={initializing === hire.id}
-                      onClick={() => handleInitialize(hire.id)}
-                    >
-                      {initializing === hire.id ? 'Creating...' : 'Start Onboarding'}
-                    </Button>
-                  )}
-                </div>
+                    {!hasChecklist && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-xs h-8"
+                        disabled={initializing === hire.id}
+                        onClick={() => handleInitialize(hire.id)}
+                      >
+                        {initializing === hire.id ? 'Creating...' : 'Start Onboarding'}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
@@ -265,7 +266,7 @@ export function OnboardingTab({ departmentId }: OnboardingTabProps) {
       {/* Checklists */}
       {employeesWithChecklists.length > 0 && (
         <div>
-          <h3 className="text-base font-semibold mb-4">Onboarding Checklists</h3>
+          <h3 className="text-base font-bold mb-4">Onboarding Checklists</h3>
           <div className="grid gap-6 lg:grid-cols-2">
             {employeesWithChecklists.map(empId => {
               const emp = employees.find(e => e.id === empId);

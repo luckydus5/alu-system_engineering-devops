@@ -26,10 +26,10 @@ interface PerformanceTabProps {
 }
 
 const PERFORMANCE_LEVELS = [
-  { level: 'Outstanding', min: 90, max: 100, color: 'text-emerald-600', bgColor: 'bg-emerald-500', badge: 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800' },
-  { level: 'Exceeds', min: 75, max: 89, color: 'text-blue-600', bgColor: 'bg-blue-500', badge: 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800' },
-  { level: 'Meets', min: 60, max: 74, color: 'text-amber-600', bgColor: 'bg-amber-500', badge: 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800' },
-  { level: 'Needs Improvement', min: 0, max: 59, color: 'text-red-600', bgColor: 'bg-red-500', badge: 'bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800' },
+  { level: 'Outstanding', min: 90, max: 100, color: 'text-success', bgColor: 'bg-success', badge: 'bg-success/10 text-success border-success/30' },
+  { level: 'Exceeds', min: 75, max: 89, color: 'text-info', bgColor: 'bg-info', badge: 'bg-info/10 text-info border-info/30' },
+  { level: 'Meets', min: 60, max: 74, color: 'text-warning', bgColor: 'bg-warning', badge: 'bg-warning/10 text-warning border-warning/30' },
+  { level: 'Needs Improvement', min: 0, max: 59, color: 'text-destructive', bgColor: 'bg-destructive', badge: 'bg-destructive/10 text-destructive border-destructive/30' },
 ];
 
 function getPerformanceLevel(score: number) {
@@ -111,29 +111,29 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
     return (
       <div className="space-y-4">
         <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
-          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
         </div>
-        <Skeleton className="h-64 rounded-2xl" />
+        <Skeleton className="h-64 rounded-xl" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Stat cards */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-5">
         {[
-          { label: 'Avg Score', value: scoredReviews.length > 0 ? `${avgScore}%` : '—', icon: TrendingUp },
-          { label: 'Completed', value: completed, icon: CheckCircle2 },
-          { label: 'Pending', value: pending, icon: Clock },
-          { label: 'Top Stars', value: topPerformers, icon: Trophy },
-          { label: 'On Track', value: goals.length > 0 ? `${goalsOnTrack}%` : '—', icon: Target },
-        ].map(({ label, value, icon: Icon }) => (
-          <div key={label} className="p-5 rounded-2xl bg-card border">
+          { label: 'Avg Score', value: scoredReviews.length > 0 ? `${avgScore}%` : '—', icon: TrendingUp, variant: 'kpi-blue' },
+          { label: 'Completed', value: completed, icon: CheckCircle2, variant: 'kpi-success' },
+          { label: 'Pending', value: pending, icon: Clock, variant: 'kpi-gold' },
+          { label: 'Top Stars', value: topPerformers, icon: Trophy, variant: 'kpi-warning' },
+          { label: 'On Track', value: goals.length > 0 ? `${goalsOnTrack}%` : '—', icon: Target, variant: 'kpi-blue' },
+        ].map(({ label, value, icon: Icon, variant }) => (
+          <div key={label} className={cn("p-5 rounded-xl shadow-corporate", variant)}>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs text-muted-foreground font-medium">{label}</p>
-                <p className="text-2xl font-semibold tracking-tight mt-1">{value}</p>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+                <p className="text-2xl font-bold tracking-tight mt-1">{value}</p>
               </div>
               <Icon className="h-5 w-5 text-muted-foreground/40" />
             </div>
@@ -143,14 +143,14 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
 
       <Tabs value={activeView} onValueChange={setActiveView}>
         <div className="flex items-center justify-between">
-          <TabsList className="bg-muted/50 p-0.5 rounded-xl h-auto">
-            <TabsTrigger value="overview" className="gap-1.5 text-xs rounded-lg data-[state=active]:shadow-sm px-4 py-2">
+          <TabsList className="bg-muted/50 p-0.5 rounded-lg h-auto">
+            <TabsTrigger value="overview" className="gap-1.5 text-xs rounded-md data-[state=active]:shadow-sm px-4 py-2">
               <BarChart3 className="h-3.5 w-3.5" /> Overview
             </TabsTrigger>
-            <TabsTrigger value="reviews" className="gap-1.5 text-xs rounded-lg data-[state=active]:shadow-sm px-4 py-2">
+            <TabsTrigger value="reviews" className="gap-1.5 text-xs rounded-md data-[state=active]:shadow-sm px-4 py-2">
               <Star className="h-3.5 w-3.5" /> Reviews
             </TabsTrigger>
-            <TabsTrigger value="goals" className="gap-1.5 text-xs rounded-lg data-[state=active]:shadow-sm px-4 py-2">
+            <TabsTrigger value="goals" className="gap-1.5 text-xs rounded-md data-[state=active]:shadow-sm px-4 py-2">
               <Target className="h-3.5 w-3.5" /> Goals
             </TabsTrigger>
           </TabsList>
@@ -166,14 +166,13 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
 
         <TabsContent value="overview" className="space-y-6 mt-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Distribution */}
-            <Card className="border rounded-2xl shadow-none">
-              <CardHeader className="pb-4">
+            <Card className="shadow-corporate rounded-xl">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold">Performance Distribution</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {scoredReviews.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No reviews with scores yet. Add a review to see distribution.</p>
+                  <p className="text-sm text-muted-foreground text-center py-8">No reviews with scores yet.</p>
                 ) : (
                   PERFORMANCE_LEVELS.map((level) => {
                     const count = scoredReviews.filter(r => (r.score || 0) >= level.min && (r.score || 0) <= level.max).length;
@@ -182,9 +181,9 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
                       <div key={level.level} className="space-y-1.5">
                         <div className="flex items-center justify-between text-xs">
                           <span className="font-medium">{level.level}</span>
-                          <span className="text-muted-foreground">{count}</span>
+                          <span className="text-muted-foreground font-semibold">{count}</span>
                         </div>
-                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-2 bg-muted rounded-full overflow-hidden">
                           <div className={cn("h-full rounded-full", level.bgColor)} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
@@ -194,9 +193,8 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
               </CardContent>
             </Card>
 
-            {/* Top Performers */}
-            <Card className="border rounded-2xl shadow-none">
-              <CardHeader className="pb-4">
+            <Card className="shadow-corporate rounded-xl">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold">Top Performers</CardTitle>
               </CardHeader>
               <CardContent>
@@ -211,10 +209,10 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
                         const level = getPerformanceLevel(review.score || 0);
                         const name = review.employee_name || 'Unknown';
                         return (
-                          <div key={review.id} className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/40 transition-colors">
-                            <span className="text-xs font-medium text-muted-foreground w-5 text-center">{idx + 1}</span>
+                          <div key={review.id} className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-muted/40 transition-colors">
+                            <span className="text-xs font-bold text-secondary w-5 text-center">{idx + 1}</span>
                             <Avatar className="h-8 w-8">
-                              <AvatarFallback className="text-[10px] font-medium bg-muted text-muted-foreground">
+                              <AvatarFallback className="text-[10px] font-semibold bg-primary/10 text-primary">
                                 {getInitials(name)}
                               </AvatarFallback>
                             </Avatar>
@@ -222,7 +220,7 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
                               <p className="text-sm font-medium truncate">{name}</p>
                               <p className="text-[10px] text-muted-foreground">{review.review_period}</p>
                             </div>
-                            <span className={cn("text-sm font-semibold tabular-nums", level.color)}>{review.score}%</span>
+                            <span className={cn("text-sm font-bold tabular-nums", level.color)}>{review.score}%</span>
                           </div>
                         );
                       })}
@@ -235,9 +233,9 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
 
         <TabsContent value="reviews" className="mt-6">
           {reviews.length === 0 ? (
-            <div className="text-center py-16 rounded-2xl bg-card border">
-              <Star className="h-10 w-10 mx-auto text-muted-foreground/20 mb-4" />
-              <h3 className="text-lg font-semibold">No Reviews Yet</h3>
+            <div className="text-center py-16 rounded-xl bg-card border shadow-corporate">
+              <Star className="h-12 w-12 mx-auto text-secondary/30 mb-4" />
+              <h3 className="text-lg font-bold">No Reviews Yet</h3>
               <p className="text-sm text-muted-foreground mt-1">Click "Add Review" to create the first performance review.</p>
             </div>
           ) : (
@@ -245,31 +243,33 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
               {reviews.map(review => {
                 const level = review.score !== null ? getPerformanceLevel(review.score) : null;
                 return (
-                  <div key={review.id} className="p-5 rounded-2xl bg-card border space-y-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarFallback className="text-xs font-medium bg-muted text-muted-foreground">
-                          {getInitials(review.employee_name || 'U')}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{review.employee_name}</p>
-                        <p className="text-xs text-muted-foreground">{review.review_period}</p>
+                  <Card key={review.id} className="shadow-corporate rounded-xl">
+                    <CardContent className="p-5 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarFallback className="text-xs font-semibold bg-primary/10 text-primary">
+                            {getInitials(review.employee_name || 'U')}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm">{review.employee_name}</p>
+                          <p className="text-xs text-muted-foreground">{review.review_period}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      {level ? (
-                        <>
-                          <Badge variant="outline" className={cn("text-[10px]", level.badge)}>{level.level}</Badge>
-                          <span className={cn("text-lg font-semibold", level.color)}>{review.score}%</span>
-                        </>
-                      ) : (
-                        <Badge variant="outline" className="text-[10px]">{review.status}</Badge>
-                      )}
-                    </div>
-                    {review.score !== null && <Progress value={review.score} className="h-1" />}
-                    {review.comments && <p className="text-xs text-muted-foreground line-clamp-2">{review.comments}</p>}
-                  </div>
+                      <div className="flex items-center justify-between">
+                        {level ? (
+                          <>
+                            <Badge variant="outline" className={cn("text-[10px] border", level.badge)}>{level.level}</Badge>
+                            <span className={cn("text-lg font-bold", level.color)}>{review.score}%</span>
+                          </>
+                        ) : (
+                          <Badge variant="outline" className="text-[10px]">{review.status}</Badge>
+                        )}
+                      </div>
+                      {review.score !== null && <Progress value={review.score} className="h-1.5" />}
+                      {review.comments && <p className="text-xs text-muted-foreground line-clamp-2">{review.comments}</p>}
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -278,32 +278,34 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
 
         <TabsContent value="goals" className="mt-6">
           {goals.length === 0 ? (
-            <div className="text-center py-16 rounded-2xl bg-card border">
-              <Target className="h-10 w-10 mx-auto text-muted-foreground/20 mb-4" />
-              <h3 className="text-lg font-semibold">No Goals Yet</h3>
+            <div className="text-center py-16 rounded-xl bg-card border shadow-corporate">
+              <Target className="h-12 w-12 mx-auto text-primary/30 mb-4" />
+              <h3 className="text-lg font-bold">No Goals Yet</h3>
               <p className="text-sm text-muted-foreground mt-1">Click "Add Goal" to create the first performance goal.</p>
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {goals.map(goal => (
-                <div key={goal.id} className="p-5 rounded-2xl bg-card border space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-sm">{goal.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {goal.employee_name} {goal.due_date ? `· Due: ${goal.due_date}` : ''}
-                      </p>
+                <Card key={goal.id} className="shadow-corporate rounded-xl">
+                  <CardContent className="p-5 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h4 className="font-semibold text-sm">{goal.title}</h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {goal.employee_name} {goal.due_date ? `· Due: ${goal.due_date}` : ''}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        "text-xs font-bold",
+                        goal.progress === 100 ? "text-success" : "text-muted-foreground"
+                      )}>
+                        {goal.progress}%
+                      </span>
                     </div>
-                    <span className={cn(
-                      "text-xs font-medium",
-                      goal.progress === 100 ? "text-emerald-600" : "text-muted-foreground"
-                    )}>
-                      {goal.progress}%
-                    </span>
-                  </div>
-                  <Progress value={goal.progress} className="h-1" />
-                  {goal.description && <p className="text-xs text-muted-foreground line-clamp-2">{goal.description}</p>}
-                </div>
+                    <Progress value={goal.progress} className="h-1.5" />
+                    {goal.description && <p className="text-xs text-muted-foreground line-clamp-2">{goal.description}</p>}
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
@@ -365,12 +367,12 @@ export function PerformanceTab({ departmentId }: PerformanceTabProps) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Goal Title <span className="text-destructive">*</span></Label>
-              <Input value={goalForm.title} onChange={e => setGoalForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Complete Q1 Sales Target" />
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input value={goalForm.title} onChange={e => setGoalForm(f => ({ ...f, title: e.target.value }))} />
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Textarea value={goalForm.description} onChange={e => setGoalForm(f => ({ ...f, description: e.target.value }))} rows={2} />
+              <Textarea value={goalForm.description} onChange={e => setGoalForm(f => ({ ...f, description: e.target.value }))} rows={3} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
