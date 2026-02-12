@@ -141,6 +141,10 @@ export function useCompanyPolicies(companyId?: string | null) {
       }
     },
     onSuccess: () => {
+      // Sync leave balances with updated policies
+      supabase.rpc('initialize_default_leave_balances').then(() => {
+        queryClient.invalidateQueries({ queryKey: ['leave-balances'] });
+      });
       queryClient.invalidateQueries({ queryKey: ['company-policies'] });
       toast({ title: 'All policies saved successfully' });
     },
