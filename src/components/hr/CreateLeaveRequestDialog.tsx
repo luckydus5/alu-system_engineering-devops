@@ -100,7 +100,8 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
     };
 
     if (isOnBehalf && selectedEmployee) {
-      requestData.employee_id = selectedEmployee.id;
+      // Use linked_user_id (auth.users id) if available, otherwise use employee table id
+      requestData.employee_id = selectedEmployee.linked_user_id || selectedEmployee.id;
     }
 
     await createRequest.mutateAsync(requestData);

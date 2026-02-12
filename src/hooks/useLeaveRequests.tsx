@@ -155,11 +155,13 @@ export function useLeaveRequests(departmentId?: string, isHR = false) {
       status,
       comment,
       isManager = false,
+      isHR = false,
     }: {
       id: string;
       status: LeaveStatus;
       comment?: string;
       isManager?: boolean;
+      isHR?: boolean;
     }) => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData.user) throw new Error('Not authenticated');
@@ -167,23 +169,20 @@ export function useLeaveRequests(departmentId?: string, isHR = false) {
       const updateData: Record<string, unknown> = { status };
 
       if (isManager) {
+        // Peat Manager approving → manager_approved
         updateData.manager_id = userData.user.id;
         updateData.manager_action_at = new Date().toISOString();
         if (comment) updateData.manager_comment = comment;
-      } else if (status === 'gm_pending') {
-        // HR forwarding to GM
+      } else if (isHR) {
+        // HR forwarding to GM → gm_pending, or HR rejecting
         updateData.hr_reviewer_id = userData.user.id;
         updateData.hr_action_at = new Date().toISOString();
         if (comment) updateData.hr_comment = comment;
-      } else if (status === 'approved' || (status === 'rejected' && !isManager)) {
-        // GM final decision
+      } else {
+        // GM/OM final decision → approved or rejected
         updateData.gm_reviewer_id = userData.user.id;
         updateData.gm_action_at = new Date().toISOString();
         if (comment) updateData.gm_comment = comment;
-      } else {
-        updateData.hr_reviewer_id = userData.user.id;
-        updateData.hr_action_at = new Date().toISOString();
-        if (comment) updateData.hr_comment = comment;
       }
 
       const { data, error } = await supabase
