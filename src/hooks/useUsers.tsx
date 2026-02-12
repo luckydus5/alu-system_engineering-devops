@@ -73,7 +73,7 @@ export function useUsers() {
 
   const updateUser = async (
     userId: string,
-    updates: { role?: AppRole; departmentId?: string | null; fullName?: string }
+    updates: { role?: AppRole; departmentId?: string | null; fullName?: string; systemPosition?: string | null }
   ) => {
     try {
       const { data, error } = await supabase.functions.invoke('manage-user', {

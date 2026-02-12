@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { WarehouseTransactionHistory } from '@/components/warehouse/WarehouseTransactionHistory';
 import { ApproversManagement } from '@/components/admin/ApproversManagement';
 import { LeaveManagersManagement } from '@/components/admin/LeaveManagersManagement';
+import { LeaveApproversManagement } from '@/components/admin/LeaveApproversManagement';
 import { CompanyPoliciesPortal } from '@/components/admin/CompanyPoliciesPortal';
 import { 
   Shield, 
@@ -141,6 +142,7 @@ const sidebarTools = [
   { id: 'warehouse', label: 'Warehouse', icon: Database, description: 'Stock transactions' },
   { id: 'approvers', label: 'Item Approvers', icon: CheckCircle, description: 'Manage item request approvers' },
   { id: 'leave-managers', label: 'Leave Managers', icon: CalendarDays, description: 'Leave management access' },
+  { id: 'leave-approvers', label: 'Leave Approvers', icon: Shield, description: 'Leave approval chain' },
   { id: 'live', label: 'Live Monitor', icon: Activity, description: 'Real-time activity' },
   { id: 'reports', label: 'System Reports', icon: FileText, description: 'Auto-generated reports' },
   { id: 'analytics', label: 'Analytics', icon: BarChart3, description: 'Usage statistics' },
@@ -911,6 +913,9 @@ export default function SuperAdmin() {
 
       case 'leave-managers':
         return <LeaveManagersManagement />;
+
+      case 'leave-approvers':
+        return <LeaveApproversManagement />;
 
       case 'policies':
         return <CompanyPoliciesPortal />;
