@@ -6,7 +6,7 @@ import { useLeaveApprovers, APPROVER_ROLE_LABELS } from '@/hooks/useLeaveApprove
 import { POSITION_LABELS } from '@/lib/systemPositions';
 import { Shield, UserCheck, Loader2, AlertCircle } from 'lucide-react';
 
-const roleOrder = ['peat_manager', 'hr_reviewer', 'gm_approver', 'om_approver'] as const;
+const roleOrder = ['peat_manager', 'hr_reviewer', 'gm_approver', 'om_approver', 'it_manager', 'it_officer'] as const;
 
 export function LeaveApproversManagement() {
   const { approvers, isLoading, removeApprover } = useLeaveApprovers();
