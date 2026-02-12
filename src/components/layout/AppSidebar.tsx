@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useCurrentUserLeavePermissions } from '@/hooks/useLeaveManagers';
+import { useCurrentUserApproverRoles } from '@/hooks/useLeaveApprovers';
 import { getDepartmentIcon } from '@/lib/departmentIcons';
 import {
   Sidebar,
@@ -45,10 +46,12 @@ export function AppSidebar() {
   const { profile, highestRole } = useUserRole();
   const { departments } = useDepartments();
   const { canFileForOthers } = useCurrentUserLeavePermissions();
+  const { isAnyApprover } = useCurrentUserApproverRoles();
 
   const mainNavItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
-    ...(canFileForOthers ? [{ title: 'Leave Admin', url: '/leave-admin', icon: CalendarDays }] : []),
+    ...(canFileForOthers ? [{ title: 'Peat Admin', url: '/peat-admin', icon: CalendarDays }] : []),
+    ...(isAnyApprover ? [{ title: 'Leave Approval', url: '/leave-approval', icon: Shield }] : []),
   ];
 
   const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
