@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,7 +51,7 @@ export default function MyDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { profile, roles, highestRole } = useUserRole();
-  const { approverRoles, isPeatManager, isGMApprover, isOMApprover, isAnyApprover, isLoading: approverLoading } = useCurrentUserApproverRoles();
+  const { approverRoles, isPeatManager, isGMApprover, isOMApprover, isHRReviewer, isAnyApprover, isLoading: approverLoading } = useCurrentUserApproverRoles();
   const { canFileForOthers, isLoading: permLoading } = useCurrentUserLeavePermissions();
   const { departments } = useDepartments();
   const primaryDeptId = roles[0]?.department_id;
@@ -63,8 +63,15 @@ export default function MyDashboard() {
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [comment, setComment] = useState('');
-  const defaultTab = canFileForOthers ? 'filed' : isAnyApprover ? 'approvals' : 'overview';
-  const [activeTab, setActiveTab] = useState(defaultTab);
+  const [activeTab, setActiveTab] = useState('overview');
+  
+  // Update default tab once async data loads
+  useEffect(() => {
+    if (!approverLoading && !permLoading) {
+      if (canFileForOthers) setActiveTab('filed');
+      else if (isAnyApprover) setActiveTab('approvals');
+    }
+  }, [approverLoading, permLoading, canFileForOthers, isAnyApprover]);
 
   const primaryPosition = approverRoles[0] || null;
   const positionLabel = primaryPosition ? POSITION_LABELS[primaryPosition] : null;
@@ -78,6 +85,7 @@ export default function MyDashboard() {
   // Approval-related data
   const actionableRequests = (() => {
     if (isPeatManager) return leaveRequests.filter(r => r.status === 'pending');
+    if (isHRReviewer) return leaveRequests.filter(r => r.status === 'manager_approved');
     if (isGMApprover || isOMApprover) return leaveRequests.filter(r => r.status === 'gm_pending');
     return [];
   })();
@@ -97,6 +105,8 @@ export default function MyDashboard() {
       newStatus = 'rejected';
     } else if (isPeatManager) {
       newStatus = 'manager_approved';
+    } else if (isHRReviewer) {
+      newStatus = 'gm_pending';
     } else {
       newStatus = 'approved';
     }
@@ -105,6 +115,7 @@ export default function MyDashboard() {
       status: newStatus,
       comment: comment || undefined,
       isManager: isPeatManager,
+      isHR: isHRReviewer,
     });
     setSelectedRequest(null);
     setActionType(null);
@@ -531,6 +542,12 @@ export default function MyDashboard() {
                   This will be forwarded to HR for further review.
                 </div>
               )}
+              {actionType === 'approve' && isHRReviewer && (
+                <div className="p-3 rounded-xl bg-indigo-500/10 text-xs text-indigo-700 dark:text-indigo-300">
+                  <ArrowUpRight className="h-3.5 w-3.5 inline mr-1" />
+                  This will be forwarded to GM/OM for final approval.
+                </div>
+              )}
               {actionType === 'approve' && (isGMApprover || isOMApprover) && (
                 <div className="p-3 rounded-xl bg-emerald-500/10 text-xs text-emerald-700 dark:text-emerald-300">
                   <CheckCircle2 className="h-3.5 w-3.5 inline mr-1" />
@@ -547,7 +564,7 @@ export default function MyDashboard() {
               className={actionType === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-destructive hover:bg-destructive/90'}
             >
               {updateRequestStatus.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {actionType === 'approve' ? (isPeatManager ? 'Approve & Forward' : 'Approve') : 'Reject'}
+              {actionType === 'approve' ? (isPeatManager ? 'Approve & Forward' : isHRReviewer ? 'Approve & Forward to GM' : 'Approve') : 'Reject'}
             </Button>
           </DialogFooter>
         </DialogContent>

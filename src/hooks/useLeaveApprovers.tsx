@@ -132,13 +132,22 @@ export function useCurrentUserApproverRoles() {
     },
   });
 
+  const isPeatManager = roles.includes('peat_manager');
+  const isPeatAdmin = roles.includes('peat_admin');
+  const isHRReviewer = roles.includes('hr_reviewer');
+  const isGMApprover = roles.includes('gm_approver');
+  const isOMApprover = roles.includes('om_approver');
+  // Only leave-workflow roles count as "approver"
+  const isAnyApprover = isPeatManager || isHRReviewer || isGMApprover || isOMApprover;
+
   return {
     approverRoles: roles,
-    isPeatManager: roles.includes('peat_manager'),
-    isPeatAdmin: roles.includes('peat_admin'),
-    isGMApprover: roles.includes('gm_approver'),
-    isOMApprover: roles.includes('om_approver'),
-    isAnyApprover: roles.length > 0,
+    isPeatManager,
+    isPeatAdmin,
+    isHRReviewer,
+    isGMApprover,
+    isOMApprover,
+    isAnyApprover,
     isLoading,
   };
 }
