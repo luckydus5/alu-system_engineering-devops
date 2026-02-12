@@ -13,7 +13,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   CheckCircle2, XCircle, Clock, Loader2, ShieldAlert,
   CalendarDays, FileText, Briefcase, Plus, ArrowRight,
-  Leaf, Monitor, Shield, ClipboardList, Timer, ArrowUpRight, Download
+  Leaf, Monitor, Shield, ClipboardList, ArrowUpRight, Download, Users
 } from 'lucide-react';
 import { useCurrentUserApproverRoles, APPROVER_ROLE_LABELS } from '@/hooks/useLeaveApprovers';
 import { useCurrentUserLeavePermissions } from '@/hooks/useLeaveManagers';
@@ -23,7 +23,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDepartments } from '@/hooks/useDepartments';
 import { POSITION_LABELS, POSITION_COLORS } from '@/lib/systemPositions';
 import { CreateLeaveRequestDialog } from '@/components/hr/CreateLeaveRequestDialog';
-import { AttendanceTab } from '@/components/hr/AttendanceTab';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { generateLeaveApprovalPdf } from '@/lib/generateLeavePdf';
@@ -60,10 +59,12 @@ export default function MyDashboard() {
   const { balances } = useLeaveBalances(user?.id);
 
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [myLeaveDialogOpen, setMyLeaveDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [comment, setComment] = useState('');
-  const [activeTab, setActiveTab] = useState(isAnyApprover ? 'approvals' : 'overview');
+  const defaultTab = canFileForOthers ? 'filed' : isAnyApprover ? 'approvals' : 'overview';
+  const [activeTab, setActiveTab] = useState(defaultTab);
 
   const primaryPosition = approverRoles[0] || null;
   const positionLabel = primaryPosition ? POSITION_LABELS[primaryPosition] : null;
@@ -205,12 +206,23 @@ export default function MyDashboard() {
               </div>
             </div>
           </div>
-          {primaryDeptId && (
-            <Button onClick={() => setLeaveDialogOpen(true)} className="gap-2 shadow-sm">
+          {primaryDeptId && canFileForOthers ? (
+            <div className="flex items-center gap-2">
+              <Button onClick={() => setLeaveDialogOpen(true)} className="gap-2 shadow-sm">
+                <Users className="h-4 w-4" />
+                File for Employee
+              </Button>
+              <Button variant="outline" onClick={() => setMyLeaveDialogOpen(true)} className="gap-2">
+                <Plus className="h-4 w-4" />
+                My Leave
+              </Button>
+            </div>
+          ) : primaryDeptId ? (
+            <Button onClick={() => setMyLeaveDialogOpen(true)} className="gap-2 shadow-sm">
               <Plus className="h-4 w-4" />
               New Leave Request
             </Button>
-          )}
+          ) : null}
         </div>
 
         {/* KPI Strip */}
@@ -266,6 +278,12 @@ export default function MyDashboard() {
         {/* Tabbed Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="w-full grid grid-cols-2 sm:grid-cols-3 h-11 bg-muted/60">
+            {canFileForOthers && (
+              <TabsTrigger value="filed" className="text-xs sm:text-sm gap-1.5">
+                <Users className="h-3.5 w-3.5 hidden sm:block" />
+                Filed for Others
+              </TabsTrigger>
+            )}
             {isAnyApprover && (
               <TabsTrigger value="approvals" className="text-xs sm:text-sm gap-1.5 relative">
                 <ClipboardList className="h-3.5 w-3.5 hidden sm:block" />
@@ -281,13 +299,9 @@ export default function MyDashboard() {
               <FileText className="h-3.5 w-3.5 hidden sm:block" />
               My Leaves
             </TabsTrigger>
-            {canFileForOthers && (
-              <TabsTrigger value="filed" className="text-xs sm:text-sm gap-1.5">
-                <CalendarDays className="h-3.5 w-3.5 hidden sm:block" />
-                Filed
-              </TabsTrigger>
-            )}
           </TabsList>
+
+
 
           {/* MY LEAVES TAB */}
           <TabsContent value="overview" className="mt-4">
@@ -539,11 +553,21 @@ export default function MyDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Leave Request Dialog */}
+      {/* File for Employee Dialog (on-behalf default ON) */}
       {primaryDeptId && (
         <CreateLeaveRequestDialog
           open={leaveDialogOpen}
           onOpenChange={setLeaveDialogOpen}
+          departmentId={primaryDeptId}
+          defaultOnBehalf={true}
+        />
+      )}
+
+      {/* My Own Leave Dialog */}
+      {primaryDeptId && (
+        <CreateLeaveRequestDialog
+          open={myLeaveDialogOpen}
+          onOpenChange={setMyLeaveDialogOpen}
           departmentId={primaryDeptId}
         />
       )}

@@ -25,6 +25,7 @@ interface CreateLeaveRequestDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   departmentId: string;
+  defaultOnBehalf?: boolean;
 }
 
 const LEAVE_TYPE_CONFIG: Record<LeaveType, { icon: React.ElementType; color: string; bg: string; description: string }> = {
@@ -49,7 +50,7 @@ function getGradient(name: string) {
   return AVATAR_GRADIENTS[name.charCodeAt(0) % AVATAR_GRADIENTS.length];
 }
 
-export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: CreateLeaveRequestDialogProps) {
+export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, defaultOnBehalf = false }: CreateLeaveRequestDialogProps) {
   const [leaveType, setLeaveType] = useState<LeaveType>('annual');
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
@@ -57,7 +58,7 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
   const [step, setStep] = useState(1);
   
   // On-behalf-of state
-  const [isOnBehalf, setIsOnBehalf] = useState(false);
+  const [isOnBehalf, setIsOnBehalf] = useState(defaultOnBehalf);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState('');
 
@@ -107,7 +108,7 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId }: C
     setEndDate(undefined);
     setReason('');
     setStep(1);
-    setIsOnBehalf(false);
+    setIsOnBehalf(defaultOnBehalf);
     setSelectedEmployee(null);
     setEmployeeSearch('');
   };
