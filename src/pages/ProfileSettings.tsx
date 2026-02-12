@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,8 @@ import { Separator } from '@/components/ui/separator';
 import { ChangePasswordDialog } from '@/components/profile/ChangePasswordDialog';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
+import { useLeaveApprovers } from '@/hooks/useLeaveApprovers';
+import { POSITION_LABELS, POSITION_COLORS } from '@/lib/systemPositions';
 import { 
   User, Mail, Building2, Shield, KeyRound, LogOut, 
   Phone, Briefcase, Calendar
@@ -16,10 +18,16 @@ import { format } from 'date-fns';
 
 export default function ProfileSettings() {
   const { profile, highestRole } = useUserRole();
-  const { signOut } = useAuth();
+  const { user, signOut } = useAuth();
+  const { approvers } = useLeaveApprovers();
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   const initials = profile?.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'U';
+
+  // Find the current user's system position
+  const userPosition = approvers.find(a => a.user_id === user?.id);
+  const positionLabel = userPosition ? POSITION_LABELS[userPosition.approver_role] : null;
+  const positionColor = userPosition ? POSITION_COLORS[userPosition.approver_role] : null;
 
   return (
     <DashboardLayout>
@@ -46,8 +54,13 @@ export default function ProfileSettings() {
               </Avatar>
               <div className="flex-1">
                 <h2 className="text-xl font-semibold">{profile?.full_name || 'User'}</h2>
-                <div className="flex items-center gap-2 mt-1">
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <Badge variant="outline" className="text-xs capitalize">{highestRole}</Badge>
+                  {positionLabel && positionColor && (
+                    <Badge variant="outline" className={`text-xs ${positionColor}`}>
+                      {positionLabel}
+                    </Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -74,6 +87,17 @@ export default function ProfileSettings() {
                   <div>
                     <p className="text-xs text-muted-foreground">Phone</p>
                     <p className="text-sm font-medium">{profile.phone || '—'}</p>
+                  </div>
+                </div>
+              )}
+              {positionLabel && (
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0">
+                    <Briefcase className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">System Position</p>
+                    <p className="text-sm font-medium">{positionLabel}</p>
                   </div>
                 </div>
               )}

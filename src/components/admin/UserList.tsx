@@ -5,7 +5,7 @@ import { AppRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useLeaveApprovers } from '@/hooks/useLeaveApprovers';
-import { SYSTEM_POSITIONS, POSITION_LABELS } from '@/lib/systemPositions';
+import { SYSTEM_POSITIONS, POSITION_LABELS, POSITION_COLORS } from '@/lib/systemPositions';
 import {
   Table,
   TableBody,
@@ -227,7 +227,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                       </TableCell>
                       <TableCell>
                         {approverMap.has(user.id) ? (
-                          <Badge variant="outline" className="text-xs bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30">
+                          <Badge variant="outline" className={`text-xs ${POSITION_COLORS[approverMap.get(user.id)!] || 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30'}`}>
                             {POSITION_LABELS[approverMap.get(user.id)!] || approverMap.get(user.id)}
                           </Badge>
                         ) : (
