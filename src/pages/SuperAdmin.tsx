@@ -940,7 +940,7 @@ export default function SuperAdmin() {
                 <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : (
-              <ScrollArea className="h-[calc(100vh-280px)]">
+              <div className="overflow-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
@@ -1011,7 +1011,7 @@ export default function SuperAdmin() {
                     )}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
             )}
           </div>
         );
@@ -1090,7 +1090,7 @@ export default function SuperAdmin() {
         </div>
 
         {/* Main Content */}
-        <div className="flex gap-4 flex-1 min-h-0">
+        <div className="flex gap-4 flex-1">
           {/* Left Sidebar */}
           <div className="w-[220px] shrink-0 space-y-2">
             <Card className="overflow-hidden">
