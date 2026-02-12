@@ -200,6 +200,50 @@ export type Database = {
           },
         ]
       }
+      company_policies: {
+        Row: {
+          company_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          policy_category: string
+          policy_key: string
+          policy_value: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          policy_category: string
+          policy_key: string
+          policy_value: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          company_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          policy_category?: string
+          policy_key?: string
+          policy_value?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_policies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       departments: {
         Row: {
           code: string

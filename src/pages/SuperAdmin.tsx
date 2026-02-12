@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { WarehouseTransactionHistory } from '@/components/warehouse/WarehouseTransactionHistory';
 import { ApproversManagement } from '@/components/admin/ApproversManagement';
 import { LeaveManagersManagement } from '@/components/admin/LeaveManagersManagement';
+import { CompanyPoliciesPortal } from '@/components/admin/CompanyPoliciesPortal';
 import { 
   Shield, 
   Activity, 
@@ -134,6 +135,7 @@ const actionColors: Record<string, string> = {
 
 const sidebarTools = [
   { id: 'audit', label: 'Audit Logs', icon: History, description: 'System activity history' },
+  { id: 'policies', label: 'Company Policies', icon: Layers, description: 'Attendance, Leave & OT rules' },
   { id: 'users', label: 'User Overview', icon: Users, description: 'All system users' },
   { id: 'departments', label: 'Departments', icon: Building2, description: 'Department management' },
   { id: 'warehouse', label: 'Warehouse', icon: Database, description: 'Stock transactions' },
@@ -909,6 +911,9 @@ export default function SuperAdmin() {
 
       case 'leave-managers':
         return <LeaveManagersManagement />;
+
+      case 'policies':
+        return <CompanyPoliciesPortal />;
 
       case 'departments':
         return (
