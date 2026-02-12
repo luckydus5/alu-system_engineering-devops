@@ -162,7 +162,7 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -4 }}
                         transition={{ duration: 0.12 }}
-                        className="absolute right-0 top-full mt-1.5 w-56 bg-popover border rounded-xl shadow-lg z-50 overflow-hidden p-1"
+                        className="absolute right-0 top-full mt-1.5 w-56 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden p-1"
                       >
                         <button
                           onClick={() => { setSelectedCompany('all'); setCompanyDropdownOpen(false); }}
