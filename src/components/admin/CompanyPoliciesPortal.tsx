@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -6,8 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { 
-  Clock, CalendarDays, TrendingUp, Save, Loader2, 
-  RefreshCw, Building2, Globe, Shield, AlertCircle,
+  Clock, CalendarDays, TrendingUp, Loader2, 
+  RefreshCw, Building2, Globe, Shield, CheckCircle2,
   Sun, Moon
 } from 'lucide-react';
 import { useCompanyPolicies } from '@/hooks/useCompanyPolicies';
@@ -24,8 +24,8 @@ export function CompanyPoliciesPortal() {
   const { policies, isLoading, getPolicyValue, bulkUpdatePolicies, refetch } = useCompanyPolicies(companyId);
   const { companies } = useCompanies();
   const [localValues, setLocalValues] = useState<Record<string, string>>({});
-  const [originalValues, setOriginalValues] = useState<Record<string, string>>({});
-  const [hasChanges, setHasChanges] = useState(false);
+  const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const debounceTimers = useRef<Record<string, NodeJS.Timeout>>({});
 
   useEffect(() => {
     if (policies.length > 0) {
@@ -34,34 +34,39 @@ export function CompanyPoliciesPortal() {
         vals[`${p.policy_category}:${p.policy_key}`] = p.policy_value;
       });
       setLocalValues(vals);
-      setOriginalValues(vals);
-      setHasChanges(false);
     }
   }, [policies]);
 
+  const autoSave = useCallback(async (category: string, key: string, value: string) => {
+    // Treat empty as "0" for number fields
+    const saveValue = value === '' ? '0' : value;
+    setSavingStatus('saving');
+    try {
+      await bulkUpdatePolicies.mutateAsync([
+        { policy_category: category, policy_key: key, policy_value: saveValue, company_id: companyId }
+      ]);
+      setSavingStatus('saved');
+      setTimeout(() => setSavingStatus('idle'), 2000);
+    } catch {
+      setSavingStatus('idle');
+    }
+  }, [bulkUpdatePolicies, companyId]);
+
   const handleChange = (category: string, key: string, value: string) => {
     setLocalValues(prev => ({ ...prev, [`${category}:${key}`]: value }));
-    setHasChanges(true);
+    
+    // Debounce auto-save per field (800ms)
+    const timerKey = `${category}:${key}`;
+    if (debounceTimers.current[timerKey]) {
+      clearTimeout(debounceTimers.current[timerKey]);
+    }
+    debounceTimers.current[timerKey] = setTimeout(() => {
+      autoSave(category, key, value);
+    }, 800);
   };
 
   const getLocalValue = (category: string, key: string): string => {
     return localValues[`${category}:${key}`] ?? getPolicyValue(category, key, '');
-  };
-
-  const handleSaveAll = async () => {
-    // Only save policies that actually changed
-    const updates = Object.entries(localValues)
-      .filter(([key, value]) => originalValues[key] !== value)
-      .map(([compositeKey, value]) => {
-        const [category, key] = compositeKey.split(':');
-        return { policy_category: category, policy_key: key, policy_value: value, company_id: companyId };
-      });
-    if (updates.length === 0) {
-      setHasChanges(false);
-      return;
-    }
-    await bulkUpdatePolicies.mutateAsync(updates);
-    setHasChanges(false);
   };
 
   const policyCount = policies.length;
@@ -80,25 +85,24 @@ export function CompanyPoliciesPortal() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {savingStatus === 'saving' && (
+            <Badge variant="outline" className="text-xs gap-1">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Saving...
+            </Badge>
+          )}
+          {savingStatus === 'saved' && (
+            <Badge variant="outline" className="text-xs gap-1 text-emerald-600 border-emerald-300">
+              <CheckCircle2 className="w-3 h-3" />
+              Saved
+            </Badge>
+          )}
           <Badge variant="outline" className="text-xs">
             {policyCount} rules configured
           </Badge>
           <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isLoading}>
             <RefreshCw className={cn("w-4 h-4 mr-1.5", isLoading && "animate-spin")} />
             Refresh
-          </Button>
-          <Button 
-            size="sm" 
-            onClick={handleSaveAll} 
-            disabled={!hasChanges || bulkUpdatePolicies.isPending}
-            className="min-w-[120px]"
-          >
-            {bulkUpdatePolicies.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-            ) : (
-              <Save className="w-4 h-4 mr-1.5" />
-            )}
-            Save All Changes
           </Button>
         </div>
       </div>
@@ -139,12 +143,7 @@ export function CompanyPoliciesPortal() {
         </CardContent>
       </Card>
 
-      {hasChanges && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm">
-          <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-          <span className="text-amber-700 dark:text-amber-400">You have unsaved changes. Click "Save All Changes" to apply.</span>
-        </div>
-      )}
+      {/* Auto-save is active — no manual save needed */}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-20">
