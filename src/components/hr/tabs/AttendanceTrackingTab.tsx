@@ -484,6 +484,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadPreview, setUploadPreview] = useState<any[] | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseProgress, setParseProgress] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -505,25 +507,39 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     return null;
   };
 
-  // Parse Excel file — supports machine format: Department | Name | No. | Date/Time | Status (C/In, C/Out)
+  // Yield to UI thread
+  const yieldToUI = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+
+  // Parse Excel file — async with progress to prevent freezing
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setIsParsing(true);
+    setParseProgress('Reading file...');
+
+    // Yield so the loading UI renders before heavy work
+    await yieldToUI();
+
     try {
       const data = await file.arrayBuffer();
+      setParseProgress('Parsing spreadsheet...');
+      await yieldToUI();
+
       const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       const jsonData = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
       
       if (jsonData.length === 0) {
         toast({ title: 'Empty file', description: 'The Excel file has no data rows', variant: 'destructive' });
+        setIsParsing(false);
         return;
       }
 
+      setParseProgress(`Processing ${jsonData.length.toLocaleString()} rows...`);
+      await yieldToUI();
+
       const headers = Object.keys(jsonData[0] as object);
-      
-      // Detect format: Machine format has "Status" column with C/In, C/Out and combined "Date/Time"
       const nameCol = findCol(headers, [/^name$/, /name/, /employee/, /staff/]);
       const statusCol = findCol(headers, [/^status$/, /status/]);
       const dateTimeCol = findCol(headers, [/date.?time/, /date.*time/, /time.*date/]);
@@ -535,10 +551,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
       if (!nameCol) {
         toast({ title: 'Invalid format', description: 'Could not find a Name/Employee column. Found: ' + headers.join(', '), variant: 'destructive' });
+        setIsParsing(false);
         return;
       }
       if (!isMachineFormat && !dateCol) {
         toast({ title: 'Invalid format', description: 'Could not find a Date column. Found: ' + headers.join(', '), variant: 'destructive' });
+        setIsParsing(false);
         return;
       }
 
@@ -548,7 +566,6 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         if (val instanceof Date && !isNaN(val.getTime())) return val;
         if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000);
         const str = String(val).trim();
-        // Try common formats
         for (const fmt of ['dd-MMM-yy HH:mm:ss', 'dd-MMM-yyyy HH:mm:ss', 'yyyy-MM-dd HH:mm:ss', 'dd/MM/yyyy HH:mm:ss', 'MM/dd/yyyy HH:mm:ss', 'yyyy-MM-dd', 'dd/MM/yyyy', 'dd-MM-yyyy', 'dd-MMM-yyyy', 'dd-MMM-yy']) {
           try {
             const d = parse(str, fmt, new Date());
@@ -559,55 +576,59 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         return isNaN(fallback.getTime()) ? null : fallback;
       };
 
+      // Pre-build a lowercase user lookup map for fast matching
+      const userLookup = users.map(u => ({ ...u, nameLower: u.full_name?.toLowerCase() || '' }));
+
+      const matchUser = (name: string) => {
+        const searchName = name.toLowerCase();
+        return userLookup.find(u =>
+          u.nameLower === searchName || u.nameLower.includes(searchName) || searchName.includes(u.nameLower)
+        );
+      };
+
       if (isMachineFormat) {
         // ── Machine format: each row is one event (C/In or C/Out) ──
-        // Group by employee+date, then pair C/In and C/Out
-        const events: { name: string; dateTime: Date; isCheckIn: boolean }[] = [];
-        
-        for (const row of jsonData as Record<string, any>[]) {
-          const name = String(row[nameCol!] || '').trim();
-          const dtVal = row[dateTimeCol!];
-          const statusVal = String(row[statusCol!] || '').trim().toLowerCase();
-          if (!name || !dtVal) continue;
+        const grouped = new Map<string, { checkIns: Date[]; checkOuts: Date[] }>();
+        const CHUNK = 2000;
 
-          const dateTime = parseDate(dtVal);
-          if (!dateTime) continue;
+        for (let i = 0; i < jsonData.length; i += CHUNK) {
+          const chunk = jsonData.slice(i, i + CHUNK) as Record<string, any>[];
+          for (const row of chunk) {
+            const name = String(row[nameCol!] || '').trim();
+            const dtVal = row[dateTimeCol!];
+            const statusVal = String(row[statusCol!] || '').trim().toLowerCase();
+            if (!name || !dtVal) continue;
 
-          const isCheckIn = /c\/in|c.in|check.?in|clock.?in|in$/i.test(statusVal);
-          events.push({ name, dateTime, isCheckIn });
+            const dateTime = parseDate(dtVal);
+            if (!dateTime) continue;
+
+            const isCheckIn = /c\/in|c.in|check.?in|clock.?in|in$/i.test(statusVal);
+            const dateKey = `${name}|||${format(dateTime, 'yyyy-MM-dd')}`;
+            if (!grouped.has(dateKey)) grouped.set(dateKey, { checkIns: [], checkOuts: [] });
+            const group = grouped.get(dateKey)!;
+            if (isCheckIn) group.checkIns.push(dateTime);
+            else group.checkOuts.push(dateTime);
+          }
+
+          setParseProgress(`Processed ${Math.min(i + CHUNK, jsonData.length).toLocaleString()} / ${jsonData.length.toLocaleString()} rows...`);
+          await yieldToUI();
         }
 
-        // Group by name + date
-        const grouped = new Map<string, { checkIns: Date[]; checkOuts: Date[] }>();
-        events.forEach(ev => {
-          const dateKey = `${ev.name}|||${format(ev.dateTime, 'yyyy-MM-dd')}`;
-          if (!grouped.has(dateKey)) grouped.set(dateKey, { checkIns: [], checkOuts: [] });
-          const group = grouped.get(dateKey)!;
-          if (ev.isCheckIn) group.checkIns.push(ev.dateTime);
-          else group.checkOuts.push(ev.dateTime);
-        });
+        setParseProgress('Grouping attendance records...');
+        await yieldToUI();
 
         const parsed: any[] = [];
         grouped.forEach((group, key) => {
           const [name, dateStr] = key.split('|||');
           const parsedDate = new Date(dateStr);
-          
-          // Take earliest check-in, latest check-out
           const earliestIn = group.checkIns.length > 0 ? group.checkIns.sort((a, b) => a.getTime() - b.getTime())[0] : null;
           const latestOut = group.checkOuts.length > 0 ? group.checkOuts.sort((a, b) => b.getTime() - a.getTime())[0] : null;
 
-          const matchedUser = users.find(u => {
-            const fullName = u.full_name?.toLowerCase() || '';
-            const searchName = name.toLowerCase();
-            return fullName === searchName || fullName.includes(searchName) || searchName.includes(fullName);
-          });
+          const matchedUser = matchUser(name);
 
           let status: AttendanceStatus = 'present';
           if (!earliestIn && !latestOut) status = 'absent';
-          else if (earliestIn) {
-            const inHour = earliestIn.getHours();
-            if (inHour >= 9) status = 'late';
-          }
+          else if (earliestIn && earliestIn.getHours() >= 9) status = 'late';
 
           parsed.push({
             name, date: dateStr, dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
@@ -622,14 +643,15 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
         if (parsed.length === 0) {
           toast({ title: 'No valid records', description: 'Could not parse any attendance records from the file', variant: 'destructive' });
+          setIsParsing(false);
           return;
         }
         parsed.sort((a, b) => a.name.localeCompare(b.name) || a.date.localeCompare(b.date));
         setUploadPreview(parsed);
-        toast({ title: `${parsed.length} daily records parsed from ${events.length} events`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
+        toast({ title: `${parsed.length} daily records parsed from ${jsonData.length.toLocaleString()} events`, description: `${parsed.filter(p => p.matched).length} matched to employees` });
 
       } else {
-        // ── Standard format: separate columns for Date, Check In, Check Out ──
+        // ── Standard format ──
         const parsed: any[] = [];
         for (const row of jsonData as Record<string, any>[]) {
           const name = String(row[nameCol!] || '').trim();
@@ -641,11 +663,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const parsedDate = parseDate(dateVal);
           if (!parsedDate) continue;
 
-          const matchedUser = users.find(u => {
-            const fullName = u.full_name?.toLowerCase() || '';
-            const searchName = name.toLowerCase();
-            return fullName === searchName || fullName.includes(searchName) || searchName.includes(fullName);
-          });
+          const matchedUser = matchUser(name);
 
           const parseTime = (timeStr: string, dateBase: Date): string | null => {
             if (!timeStr || timeStr === '-' || timeStr === '--:--') return null;
@@ -683,6 +701,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
         if (parsed.length === 0) {
           toast({ title: 'No valid records', description: 'Could not parse any attendance records from the file', variant: 'destructive' });
+          setIsParsing(false);
           return;
         }
         setUploadPreview(parsed);
@@ -691,6 +710,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     } catch (err) {
       toast({ title: 'Failed to read file', description: String(err), variant: 'destructive' });
     }
+    setIsParsing(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [users, departmentId, toast]);
 
@@ -737,10 +757,19 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                 <p className="text-[10px] text-muted-foreground">Upload Excel from machine</p>
               </div>
             </div>
-            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} />
-            <Button size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
-              <Upload className="h-4 w-4 mr-2" /> Upload Excel
-            </Button>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing} />
+            {isParsing ? (
+              <div className="w-full text-center space-y-1.5">
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{parseProgress}</span>
+                </div>
+              </div>
+            ) : (
+              <Button size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" /> Upload Excel
+              </Button>
+            )}
           </CardContent>
         </Card>
 
