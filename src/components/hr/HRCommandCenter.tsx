@@ -34,8 +34,8 @@ interface HRCommandCenterProps {
 
 const NAVIGATION_ITEMS = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'employees', label: 'People', icon: Users },
-  { id: 'leave', label: 'Leave', icon: Calendar },
+  { id: 'employees', label: 'Employee Hub', icon: Users },
+  { id: 'leave', label: 'Leave Management', icon: Calendar },
   { id: 'attendance', label: 'Attendance', icon: Clock },
   { id: 'performance', label: 'Performance', icon: Target },
   { id: 'onboarding', label: 'Onboarding', icon: UserPlus },
