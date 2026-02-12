@@ -21,6 +21,7 @@ import Notifications from "./pages/Notifications";
 import InstallApp from "./pages/InstallApp";
 import ProfileSettings from "./pages/ProfileSettings";
 import NotFound from "./pages/NotFound";
+import LeaveAdmin from "./pages/LeaveAdmin";
 
 
 const queryClient = new QueryClient({
@@ -57,6 +58,7 @@ const App = () => (
               <Route path="/notifications" element={<Notifications />} />
               <Route path="/install" element={<InstallApp />} />
               <Route path="/settings" element={<ProfileSettings />} />
+              <Route path="/leave-admin" element={<LeaveAdmin />} />
               {/* Catch-all route for 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>
