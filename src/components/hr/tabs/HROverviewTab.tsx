@@ -33,17 +33,24 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
   const { companies } = useCompanies();
   const { user } = useAuth();
 
-  // Compute current user's own leave stats
+  // Compute current user's own leave balance (accrued - used)
   const leaveStats = useMemo(() => {
-    if (!user) return { annualDays: 0, personalDays: 0 };
+    if (!user) return { annualBalance: 0, personalDays: 0 };
+    const now = new Date();
+    const completedMonths = now.getMonth(); // Jan=0 means 0 completed, Feb=1 means 1 completed
+    const monthlyAccrual = 1.5;
+    const accrued = completedMonths * monthlyAccrual; // 1 completed month = 1.5 days
+
     const myApproved = leaveRequests.filter(r => r.status === 'approved' && r.requester_id === user.id);
-    const annualDays = myApproved
+    const annualUsed = myApproved
       .filter(r => r.leave_type === 'annual')
       .reduce((sum, r) => sum + r.total_days, 0);
     const personalDays = myApproved
       .filter(r => r.leave_type === 'personal' || r.leave_type === 'sick')
       .reduce((sum, r) => sum + r.total_days, 0);
-    return { annualDays, personalDays };
+
+    const annualBalance = Math.max(0, accrued - annualUsed);
+    return { annualBalance, personalDays };
   }, [leaveRequests, user]);
 
   const STAT_CARDS = [
@@ -56,7 +63,7 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
     },
     { 
       label: 'ANNUAL LEAVE', 
-      value: `${leaveStats.annualDays} days`, 
+      value: `${leaveStats.annualBalance} days`, 
       icon: Hand,
       gradient: 'bg-gradient-to-br from-[hsl(187,71%,45%)] to-[hsl(187,71%,35%)]',
       onClick: () => onNavigate('leave')
