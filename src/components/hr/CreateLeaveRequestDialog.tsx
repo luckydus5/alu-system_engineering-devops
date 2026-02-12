@@ -1,20 +1,20 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
+import { Separator } from '@/components/ui/separator';
 import { 
   CalendarIcon, Loader2, Palmtree, Thermometer, User, Baby, 
-  Heart, Clock, Send, ArrowRight, CheckCircle2, AlertCircle,
-  Users, Search, Building2, UserCheck
+  Heart, Clock, Send, CheckCircle2, AlertCircle,
+  Users, Search, UserCheck, ArrowRight, ChevronDown
 } from 'lucide-react';
 import { format, differenceInBusinessDays, addDays, isWeekend } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -28,14 +28,14 @@ interface CreateLeaveRequestDialogProps {
   defaultOnBehalf?: boolean;
 }
 
-const LEAVE_TYPE_CONFIG: Record<LeaveType, { icon: React.ElementType; color: string; bg: string; description: string }> = {
-  annual: { icon: Palmtree, color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 dark:bg-emerald-950/30 dark:border-emerald-800', description: 'Vacation & holiday time' },
-  sick: { icon: Thermometer, color: 'text-red-500', bg: 'bg-red-50 border-red-200 hover:border-red-400 dark:bg-red-950/30 dark:border-red-800', description: 'Health-related absence' },
-  personal: { icon: User, color: 'text-blue-500', bg: 'bg-blue-50 border-blue-200 hover:border-blue-400 dark:bg-blue-950/30 dark:border-blue-800', description: 'Personal matters' },
-  maternity: { icon: Baby, color: 'text-pink-500', bg: 'bg-pink-50 border-pink-200 hover:border-pink-400 dark:bg-pink-950/30 dark:border-pink-800', description: 'Maternity leave' },
-  paternity: { icon: Baby, color: 'text-indigo-500', bg: 'bg-indigo-50 border-indigo-200 hover:border-indigo-400 dark:bg-indigo-950/30 dark:border-indigo-800', description: 'Paternity leave' },
-  bereavement: { icon: Heart, color: 'text-gray-500', bg: 'bg-gray-50 border-gray-200 hover:border-gray-400 dark:bg-gray-950/30 dark:border-gray-800', description: 'Family bereavement' },
-  unpaid: { icon: Clock, color: 'text-amber-500', bg: 'bg-amber-50 border-amber-200 hover:border-amber-400 dark:bg-amber-950/30 dark:border-amber-800', description: 'Unpaid time off' },
+const LEAVE_TYPE_CONFIG: Record<LeaveType, { icon: React.ElementType; color: string; accent: string; description: string }> = {
+  annual: { icon: Palmtree, color: 'text-emerald-600', accent: 'border-emerald-400 bg-emerald-50 dark:bg-emerald-950/40', description: 'Vacation & holiday time' },
+  sick: { icon: Thermometer, color: 'text-red-500', accent: 'border-red-400 bg-red-50 dark:bg-red-950/40', description: 'Health-related absence' },
+  personal: { icon: User, color: 'text-blue-500', accent: 'border-blue-400 bg-blue-50 dark:bg-blue-950/40', description: 'Personal matters' },
+  maternity: { icon: Baby, color: 'text-pink-500', accent: 'border-pink-400 bg-pink-50 dark:bg-pink-950/40', description: 'Maternity leave' },
+  paternity: { icon: Baby, color: 'text-indigo-500', accent: 'border-indigo-400 bg-indigo-50 dark:bg-indigo-950/40', description: 'Paternity leave' },
+  bereavement: { icon: Heart, color: 'text-gray-500', accent: 'border-gray-400 bg-gray-50 dark:bg-gray-950/40', description: 'Family bereavement' },
+  unpaid: { icon: Clock, color: 'text-amber-500', accent: 'border-amber-400 bg-amber-50 dark:bg-amber-950/40', description: 'Unpaid time off' },
 };
 
 const AVATAR_GRADIENTS = [
@@ -55,15 +55,22 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
   const [startDate, setStartDate] = useState<Date | undefined>();
   const [endDate, setEndDate] = useState<Date | undefined>();
   const [reason, setReason] = useState('');
-  const [step, setStep] = useState(1);
   
-  // On-behalf-of state
   const [isOnBehalf, setIsOnBehalf] = useState(defaultOnBehalf);
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [showEmployeePicker, setShowEmployeePicker] = useState(defaultOnBehalf);
 
   const { createRequest } = useLeaveRequests();
   const { employees } = useEmployees();
+
+  // Reset on-behalf when dialog opens
+  useEffect(() => {
+    if (open) {
+      setIsOnBehalf(defaultOnBehalf);
+      setShowEmployeePicker(defaultOnBehalf);
+    }
+  }, [open, defaultOnBehalf]);
 
   const filteredEmployees = useMemo(() => {
     if (!employeeSearch.trim()) return employees.slice(0, 20);
@@ -92,7 +99,6 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
       department_id: isOnBehalf && selectedEmployee?.department_id ? selectedEmployee.department_id : departmentId,
     };
 
-    // If filing on behalf, attach employee_id
     if (isOnBehalf && selectedEmployee) {
       requestData.employee_id = selectedEmployee.id;
     }
@@ -107,10 +113,10 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
     setStartDate(undefined);
     setEndDate(undefined);
     setReason('');
-    setStep(1);
     setIsOnBehalf(defaultOnBehalf);
     setSelectedEmployee(null);
     setEmployeeSearch('');
+    setShowEmployeePicker(defaultOnBehalf);
   };
 
   const handleOpenChange = (v: boolean) => {
@@ -118,101 +124,99 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
     onOpenChange(v);
   };
 
-  const canProceedStep1 = isOnBehalf ? !!selectedEmployee && !!leaveType : !!leaveType;
-  const canProceedStep2 = !!startDate && !!endDate;
+  const canSubmit = !!startDate && !!endDate && !!leaveType && (isOnBehalf ? !!selectedEmployee : true);
   const config = LEAVE_TYPE_CONFIG[leaveType];
   const Icon = config.icon;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[580px] p-0 gap-0 overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent px-6 pt-6 pb-4">
+      <DialogContent className="sm:max-w-[520px] p-0 gap-0 overflow-hidden max-h-[90vh]">
+        {/* Clean Header */}
+        <div className="px-6 pt-5 pb-4 border-b bg-card">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">New Leave Request</DialogTitle>
-            <p className="text-sm text-muted-foreground">Complete 3 quick steps to submit your request</p>
+            <DialogTitle className="text-lg font-bold tracking-tight">
+              {isOnBehalf ? 'File Leave for Employee' : 'New Leave Request'}
+            </DialogTitle>
           </DialogHeader>
-          
+
           {/* On Behalf Toggle */}
-          <div className="flex items-center justify-between mt-3 p-3 rounded-xl bg-background/80 border">
-            <div className="flex items-center gap-2">
-              <Users className="h-4 w-4 text-muted-foreground" />
+          <div className="flex items-center justify-between mt-3 p-2.5 rounded-lg bg-muted/50 border border-border/60">
+            <div className="flex items-center gap-2.5">
+              <div className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center">
+                <Users className="h-3.5 w-3.5 text-primary" />
+              </div>
               <span className="text-sm font-medium">Filing on behalf of an employee</span>
             </div>
-            <Switch checked={isOnBehalf} onCheckedChange={(v) => { setIsOnBehalf(v); if (!v) { setSelectedEmployee(null); setEmployeeSearch(''); }}} />
-          </div>
-
-          {/* Progress Steps */}
-          <div className="flex items-center gap-2 mt-4">
-            {[1, 2, 3].map((s) => (
-              <div key={s} className="flex items-center gap-2 flex-1">
-                <button
-                  onClick={() => { if (s < step) setStep(s); }}
-                  className={cn(
-                    'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all shrink-0',
-                    step === s && 'bg-primary text-primary-foreground scale-110 shadow-md',
-                    step > s && 'bg-primary/20 text-primary cursor-pointer',
-                    step < s && 'bg-muted text-muted-foreground'
-                  )}
-                >
-                  {step > s ? <CheckCircle2 className="h-4 w-4" /> : s}
-                </button>
-                {s < 3 && (
-                  <div className={cn('h-0.5 flex-1 rounded-full transition-colors', step > s ? 'bg-primary/40' : 'bg-muted')} />
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-between mt-1.5 text-[10px] text-muted-foreground font-medium">
-            <span className="w-8 text-center">{isOnBehalf ? 'Who' : 'Type'}</span>
-            <span className="text-center">Dates</span>
-            <span className="w-8 text-center">Review</span>
+            <Switch 
+              checked={isOnBehalf} 
+              onCheckedChange={(v) => { 
+                setIsOnBehalf(v); 
+                setShowEmployeePicker(v);
+                if (!v) { setSelectedEmployee(null); setEmployeeSearch(''); }
+              }} 
+            />
           </div>
         </div>
 
-        <div className="px-6 py-5 min-h-[320px]">
-          {/* Step 1 */}
-          {step === 1 && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
-              {/* Employee Picker (when on behalf) */}
-              {isOnBehalf && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-semibold flex items-center gap-2">
-                    <UserCheck className="h-4 w-4 text-primary" />
-                    Select Employee
-                  </Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search by name, ID, or email..."
-                      value={employeeSearch}
-                      onChange={e => setEmployeeSearch(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                  <ScrollArea className="h-[140px] border rounded-xl">
-                    <div className="p-1 space-y-0.5">
+        <ScrollArea className="max-h-[calc(90vh-180px)]">
+          <div className="px-6 py-5 space-y-5">
+
+            {/* Employee Picker */}
+            {isOnBehalf && (
+              <section className="space-y-2.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <UserCheck className="h-3.5 w-3.5" />
+                  Employee
+                </Label>
+
+                {selectedEmployee && !showEmployeePicker ? (
+                  <button
+                    onClick={() => setShowEmployeePicker(true)}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg border-2 border-primary/30 bg-primary/5 text-left transition-all hover:border-primary/50"
+                  >
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className={cn('text-xs font-bold text-white bg-gradient-to-br', getGradient(selectedEmployee.full_name))}>
+                        {selectedEmployee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">{selectedEmployee.full_name}</p>
+                      <p className="text-[11px] text-muted-foreground">{selectedEmployee.employee_number} • {selectedEmployee.department_name || 'No dept'}</p>
+                    </div>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by name, ID, or email..."
+                        value={employeeSearch}
+                        onChange={e => setEmployeeSearch(e.target.value)}
+                        className="pl-10 h-10"
+                        autoFocus={isOnBehalf && !selectedEmployee}
+                      />
+                    </div>
+                    <div className="border rounded-lg overflow-hidden max-h-[160px] overflow-y-auto">
                       {filteredEmployees.map(emp => {
                         const selected = selectedEmployee?.id === emp.id;
                         return (
                           <button
                             key={emp.id}
-                            onClick={() => setSelectedEmployee(emp)}
+                            onClick={() => { setSelectedEmployee(emp); setShowEmployeePicker(false); setEmployeeSearch(''); }}
                             className={cn(
-                              'w-full flex items-center gap-3 p-2 rounded-lg text-left transition-all',
-                              selected ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-muted/60'
+                              'w-full flex items-center gap-3 px-3 py-2 text-left transition-colors border-b last:border-b-0',
+                              selected ? 'bg-primary/10' : 'hover:bg-muted/60'
                             )}
                           >
-                            <Avatar className="h-8 w-8">
-                              <AvatarFallback className={cn('text-[10px] font-bold text-white bg-gradient-to-br', getGradient(emp.full_name))}>
+                            <Avatar className="h-7 w-7">
+                              <AvatarFallback className={cn('text-[9px] font-bold text-white bg-gradient-to-br', getGradient(emp.full_name))}>
                                 {emp.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
                               </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium truncate">{emp.full_name}</p>
-                              <p className="text-[10px] text-muted-foreground">
-                                {emp.employee_number} • {emp.department_name || 'No dept'}
-                              </p>
+                              <p className="text-[10px] text-muted-foreground">{emp.employee_number} • {emp.department_name || 'No dept'}</p>
                             </div>
                             {selected && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
                           </button>
@@ -222,11 +226,16 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
                         <p className="text-center text-sm text-muted-foreground py-6">No employees found</p>
                       )}
                     </div>
-                  </ScrollArea>
-                </div>
-              )}
+                  </div>
+                )}
+              </section>
+            )}
 
-              <Label className="text-sm font-semibold">Select Leave Type</Label>
+            {/* Leave Type Selection */}
+            <section className="space-y-2.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Leave Type
+              </Label>
               <div className="grid grid-cols-2 gap-2">
                 {(Object.entries(LEAVE_TYPE_CONFIG) as [LeaveType, typeof config][]).map(([type, cfg]) => {
                   const TypeIcon = cfg.icon;
@@ -236,63 +245,44 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
                       key={type}
                       onClick={() => setLeaveType(type)}
                       className={cn(
-                        'flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all',
+                        'flex items-center gap-2.5 p-2.5 rounded-lg border-2 text-left transition-all',
                         selected
-                          ? `${cfg.bg} ring-2 ring-offset-1 ring-primary/30 scale-[1.02]`
-                          : 'border-border hover:border-muted-foreground/30 bg-card'
+                          ? `${cfg.accent} border-l-4 shadow-sm`
+                          : 'border-transparent bg-muted/40 hover:bg-muted/70'
                       )}
                     >
-                      <TypeIcon className={cn('h-5 w-5 shrink-0', cfg.color)} />
+                      <TypeIcon className={cn('h-4 w-4 shrink-0', selected ? cfg.color : 'text-muted-foreground')} />
                       <div className="min-w-0">
-                        <div className="text-sm font-medium truncate">{LEAVE_TYPE_LABELS[type]}</div>
-                        <div className="text-[10px] text-muted-foreground truncate">{cfg.description}</div>
+                        <div className={cn('text-sm font-medium truncate', selected ? 'text-foreground' : 'text-muted-foreground')}>{LEAVE_TYPE_LABELS[type]}</div>
                       </div>
                     </button>
                   );
                 })}
               </div>
-            </div>
-          )}
+            </section>
 
-          {/* Step 2: Dates */}
-          {step === 2 && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
-              {/* Show who this is for */}
-              {isOnBehalf && selectedEmployee && (
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/20">
-                  <Avatar className="h-9 w-9">
-                    <AvatarFallback className={cn('text-xs font-bold text-white bg-gradient-to-br', getGradient(selectedEmployee.full_name))}>
-                      {selectedEmployee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-semibold">{selectedEmployee.full_name}</p>
-                    <p className="text-[10px] text-muted-foreground">{selectedEmployee.employee_number} • {selectedEmployee.department_name}</p>
-                  </div>
-                  <Badge variant="outline" className="ml-auto text-[10px]">On behalf</Badge>
-                </div>
-              )}
+            <Separator />
 
-              <div className="flex items-center gap-2 mb-1">
-                <Icon className={cn('h-5 w-5', config.color)} />
-                <span className="text-sm font-semibold">{LEAVE_TYPE_LABELS[leaveType]}</span>
-              </div>
-
+            {/* Date Selection */}
+            <section className="space-y-2.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Duration
+              </Label>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">Start Date</Label>
+                  <Label className="text-[11px] text-muted-foreground">From</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         className={cn(
-                          'w-full justify-start text-left font-normal h-11 rounded-xl',
+                          'w-full justify-start text-left font-normal h-10',
                           !startDate && 'text-muted-foreground',
-                          startDate && 'border-primary/40 bg-primary/5'
+                          startDate && 'border-primary/40 font-medium'
                         )}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {startDate ? format(startDate, 'MMM d, yyyy') : 'Pick date'}
+                        <CalendarIcon className="mr-2 h-3.5 w-3.5 opacity-60" />
+                        {startDate ? format(startDate, 'dd MMM yyyy') : 'Start date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -308,19 +298,19 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
                   </Popover>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">End Date</Label>
+                  <Label className="text-[11px] text-muted-foreground">To</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
                         className={cn(
-                          'w-full justify-start text-left font-normal h-11 rounded-xl',
+                          'w-full justify-start text-left font-normal h-10',
                           !endDate && 'text-muted-foreground',
-                          endDate && 'border-primary/40 bg-primary/5'
+                          endDate && 'border-primary/40 font-medium'
                         )}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {endDate ? format(endDate, 'MMM d, yyyy') : 'Pick date'}
+                        <CalendarIcon className="mr-2 h-3.5 w-3.5 opacity-60" />
+                        {endDate ? format(endDate, 'dd MMM yyyy') : 'End date'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -337,122 +327,64 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
                 </div>
               </div>
 
+              {/* Duration Badge */}
               {totalDays > 0 && (
-                <div className={cn('p-4 rounded-xl border-2 flex items-center justify-between', config.bg)}>
+                <div className={cn('flex items-center justify-between p-3 rounded-lg border-l-4', config.accent)}>
                   <div className="flex items-center gap-2">
-                    <Icon className={cn('h-5 w-5', config.color)} />
-                    <span className="text-sm font-medium">Duration</span>
+                    <Icon className={cn('h-4 w-4', config.color)} />
+                    <span className="text-sm font-medium">{LEAVE_TYPE_LABELS[leaveType]}</span>
                   </div>
-                  <Badge variant="secondary" className="text-base font-bold px-4 py-1">
+                  <Badge variant="secondary" className="text-sm font-bold px-3">
                     {totalDays} day{totalDays > 1 ? 's' : ''}
                   </Badge>
                 </div>
               )}
+            </section>
 
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">Reason (Optional)</Label>
-                <Textarea
-                  placeholder="Brief reason for the leave..."
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  rows={2}
-                  className="rounded-xl resize-none"
-                />
-              </div>
+            {/* Reason */}
+            <section className="space-y-1.5">
+              <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Reason <span className="font-normal normal-case">(optional)</span>
+              </Label>
+              <Textarea
+                placeholder="Brief reason for the leave..."
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                rows={2}
+                className="resize-none text-sm"
+              />
+            </section>
+
+            {/* Info Banner */}
+            <div className="flex items-start gap-2.5 p-3 rounded-lg bg-muted/50 border text-muted-foreground">
+              <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-primary" />
+              <p className="text-[11px] leading-relaxed">
+                {isOnBehalf 
+                  ? `This will be submitted on behalf of ${selectedEmployee?.full_name || 'the employee'}. Approval workflow: Manager → HR → GM.`
+                  : 'Your request will follow the approval workflow: Manager → HR → General Manager.'
+                }
+              </p>
             </div>
-          )}
-
-          {/* Step 3: Review */}
-          {step === 3 && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-200">
-              <div className="text-sm font-semibold flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                Review & Submit
-              </div>
-
-              <div className="rounded-xl border-2 border-border overflow-hidden">
-                {/* On behalf banner */}
-                {isOnBehalf && selectedEmployee && (
-                  <div className="px-4 py-3 bg-primary/5 border-b flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarFallback className={cn('text-[10px] font-bold text-white bg-gradient-to-br', getGradient(selectedEmployee.full_name))}>
-                        {selectedEmployee.full_name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold">{selectedEmployee.full_name}</p>
-                      <p className="text-[10px] text-muted-foreground">{selectedEmployee.employee_number}</p>
-                    </div>
-                    <Badge className="bg-primary/10 text-primary border-primary/20 text-[10px]">On behalf</Badge>
-                  </div>
-                )}
-
-                <div className={cn('p-4 flex items-center gap-3', config.bg)}>
-                  <Icon className={cn('h-6 w-6', config.color)} />
-                  <div>
-                    <div className="font-semibold">{LEAVE_TYPE_LABELS[leaveType]}</div>
-                    <div className="text-xs text-muted-foreground">{config.description}</div>
-                  </div>
-                </div>
-                <div className="p-4 space-y-3 bg-card">
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground">Period</span>
-                    <span className="text-sm font-medium">
-                      {startDate && format(startDate, 'MMM d')} → {endDate && format(endDate, 'MMM d, yyyy')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-xs text-muted-foreground">Total Days</span>
-                    <Badge variant="secondary" className="font-bold">{totalDays} business day{totalDays > 1 ? 's' : ''}</Badge>
-                  </div>
-                  {reason && (
-                    <div className="pt-2 border-t">
-                      <span className="text-xs text-muted-foreground block mb-1">Reason</span>
-                      <p className="text-sm">{reason}</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300">
-                <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-                <p className="text-xs">
-                  {isOnBehalf 
-                    ? `This will be submitted on behalf of ${selectedEmployee?.full_name}. The request follows the same approval workflow: Manager → HR → General Manager.`
-                    : 'This will be sent to your manager for approval, then forwarded to HR for final review.'
-                  }
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+          </div>
+        </ScrollArea>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t bg-muted/30 flex justify-between">
-          <Button
-            variant="ghost"
-            onClick={() => step === 1 ? handleOpenChange(false) : setStep(step - 1)}
-          >
-            {step === 1 ? 'Cancel' : 'Back'}
+        <div className="px-6 py-3.5 border-t bg-muted/30 flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => handleOpenChange(false)}>
+            Cancel
           </Button>
-          {step < 3 ? (
-            <Button
-              onClick={() => setStep(step + 1)}
-              disabled={step === 1 ? !canProceedStep1 : !canProceedStep2}
-              className="gap-2"
-            >
-              Next <ArrowRight className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              onClick={handleSubmit}
-              disabled={createRequest.isPending}
-              className="gap-2 bg-primary hover:bg-primary/90"
-            >
-              {createRequest.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Submit Request
-            </Button>
-          )}
+          <Button
+            onClick={handleSubmit}
+            disabled={!canSubmit || createRequest.isPending}
+            className="gap-2 min-w-[140px]"
+          >
+            {createRequest.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            Submit Request
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
