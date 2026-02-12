@@ -6,12 +6,14 @@ import {
   UserCog,
   Shield,
   Users,
+  CalendarDays,
 } from 'lucide-react';
 import hqPowerLogo from '@/assets/hq-power-logo.png';
 import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useCurrentUserLeavePermissions } from '@/hooks/useLeaveManagers';
 import { getDepartmentIcon } from '@/lib/departmentIcons';
 import {
   Sidebar,
@@ -42,9 +44,11 @@ export function AppSidebar() {
   const { signOut } = useAuth();
   const { profile, highestRole } = useUserRole();
   const { departments } = useDepartments();
+  const { canFileForOthers } = useCurrentUserLeavePermissions();
 
   const mainNavItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+    ...(canFileForOthers ? [{ title: 'Leave Admin', url: '/leave-admin', icon: CalendarDays }] : []),
   ];
 
   const isAdmin = highestRole === 'admin' || highestRole === 'super_admin';
