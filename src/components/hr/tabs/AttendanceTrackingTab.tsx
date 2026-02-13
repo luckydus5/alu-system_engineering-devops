@@ -643,6 +643,27 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const fallbackCo = selectedCompanyId && selectedCompanyId !== 'none' ? selectedCompanyId : undefined;
       const classifyDept = (excelDept: string) => classifier.classify(excelDept, fallbackCo);
 
+      // Normalize name: remove dots/punctuation, collapse spaces, lowercase
+      const normalizeName = (n: string) => n.toLowerCase().replace(/[._-]/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // Check if two names refer to the same person using word-level matching
+      const namesMatch = (a: string, b: string): boolean => {
+        const aParts = normalizeName(a).split(' ').filter(p => p.length > 1);
+        const bParts = normalizeName(b).split(' ').filter(p => p.length > 1);
+        if (aParts.length === 0 || bParts.length === 0) return false;
+        // Count how many words from the shorter name appear in the longer name
+        const shorter = aParts.length <= bParts.length ? aParts : bParts;
+        const longer = aParts.length <= bParts.length ? bParts : aParts;
+        let matched = 0;
+        for (const word of shorter) {
+          if (longer.some(w => w === word || (word.length >= 4 && w.startsWith(word)) || (w.length >= 4 && word.startsWith(w)))) {
+            matched++;
+          }
+        }
+        // Require at least half of the shorter name's words to match, and at least 1
+        return matched >= 1 && matched >= Math.ceil(shorter.length / 2);
+      };
+
       const matchUser = (name: string, empNo?: string) => {
         const searchName = name.toLowerCase().trim();
         // Try exact employee number match first
@@ -650,28 +671,30 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const byNo = employeeLookup.find(e => e.employee_number === `EMP-${empNo.padStart(4, '0')}` || e.employee_number === empNo);
           if (byNo) return { type: 'employee' as const, ...byNo };
         }
-        // Try exact name match against employees first
-        let match = employeeLookup.find(e => e.nameLower === searchName);
+        // Try exact name match (normalized) against employees first
+        const searchNorm = normalizeName(name);
+        let match = employeeLookup.find(e => normalizeName(e.full_name || '') === searchNorm);
         if (match) return { type: 'employee' as const, ...match };
-        // Try partial match against employees
-        match = employeeLookup.find(e => e.nameLower.includes(searchName) || searchName.includes(e.nameLower));
+        // Try word-level match against employees
+        match = employeeLookup.find(e => namesMatch(name, e.full_name || ''));
         if (match) return { type: 'employee' as const, ...match };
-        // Try profiles/users
-        let uMatch = userLookup.find(u => u.nameLower === searchName);
+        // Try profiles/users - exact normalized
+        let uMatch = userLookup.find(u => normalizeName(u.full_name || '') === searchNorm);
         if (uMatch) return { type: 'user' as const, ...uMatch };
-        uMatch = userLookup.find(u => u.nameLower.includes(searchName) || searchName.includes(u.nameLower));
+        // Try word-level match against users
+        uMatch = userLookup.find(u => namesMatch(name, u.full_name || ''));
         if (uMatch) return { type: 'user' as const, ...uMatch };
         // Try last name only match (for single-name entries like "MANIRAKOZE")
-        const parts = searchName.split(/\s+/);
-        if (parts.length === 1) {
+        const parts = searchNorm.split(/\s+/);
+        if (parts.length === 1 && parts[0].length >= 4) {
           match = employeeLookup.find(e => {
-            const eParts = e.nameLower.split(/\s+/);
-            return eParts.some(p => p === searchName);
+            const eParts = normalizeName(e.full_name || '').split(/\s+/);
+            return eParts.some(p => p === parts[0]);
           });
           if (match) return { type: 'employee' as const, ...match };
           uMatch = userLookup.find(u => {
-            const uParts = u.nameLower.split(/\s+/);
-            return uParts.some(p => p === searchName);
+            const uParts = normalizeName(u.full_name || '').split(/\s+/);
+            return uParts.some(p => p === parts[0]);
           });
           if (uMatch) return { type: 'user' as const, ...uMatch };
         }
