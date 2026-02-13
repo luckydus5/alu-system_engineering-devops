@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DepartmentAccessCards } from '@/components/dashboard/DepartmentAccessCards';
-import { MobileDepartmentGrid } from '@/components/dashboard/MobileDepartmentGrid';
+
 import { PullToRefreshIndicator } from '@/components/shared/PullToRefreshIndicator';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -49,26 +49,9 @@ export default function Dashboard() {
           />
         )}
 
-        {/* Mobile View - Compact grid without heavy welcome section */}
-        {isMobile ? (
-          <div className="space-y-4">
-            {/* Simple mobile greeting */}
-            <div className="px-0">
-              <p className="text-sm text-muted-foreground">
-                {getGreeting()}, <span className="font-semibold text-foreground">{profile?.full_name?.split(' ')[0] || 'User'}</span>
-              </p>
-              {isRefreshing && (
-                <p className="text-xs text-primary mt-1">Refreshing...</p>
-              )}
-            </div>
-            
-            {/* Compact Department Grid */}
-            <MobileDepartmentGrid />
-          </div>
-        ) : (
-          /* Desktop View - Full layout */
-          <div className="space-y-8">
-            {/* Welcome Section - Enhanced */}
+        <div className="space-y-8">
+          {/* Welcome Section - Enhanced */}
+          {!isMobile && (
             <div 
               className="relative overflow-hidden rounded-2xl border border-primary/20 p-6 md:p-8"
               style={{
@@ -95,11 +78,22 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Department Access Cards - Main Feature */}
-            <DepartmentAccessCards />
-          </div>
-        )}
+          {isMobile && (
+            <div className="px-0">
+              <p className="text-sm text-muted-foreground">
+                {getGreeting()}, <span className="font-semibold text-foreground">{profile?.full_name?.split(' ')[0] || 'User'}</span>
+              </p>
+              {isRefreshing && (
+                <p className="text-xs text-primary mt-1">Refreshing...</p>
+              )}
+            </div>
+          )}
+
+          {/* Department Access Cards */}
+          <DepartmentAccessCards />
+        </div>
       </div>
     </DashboardLayout>
   );
