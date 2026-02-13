@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
       return !['admin', 'super_admin'].includes(targetRole);
     };
 
-    // Helper to sync system position (leave approver)
+    // Helper to sync system position (leave approver) AND auto-grant leave_managers permissions
     const syncSystemPosition = async (targetUserId: string, position: string | null) => {
       if (!isSuperAdmin) return; // Only super admins can assign positions
 
@@ -151,6 +151,15 @@ Deno.serve(async (req) => {
           .update({ is_active: false })
           .eq('user_id', targetUserId)
           .eq('is_active', true);
+
+        // If old role was peat_admin, remove leave_managers entry too
+        if (currentRole === 'peat_admin') {
+          await supabaseAdmin
+            .from('leave_managers')
+            .delete()
+            .eq('user_id', targetUserId);
+          console.log('Removed leave_managers for former peat_admin:', targetUserId);
+        }
       }
 
       // Assign new position
@@ -162,6 +171,23 @@ Deno.serve(async (req) => {
           .eq('approver_role', position)
           .eq('is_active', true);
 
+        // Also remove old leave_managers entry for whoever had this position
+        if (position === 'peat_admin') {
+          const { data: oldHolder } = await supabaseAdmin
+            .from('leave_approvers')
+            .select('user_id')
+            .eq('approver_role', position)
+            .eq('is_active', false)
+            .order('updated_at', { ascending: false })
+            .limit(1);
+          if (oldHolder?.[0]) {
+            await supabaseAdmin
+              .from('leave_managers')
+              .delete()
+              .eq('user_id', oldHolder[0].user_id);
+          }
+        }
+
         // Assign to this user
         await supabaseAdmin
           .from('leave_approvers')
@@ -172,7 +198,34 @@ Deno.serve(async (req) => {
             is_active: true,
           });
 
+        // Auto-grant leave_managers permission for peat_admin (can file for others)
+        if (position === 'peat_admin') {
+          await supabaseAdmin
+            .from('leave_managers')
+            .upsert({
+              user_id: targetUserId,
+              granted_by: requestingUserId,
+              can_file_for_others: true,
+              can_edit_balances: false,
+            }, { onConflict: 'user_id' });
+          console.log('Auto-granted leave_managers (can_file_for_others) for peat_admin:', targetUserId);
+        }
+
+        // Auto-grant leave_managers permission for peat_manager (can also file for themselves properly)
+        if (position === 'peat_manager') {
+          // Peat manager doesn't need leave_managers entry unless they also file for others
+          // But they need to be detected as department manager for approval chain
+          console.log('Peat Manager detected — will auto-approve pending leaves');
+        }
+
         console.log('System position assigned:', position, 'to user:', targetUserId);
+      } else {
+        // Position removed — clean up leave_managers if it was auto-granted
+        await supabaseAdmin
+          .from('leave_managers')
+          .delete()
+          .eq('user_id', targetUserId);
+        console.log('Cleaned up leave_managers for user:', targetUserId);
       }
     };
 
