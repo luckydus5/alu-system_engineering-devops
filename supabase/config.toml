@@ -1,16 +1,1 @@
-project_id = "utcobmnzimqhqtiheoqb"
-
-[functions.create-user]
-verify_jwt = false
-
-[functions.manage-user]
-verify_jwt = false
-
-[functions.system-health]
-verify_jwt = false
-
-[functions.system-monitor]
-verify_jwt = false
-
-[functions.admin-reset-password]
-verify_jwt = false
+project_id = "edumcnnilpnbdxcjpchw"
