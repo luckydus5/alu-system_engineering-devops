@@ -1918,6 +1918,47 @@ export type Database = {
           },
         ]
       }
+      weekend_schedules: {
+        Row: {
+          assigned_by: string
+          created_at: string
+          employee_id: string
+          id: string
+          is_off_duty: boolean
+          notes: string | null
+          updated_at: string
+          week_start_date: string
+        }
+        Insert: {
+          assigned_by: string
+          created_at?: string
+          employee_id: string
+          id?: string
+          is_off_duty?: boolean
+          notes?: string | null
+          updated_at?: string
+          week_start_date: string
+        }
+        Update: {
+          assigned_by?: string
+          created_at?: string
+          employee_id?: string
+          id?: string
+          is_off_duty?: boolean
+          notes?: string | null
+          updated_at?: string
+          week_start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekend_schedules_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

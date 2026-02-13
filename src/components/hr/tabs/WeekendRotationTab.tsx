@@ -4,94 +4,76 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from '@/components/ui/table';
 import { 
-  CalendarDays, Users, ChevronLeft, ChevronRight, Sun, Moon,
-  Shield, RefreshCw, UserCheck, Clock, AlertCircle
+  CalendarDays, Users, ChevronLeft, ChevronRight, 
+  Shield, UserCheck, AlertCircle, CheckSquare, XSquare, Save
 } from 'lucide-react';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useWeekendSchedules } from '@/hooks/useWeekendSchedules';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, eachDayOfInterval, isSameDay, isWeekend, getWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getWeek } from 'date-fns';
+import { toast } from 'sonner';
 
 interface WeekendRotationTabProps {
   departmentId: string;
 }
 
-interface DutyAssignment {
-  employeeId: string;
-  employeeName: string;
-  department: string;
-  date: Date;
-  shift: 'day' | 'night';
-  role: 'primary' | 'backup';
-}
-
 export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
   const { employees } = useEmployees();
   const { departments } = useDepartments();
+  const { user } = useAuth();
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
+  const [view, setView] = useState<'assign' | 'on-duty' | 'off-duty'>('assign');
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekNumber = getWeek(currentWeek, { weekStartsOn: 1 });
-  const daysInWeek = eachDayOfInterval({ start: weekStart, end: weekEnd });
-  const weekendDays = daysInWeek.filter(d => isWeekend(d));
 
-  // Filter employees by department
-  const filteredEmployees = useMemo(() => {
-    if (filterDepartment === 'all') return employees;
-    return employees.filter(e => e.department_id === filterDepartment);
+  const { schedules, isLoading, upsertSchedule, bulkUpsert, isEmployeeOffDuty } = useWeekendSchedules(currentWeek);
+
+  // Filter employees
+  const activeEmployees = useMemo(() => {
+    let emps = employees.filter(e => e.employment_status === 'active');
+    if (filterDepartment !== 'all') {
+      emps = emps.filter(e => e.department_id === filterDepartment);
+    }
+    return emps;
   }, [employees, filterDepartment]);
 
-  // Generate rotation assignments based on employee index and week number
-  const rotationAssignments = useMemo(() => {
-    const assignments: DutyAssignment[] = [];
-    const activeEmployees = filteredEmployees.filter(e => e.employment_status === 'active');
-    
-    if (activeEmployees.length === 0) return assignments;
+  const offDutyEmployees = useMemo(() => activeEmployees.filter(e => isEmployeeOffDuty(e.id)), [activeEmployees, isEmployeeOffDuty]);
+  const onDutyEmployees = useMemo(() => activeEmployees.filter(e => !isEmployeeOffDuty(e.id)), [activeEmployees, isEmployeeOffDuty]);
 
-    weekendDays.forEach((day, dayIdx) => {
-      // Rotate primary and backup based on week number
-      const primaryIdx = (weekNumber + dayIdx) % activeEmployees.length;
-      const backupIdx = (weekNumber + dayIdx + 1) % activeEmployees.length;
+  const handleToggle = (employeeId: string) => {
+    if (!user) return;
+    const current = isEmployeeOffDuty(employeeId);
+    upsertSchedule.mutate({ employeeId, isOffDuty: !current, assignedBy: user.id });
+  };
 
-      const primary = activeEmployees[primaryIdx];
-      const backup = activeEmployees[backupIdx];
+  const handleSelectAll = () => {
+    if (!user) return;
+    const unselected = activeEmployees.filter(e => !isEmployeeOffDuty(e.id));
+    if (unselected.length === 0) return;
+    bulkUpsert.mutate({ employeeIds: unselected.map(e => e.id), isOffDuty: true, assignedBy: user.id });
+  };
 
-      if (primary) {
-        assignments.push({
-          employeeId: primary.id,
-          employeeName: primary.full_name,
-          department: primary.department_name || 'Unassigned',
-          date: day,
-          shift: 'day',
-          role: 'primary',
-        });
-      }
-      if (backup) {
-        assignments.push({
-          employeeId: backup.id,
-          employeeName: backup.full_name,
-          department: backup.department_name || 'Unassigned',
-          date: day,
-          shift: 'day',
-          role: 'backup',
-        });
-      }
-    });
+  const handleDeselectAll = () => {
+    if (!user) return;
+    const selected = activeEmployees.filter(e => isEmployeeOffDuty(e.id));
+    if (selected.length === 0) return;
+    bulkUpsert.mutate({ employeeIds: selected.map(e => e.id), isOffDuty: false, assignedBy: user.id });
+  };
 
-    return assignments;
-  }, [filteredEmployees, weekendDays, weekNumber]);
+  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
 
-  const onDutyToday = rotationAssignments.filter(
-    a => isSameDay(a.date, new Date()) && a.role === 'primary'
-  );
-
-  const totalOnDutyThisWeekend = rotationAssignments.filter(a => a.role === 'primary').length;
-
-  const getInitials = (name: string) => {
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  const getDeptName = (deptId: string | null) => {
+    if (!deptId) return 'Unassigned';
+    return departments.find(d => d.id === deptId)?.name || 'Unassigned';
   };
 
   return (
@@ -102,9 +84,9 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">On Duty Today</p>
-                <p className="text-2xl font-bold mt-1">{onDutyToday.length}</p>
-                <p className="text-xs text-muted-foreground">primary assigned</p>
+                <p className="text-xs font-medium text-muted-foreground">On Duty</p>
+                <p className="text-2xl font-bold mt-1">{onDutyEmployees.length}</p>
+                <p className="text-xs text-muted-foreground">this weekend</p>
               </div>
               <div className="p-2.5 rounded-xl bg-primary/20">
                 <UserCheck className="h-4 w-4 text-primary" />
@@ -117,9 +99,9 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Weekend Slots</p>
-                <p className="text-2xl font-bold mt-1">{totalOnDutyThisWeekend}</p>
-                <p className="text-xs text-muted-foreground">this weekend</p>
+                <p className="text-xs font-medium text-muted-foreground">Off Duty</p>
+                <p className="text-2xl font-bold mt-1">{offDutyEmployees.length}</p>
+                <p className="text-xs text-muted-foreground">weekend off</p>
               </div>
               <div className="p-2.5 rounded-xl bg-chart-4/20">
                 <CalendarDays className="h-4 w-4 text-chart-4" />
@@ -132,12 +114,12 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Rotation Cycle</p>
-                <p className="text-2xl font-bold mt-1">Week {weekNumber}</p>
-                <p className="text-xs text-muted-foreground">auto-rotating</p>
+                <p className="text-xs font-medium text-muted-foreground">Week</p>
+                <p className="text-2xl font-bold mt-1">{weekNumber}</p>
+                <p className="text-xs text-muted-foreground">{format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}</p>
               </div>
               <div className="p-2.5 rounded-xl bg-success/20">
-                <RefreshCw className="h-4 w-4 text-success" />
+                <Shield className="h-4 w-4 text-success" />
               </div>
             </div>
           </CardContent>
@@ -147,9 +129,9 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Active Staff</p>
-                <p className="text-2xl font-bold mt-1">{filteredEmployees.filter(e => e.employment_status === 'active').length}</p>
-                <p className="text-xs text-muted-foreground">in rotation pool</p>
+                <p className="text-xs font-medium text-muted-foreground">Total Staff</p>
+                <p className="text-2xl font-bold mt-1">{activeEmployees.length}</p>
+                <p className="text-xs text-muted-foreground">active employees</p>
               </div>
               <div className="p-2.5 rounded-xl bg-warning/20">
                 <Users className="h-4 w-4 text-warning" />
@@ -189,171 +171,212 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
         </Select>
       </div>
 
-      {/* Weekend Schedule Grid */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        {weekendDays.map(day => {
-          const dayAssignments = rotationAssignments.filter(a => isSameDay(a.date, day));
-          const isToday = isSameDay(day, new Date());
+      {/* Tabbed Views */}
+      <Tabs value={view} onValueChange={(v) => setView(v as any)}>
+        <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsTrigger value="assign" className="text-xs gap-1.5">
+            <CheckSquare className="h-3.5 w-3.5" />
+            Assign Weekend
+          </TabsTrigger>
+          <TabsTrigger value="on-duty" className="text-xs gap-1.5">
+            <UserCheck className="h-3.5 w-3.5" />
+            On Duty ({onDutyEmployees.length})
+          </TabsTrigger>
+          <TabsTrigger value="off-duty" className="text-xs gap-1.5">
+            <XSquare className="h-3.5 w-3.5" />
+            Off Duty ({offDutyEmployees.length})
+          </TabsTrigger>
+        </TabsList>
 
-          return (
-            <Card key={day.toISOString()} className={cn(
-              "overflow-hidden transition-all",
-              isToday && "ring-2 ring-primary/50 shadow-premium"
-            )}>
-              <CardHeader className={cn(
-                "pb-3 pt-4",
-                isToday ? "bg-primary/5" : "bg-muted/30"
-              )}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "h-10 w-10 rounded-xl flex items-center justify-center",
-                      isToday ? "bg-primary text-primary-foreground" : "bg-muted"
-                    )}>
-                      <span className="text-lg font-bold">{format(day, 'd')}</span>
-                    </div>
-                    <div>
-                      <CardTitle className="text-base">{format(day, 'EEEE')}</CardTitle>
-                      <p className="text-xs text-muted-foreground">{format(day, 'MMMM d, yyyy')}</p>
-                    </div>
-                  </div>
-                  {isToday && (
-                    <Badge className="bg-primary/15 text-primary border-primary/30 text-[10px]">
-                      Today
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-
-              <CardContent className="p-4 space-y-3">
-                {dayAssignments.length === 0 ? (
-                  <div className="flex items-center gap-2 py-6 justify-center text-muted-foreground">
-                    <AlertCircle className="h-4 w-4" />
-                    <p className="text-sm">No employees in rotation pool</p>
-                  </div>
-                ) : (
-                  dayAssignments.map((assignment, idx) => (
-                    <div
-                      key={`${assignment.employeeId}-${idx}`}
-                      className={cn(
-                        "flex items-center gap-3 p-3 rounded-xl border transition-colors",
-                        assignment.role === 'primary'
-                          ? "bg-primary/5 border-primary/20"
-                          : "bg-muted/30 border-border"
-                      )}
-                    >
-                      <Avatar className="h-9 w-9">
-                        <AvatarFallback className={cn(
-                          "text-xs font-semibold",
-                          assignment.role === 'primary'
-                            ? "bg-primary/20 text-primary"
-                            : "bg-muted text-muted-foreground"
-                        )}>
-                          {getInitials(assignment.employeeName)}
-                        </AvatarFallback>
-                      </Avatar>
-
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{assignment.employeeName}</p>
-                        <p className="text-xs text-muted-foreground">{assignment.department}</p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={cn(
-                          "text-[10px] px-2",
-                          assignment.role === 'primary'
-                            ? "border-primary/30 text-primary bg-primary/10"
-                            : "border-muted-foreground/30 text-muted-foreground"
-                        )}>
-                          <Shield className="h-3 w-3 mr-1" />
-                          {assignment.role === 'primary' ? 'Primary' : 'Backup'}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] px-2">
-                          <Sun className="h-3 w-3 mr-1" />
-                          Day
-                        </Badge>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Rotation Calendar Preview */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <RefreshCw className="h-4 w-4 text-primary" />
-            Upcoming Rotation Preview
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Week</th>
-                  <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Saturday Primary</th>
-                  <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Sunday Primary</th>
-                  <th className="text-left py-2 font-medium text-muted-foreground">Period</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[0, 1, 2, 3].map(offset => {
-                  const futureWeek = addWeeks(currentWeek, offset);
-                  const fwStart = startOfWeek(futureWeek, { weekStartsOn: 1 });
-                  const fwEnd = endOfWeek(futureWeek, { weekStartsOn: 1 });
-                  const fwNum = getWeek(futureWeek, { weekStartsOn: 1 });
-                  const fwWeekendDays = eachDayOfInterval({ start: fwStart, end: fwEnd }).filter(isWeekend);
-                  const activeEmps = filteredEmployees.filter(e => e.employment_status === 'active');
-
-                  return (
-                    <tr key={offset} className={cn(
-                      "border-b last:border-0",
-                      offset === 0 && "bg-primary/5 font-medium"
-                    )}>
-                      <td className="py-2.5 pr-4">
-                        <div className="flex items-center gap-2">
-                          <span>Week {fwNum}</span>
-                          {offset === 0 && (
-                            <Badge className="bg-primary/15 text-primary border-0 text-[10px]">Current</Badge>
-                          )}
-                        </div>
-                      </td>
-                      {fwWeekendDays.map((day, dayIdx) => {
-                        const idx = (fwNum + dayIdx) % (activeEmps.length || 1);
-                        const emp = activeEmps[idx];
+        {/* Assign Tab - Excel-like table */}
+        <TabsContent value="assign">
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Weekend Schedule Assignment</CardTitle>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleSelectAll}>
+                  Select All Off
+                </Button>
+                <Button variant="outline" size="sm" className="text-xs h-7" onClick={handleDeselectAll}>
+                  Clear All
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-12 text-center">#</TableHead>
+                      <TableHead className="w-12 text-center">Off?</TableHead>
+                      <TableHead>Employee Name</TableHead>
+                      <TableHead>Department</TableHead>
+                      <TableHead>Employee ID</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {activeEmployees.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                          <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+                          No active employees found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      activeEmployees.map((emp, idx) => {
+                        const isOff = isEmployeeOffDuty(emp.id);
                         return (
-                          <td key={dayIdx} className="py-2.5 pr-4">
-                            {emp ? (
-                              <div className="flex items-center gap-2">
-                                <Avatar className="h-6 w-6">
-                                  <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
+                          <TableRow
+                            key={emp.id}
+                            className={cn(
+                              "cursor-pointer transition-colors",
+                              isOff ? "bg-chart-4/5" : "hover:bg-muted/30"
+                            )}
+                            onClick={() => handleToggle(emp.id)}
+                          >
+                            <TableCell className="text-center text-xs text-muted-foreground font-mono">
+                              {idx + 1}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Checkbox
+                                checked={isOff}
+                                onCheckedChange={() => handleToggle(emp.id)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="mx-auto"
+                              />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2.5">
+                                <Avatar className="h-7 w-7">
+                                  <AvatarFallback className={cn(
+                                    "text-[10px] font-semibold",
+                                    isOff ? "bg-chart-4/20 text-chart-4" : "bg-primary/15 text-primary"
+                                  )}>
                                     {getInitials(emp.full_name)}
                                   </AvatarFallback>
                                 </Avatar>
-                                <span className="text-xs">{emp.full_name}</span>
+                                <span className="text-sm font-medium">{emp.full_name}</span>
                               </div>
-                            ) : (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </td>
+                            </TableCell>
+                            <TableCell className="text-sm text-muted-foreground">
+                              {getDeptName(emp.department_id)}
+                            </TableCell>
+                            <TableCell className="text-xs text-muted-foreground font-mono">
+                              {emp.employee_number}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-[10px] px-2",
+                                  isOff
+                                    ? "border-chart-4/30 text-chart-4 bg-chart-4/10"
+                                    : "border-primary/30 text-primary bg-primary/10"
+                                )}
+                              >
+                                {isOff ? 'Off Duty' : 'On Duty'}
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
                         );
-                      })}
-                      <td className="py-2.5 text-xs text-muted-foreground">
-                        {format(fwStart, 'MMM d')} – {format(fwEnd, 'MMM d')}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* On Duty Tab */}
+        <TabsContent value="on-duty">
+          <EmployeeStatusList
+            employees={onDutyEmployees}
+            status="on-duty"
+            getDeptName={getDeptName}
+            getInitials={getInitials}
+          />
+        </TabsContent>
+
+        {/* Off Duty Tab */}
+        <TabsContent value="off-duty">
+          <EmployeeStatusList
+            employees={offDutyEmployees}
+            status="off-duty"
+            getDeptName={getDeptName}
+            getInitials={getInitials}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
+  );
+}
+
+// Sub-component for On Duty / Off Duty lists
+function EmployeeStatusList({ 
+  employees, 
+  status, 
+  getDeptName, 
+  getInitials 
+}: { 
+  employees: any[];
+  status: 'on-duty' | 'off-duty';
+  getDeptName: (id: string | null) => string;
+  getInitials: (name: string) => string;
+}) {
+  const isOnDuty = status === 'on-duty';
+  const title = isOnDuty ? 'On Duty – Working This Weekend' : 'Off Duty – Weekend Off';
+  const emptyMsg = isOnDuty ? 'No employees on duty this weekend' : 'No employees off duty this weekend';
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          {isOnDuty ? <UserCheck className="h-4 w-4 text-primary" /> : <XSquare className="h-4 w-4 text-chart-4" />}
+          {title}
+          <Badge variant="secondary" className="ml-auto text-xs">{employees.length}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {employees.length === 0 ? (
+          <div className="flex items-center gap-2 py-8 justify-center text-muted-foreground">
+            <AlertCircle className="h-4 w-4" />
+            <p className="text-sm">{emptyMsg}</p>
+          </div>
+        ) : (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {employees.map(emp => (
+              <div
+                key={emp.id}
+                className={cn(
+                  "flex items-center gap-3 p-3 rounded-xl border transition-colors",
+                  isOnDuty ? "bg-primary/5 border-primary/20" : "bg-chart-4/5 border-chart-4/20"
+                )}
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className={cn(
+                    "text-xs font-semibold",
+                    isOnDuty ? "bg-primary/20 text-primary" : "bg-chart-4/20 text-chart-4"
+                  )}>
+                    {getInitials(emp.full_name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{emp.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{getDeptName(emp.department_id)}</p>
+                </div>
+                <Badge variant="outline" className={cn(
+                  "text-[10px] px-2 shrink-0",
+                  isOnDuty ? "border-primary/30 text-primary bg-primary/10" : "border-chart-4/30 text-chart-4 bg-chart-4/10"
+                )}>
+                  {isOnDuty ? 'On Duty' : 'Off Duty'}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
