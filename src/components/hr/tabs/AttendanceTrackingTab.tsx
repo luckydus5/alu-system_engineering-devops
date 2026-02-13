@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -226,8 +227,8 @@ function AttendanceCharts({ records, selectedMonth }: { records: any[]; selected
 }
 
 /* ─── Monthly Grid ─── */
-function MonthlyGrid({ records, selectedMonth, users, departments, searchTerm, filterDepartment }: {
-  records: any[]; selectedMonth: Date; users: any[]; departments: any[]; searchTerm: string; filterDepartment: string;
+function MonthlyGrid({ records, selectedMonth, users, employees, departments, searchTerm, filterDepartment }: {
+  records: any[]; selectedMonth: Date; users: any[]; employees: any[]; departments: any[]; searchTerm: string; filterDepartment: string;
 }) {
   const daysInMonth = getDaysInMonth(selectedMonth);
   const year = getYear(selectedMonth);
@@ -244,23 +245,50 @@ function MonthlyGrid({ records, selectedMonth, users, departments, searchTerm, f
     return map;
   }, [records]);
 
+  // Merge employees and auth users into a unified list
+  // Employees with linked_user_id use that for attendance lookup; others use their own id
+  const mergedUsers = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { id: string; attendanceKey: string; full_name: string; department_id: string | null }[] = [];
+    
+    // Add employees first (primary source)
+    employees.forEach((e: any) => {
+      const attendanceKey = e.linked_user_id || e.id;
+      if (!seen.has(attendanceKey)) {
+        seen.add(attendanceKey);
+        result.push({ id: e.id, attendanceKey, full_name: e.full_name, department_id: e.department_id });
+      }
+    });
+    
+    // Add auth users who aren't already represented by an employee record
+    users.forEach((u: any) => {
+      if (!seen.has(u.id)) {
+        seen.add(u.id);
+        result.push({ id: u.id, attendanceKey: u.id, full_name: u.full_name || u.email, department_id: u.department_id });
+      }
+    });
+    
+    return result;
+  }, [employees, users]);
+
   const employeeList = useMemo(() => {
-    let filtered = users.filter(u => {
-      const matchesSearch = !searchTerm || u.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) || u.email?.toLowerCase().includes(searchTerm.toLowerCase());
+    let filtered = mergedUsers.filter(u => {
+      const matchesSearch = !searchTerm || u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDept = filterDepartment === 'all' || u.department_id === filterDepartment;
       return matchesSearch && matchesDept;
     });
-    const grouped = new Map<string, any[]>();
+    const grouped = new Map<string, typeof filtered>();
     filtered.forEach(u => {
-      const deptName = departments.find(d => d.id === u.department_id)?.name || 'Unassigned';
+      const deptName = departments.find((d: any) => d.id === u.department_id)?.name || 'Unassigned';
       const list = grouped.get(deptName) || [];
       list.push(u);
       grouped.set(deptName, list);
     });
     return grouped;
-  }, [users, searchTerm, filterDepartment, departments]);
+  }, [mergedUsers, searchTerm, filterDepartment, departments]);
 
   const getRecordForDay = (userId: string, day: Date) => {
+    // Try both the employee id and attendanceKey
     const recs = userRecords.get(userId) || [];
     return recs.find(r => {
       const recDate = new Date(r.date || r.attendance_date);
@@ -331,14 +359,14 @@ function MonthlyGrid({ records, selectedMonth, users, departments, searchTerm, f
                       </td>
                     </tr>
                     {deptUsers.map((user, idx) => {
-                      const stats = calculateMonthStats(user.id);
+                      const stats = calculateMonthStats(user.attendanceKey);
                       return (
                         <tr key={user.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
                           <td className="sticky left-0 z-10 bg-card px-3 py-2 text-muted-foreground border-r text-center">{idx + 1}</td>
-                          <td className="sticky left-8 z-10 bg-card px-3 py-2 font-medium truncate max-w-[160px] border-r">{user.full_name || user.email}</td>
+                          <td className="sticky left-8 z-10 bg-card px-3 py-2 font-medium truncate max-w-[160px] border-r">{user.full_name}</td>
                           <td className="px-2 py-2 text-center text-muted-foreground border-r text-[10px]">{deptName.substring(0, 8)}</td>
                           {days.map((day, i) => {
-                            const record = getRecordForDay(user.id, day);
+                            const record = getRecordForDay(user.attendanceKey, day);
                             const notation = getExcelNotation(day, record);
                             return (
                               <td key={i} className={cn("px-0 py-1.5 text-center", notation.bg)}>
@@ -364,8 +392,8 @@ function MonthlyGrid({ records, selectedMonth, users, departments, searchTerm, f
 }
 
 /* ─── Annual Summary ─── */
-function AnnualSummary({ records, users, departments, searchTerm, filterDepartment, selectedYear }: {
-  records: any[]; users: any[]; departments: any[]; searchTerm: string; filterDepartment: string; selectedYear: number;
+function AnnualSummary({ records, users, employees, departments, searchTerm, filterDepartment, selectedYear }: {
+  records: any[]; users: any[]; employees: any[]; departments: any[]; searchTerm: string; filterDepartment: string; selectedYear: number;
 }) {
   const userMonthData = useMemo(() => {
     const map = new Map<string, Record<number, { present: number; absent: number; ot: number }>>();
@@ -387,21 +415,35 @@ function AnnualSummary({ records, users, departments, searchTerm, filterDepartme
     return map;
   }, [records, selectedYear]);
 
+  // Merge employees and auth users
+  const mergedUsers = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { id: string; attendanceKey: string; full_name: string; department_id: string | null }[] = [];
+    employees.forEach((e: any) => {
+      const key = e.linked_user_id || e.id;
+      if (!seen.has(key)) { seen.add(key); result.push({ id: e.id, attendanceKey: key, full_name: e.full_name, department_id: e.department_id }); }
+    });
+    users.forEach((u: any) => {
+      if (!seen.has(u.id)) { seen.add(u.id); result.push({ id: u.id, attendanceKey: u.id, full_name: u.full_name || u.email, department_id: u.department_id }); }
+    });
+    return result;
+  }, [employees, users]);
+
   const grouped = useMemo(() => {
-    const filtered = users.filter(u => {
+    const filtered = mergedUsers.filter(u => {
       const matchesSearch = !searchTerm || u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDept = filterDepartment === 'all' || u.department_id === filterDepartment;
       return matchesSearch && matchesDept;
     });
-    const map = new Map<string, any[]>();
+    const map = new Map<string, typeof filtered>();
     filtered.forEach(u => {
-      const deptName = departments.find(d => d.id === u.department_id)?.name || 'Unassigned';
+      const deptName = departments.find((d: any) => d.id === u.department_id)?.name || 'Unassigned';
       const list = map.get(deptName) || [];
       list.push(u);
       map.set(deptName, list);
     });
     return map;
-  }, [users, searchTerm, filterDepartment, departments]);
+  }, [mergedUsers, searchTerm, filterDepartment, departments]);
 
   const totalWorkingDays = 287;
 
@@ -441,7 +483,7 @@ function AnnualSummary({ records, users, departments, searchTerm, filterDepartme
                       <td colSpan={19} className="px-3 py-2 font-bold text-xs text-primary border-b">► {deptName.toUpperCase()}</td>
                     </tr>
                     {deptUsers.map((user, idx) => {
-                      const monthData = userMonthData.get(user.id) || {};
+                      const monthData = userMonthData.get(user.attendanceKey) || {};
                       let totalPresent = 0, totalAbsent = 0, totalOT = 0;
                       const monthValues = MONTH_NAMES.map((_, i) => {
                         const data = monthData[i] || { present: 0, absent: 0, ot: 0 };
@@ -454,7 +496,7 @@ function AnnualSummary({ records, users, departments, searchTerm, filterDepartme
                       return (
                         <tr key={user.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
                           <td className="sticky left-0 z-10 bg-card px-3 py-2 text-muted-foreground border-r text-center">{idx + 1}</td>
-                          <td className="sticky left-8 z-10 bg-card px-3 py-2 font-medium truncate max-w-[160px] border-r">{user.full_name || user.email}</td>
+                          <td className="sticky left-8 z-10 bg-card px-3 py-2 font-medium truncate max-w-[160px] border-r">{user.full_name}</td>
                           <td className="px-2 py-2 text-center text-muted-foreground border-r text-[10px]">{deptName.substring(0, 8)}</td>
                           {monthValues.map((val, i) => (
                             <td key={i} className="px-2 py-2 text-center">{val || <span className="text-muted-foreground/40">—</span>}</td>
@@ -809,6 +851,87 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, [users, departmentId, toast]);
 
+  // State for unmatched employees review
+  const [showUnmatchedReview, setShowUnmatchedReview] = useState(false);
+  const [unmatchedToAdd, setUnmatchedToAdd] = useState<Set<string>>(new Set());
+  const [isAddingEmployees, setIsAddingEmployees] = useState(false);
+  const [unmatchedReviewed, setUnmatchedReviewed] = useState(false);
+
+  const unmatchedEmployees = useMemo(() => {
+    if (!uploadPreview) return [];
+    const seen = new Set<string>();
+    return uploadPreview
+      .filter(r => !r.matched)
+      .filter(r => {
+        const key = r.name.toLowerCase().trim();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(r => ({
+        name: r.name,
+        excelDept: r.excelDept || '',
+        classifiedCompany: r.classifiedCompany || 'Unknown',
+        empNo: r.empNo || '',
+        occurrences: uploadPreview.filter(row => row.name.toLowerCase().trim() === r.name.toLowerCase().trim()).length,
+      }));
+  }, [uploadPreview]);
+
+  const toggleUnmatchedEmployee = (name: string) => {
+    setUnmatchedToAdd(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const selectAllUnmatched = () => {
+    if (unmatchedToAdd.size === unmatchedEmployees.length) {
+      setUnmatchedToAdd(new Set());
+    } else {
+      setUnmatchedToAdd(new Set(unmatchedEmployees.map(e => e.name)));
+    }
+  };
+
+  const handleAddUnmatchedToHub = async () => {
+    if (unmatchedToAdd.size === 0) return;
+    setIsAddingEmployees(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const toAdd = unmatchedEmployees.filter(e => unmatchedToAdd.has(e.name));
+      
+      for (const emp of toAdd) {
+        // Find a department for this employee from their classified data
+        const previewRow = uploadPreview?.find(r => r.name === emp.name);
+        const deptId = previewRow?.departmentId || departmentId;
+        
+        const { error } = await supabase.from('employees').insert({
+          full_name: emp.name,
+          employee_number: '', // auto-generated by trigger
+          department_id: deptId,
+          created_by: currentUser?.id || null,
+          employment_status: 'active',
+          employment_type: 'full_time',
+        });
+        if (error) console.error('Failed to add employee:', emp.name, error);
+      }
+
+      toast({ 
+        title: `${unmatchedToAdd.size} employees added to Employee Hub`, 
+        description: 'Please re-upload the file to match them with attendance records.' 
+      });
+      setUnmatchedToAdd(new Set());
+      setShowUnmatchedReview(false);
+      setUploadPreview(null);
+      setClassificationSummary(null);
+    } catch (err) {
+      toast({ title: 'Failed to add employees', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsAddingEmployees(false);
+    }
+  };
+
   const handleImport = async () => {
     if (!uploadPreview) return;
     const validRecords = uploadPreview.filter(r => r.matched && r.userId);
@@ -816,21 +939,36 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       toast({ title: 'No matched records to import', variant: 'destructive' });
       return;
     }
+
+    // Check for unmatched employees first (only show review once)
+    if (unmatchedEmployees.length > 0 && !showUnmatchedReview && !unmatchedReviewed) {
+      setShowUnmatchedReview(true);
+      return;
+    }
+
     setIsImporting(true);
     try {
-      await bulkImportAttendance.mutateAsync(
-        validRecords.map(r => ({
-          user_id: r.userId, department_id: r.departmentId, attendance_date: r.date,
-          clock_in: r.clockInRaw, clock_out: r.clockOutRaw, status: r.status,
-          shift_type: r.shiftType || 'day',
-          total_hours: r.totalHours || 0,
-          regular_hours: r.regularHours || 0,
-          overtime_hours: r.overtimeHours || 0,
-          notes: `Imported from Excel | ${r.classifiedCompany || 'Unclassified'} | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
-        }))
-      );
+      // Smart duplicate handling: for each user+date, merge with existing records
+      // The upsert with onConflict handles this - newer data overwrites
+      // But we need to be smart: if new record has null clock_out, preserve existing
+      const importData = validRecords.map(r => ({
+        user_id: r.userId, 
+        department_id: r.departmentId, 
+        attendance_date: r.date,
+        clock_in: r.clockInRaw, 
+        clock_out: r.clockOutRaw, 
+        status: r.status,
+        shift_type: r.shiftType || 'day',
+        total_hours: r.totalHours || 0,
+        regular_hours: r.regularHours || 0,
+        overtime_hours: r.overtimeHours || 0,
+        notes: `Imported from Excel | ${r.classifiedCompany || 'Unclassified'} | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
+      }));
+
+      await bulkImportAttendance.mutateAsync(importData);
       setUploadPreview(null);
       setClassificationSummary(null);
+      setShowUnmatchedReview(false);
     } finally {
       setIsImporting(false);
     }
@@ -1034,12 +1172,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               </div>
               <div className="flex flex-col gap-2 items-end">
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setUploadPreview(null); setClassificationSummary(null); }}>
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setUploadPreview(null); setClassificationSummary(null); setShowUnmatchedReview(false); }}>
                     <X className="h-3.5 w-3.5 mr-1" /> Cancel
                   </Button>
                   <Button size="sm" className="h-8" onClick={handleImport} disabled={isImporting || uploadPreview.filter(r => r.matched).length === 0}>
                     {isImporting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
-                    Import {uploadPreview.filter(r => r.matched).length}
+                    {unmatchedEmployees.length > 0 && !showUnmatchedReview ? 'Review & Import' : `Import ${uploadPreview.filter(r => r.matched).length}`}
                   </Button>
                 </div>
                 <div className="flex items-center rounded-md border p-0.5">
@@ -1053,6 +1191,80 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               </div>
             </div>
           </CardHeader>
+
+          {/* Unmatched Employees Review */}
+          {showUnmatchedReview && unmatchedEmployees.length > 0 && (
+            <div className="mx-4 my-3 p-4 rounded-lg border-2 border-amber-300 dark:border-amber-700 bg-amber-50/50 dark:bg-amber-950/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <UserX className="h-5 w-5 text-amber-600" />
+                  <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                    {unmatchedEmployees.length} Employees Not Found in System
+                  </h4>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectAllUnmatched}>
+                    {unmatchedToAdd.size === unmatchedEmployees.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-3">
+                These employees were found in the Excel file but don't exist in the Employee Hub. 
+                Select employees to add to the Hub, then re-upload to match their attendance.
+                Unselected employees will be skipped during import.
+              </p>
+              <ScrollArea className="max-h-[250px]">
+                <div className="space-y-1">
+                  {unmatchedEmployees.map((emp) => {
+                    const isSelected = unmatchedToAdd.has(emp.name);
+                    return (
+                      <button
+                        key={emp.name}
+                        onClick={() => toggleUnmatchedEmployee(emp.name)}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors text-sm",
+                          isSelected ? "bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700" : "bg-card border border-border hover:bg-muted/60"
+                        )}
+                      >
+                        <div className={cn(
+                          "h-5 w-5 rounded border-2 flex items-center justify-center shrink-0",
+                          isSelected ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/30"
+                        )}>
+                          {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="font-medium">{emp.name}</span>
+                          {emp.empNo && <span className="text-muted-foreground ml-2 text-xs">#{emp.empNo}</span>}
+                        </div>
+                        <Badge variant="outline" className="text-[10px] shrink-0">{emp.excelDept || 'No dept'}</Badge>
+                        <Badge variant="secondary" className="text-[10px] shrink-0">{emp.occurrences} entries</Badge>
+                        {emp.classifiedCompany !== 'Unknown' && (
+                          <Badge variant="outline" className="text-[10px] shrink-0 bg-primary/5 text-primary">{emp.classifiedCompany}</Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
+                <Button variant="outline" size="sm" onClick={() => { setShowUnmatchedReview(false); setUnmatchedReviewed(true); }} className="text-xs">
+                  Skip Unmatched & Continue Import
+                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    className="text-xs gap-1.5"
+                    disabled={unmatchedToAdd.size === 0 || isAddingEmployees}
+                    onClick={handleAddUnmatchedToHub}
+                  >
+                    {isAddingEmployees ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
+                    Add {unmatchedToAdd.size} to Employee Hub
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <CardContent className="p-0">
             <div className="overflow-auto max-h-[600px]">
               <table className="w-full text-xs border-collapse">
@@ -1108,9 +1320,9 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
       {/* Data Grid */}
       {activeView === 'monthly' ? (
-        <MonthlyGrid records={records} selectedMonth={selectedMonth} users={users} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} />
+        <MonthlyGrid records={records} selectedMonth={selectedMonth} users={users} employees={employees} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} />
       ) : (
-        <AnnualSummary records={records} users={users} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} selectedYear={selectedYear} />
+        <AnnualSummary records={records} users={users} employees={employees} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} selectedYear={selectedYear} />
       )}
     </div>
   );
