@@ -621,10 +621,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
 
                   <Separator className="my-3" />
 
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-muted-foreground">
-                      Hired {format(new Date(emp.hire_date), 'MMM yyyy')}
-                    </span>
+                  <div className="flex items-center justify-end">
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); handleView(emp); }}>
                         <Eye className="h-3.5 w-3.5" />
