@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
   LayoutDashboard, Users, Calendar, Clock, Target, 
-  UserPlus, BarChart3, 
+  UserPlus, BarChart3, CalendarDays,
   Home, ChevronRight, Globe, ChevronDown
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
@@ -25,6 +25,7 @@ import { AttendanceTrackingTab } from './tabs/AttendanceTrackingTab';
 import { PerformanceTab } from './tabs/PerformanceTab';
 import { OnboardingTab } from './tabs/OnboardingTab';
 import { HRAnalyticsTab } from './tabs/HRAnalyticsTab';
+import { WeekendRotationTab } from './tabs/WeekendRotationTab';
 
 interface HRCommandCenterProps {
   departmentId: string;
@@ -39,6 +40,7 @@ const NAVIGATION_ITEMS = [
   { id: 'attendance', label: 'Attendance', icon: Clock },
   { id: 'performance', label: 'Performance', icon: Target },
   { id: 'onboarding', label: 'Onboarding', icon: UserPlus },
+  { id: 'weekend', label: 'Weekend & Rotation', icon: CalendarDays },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
 ];
 
@@ -284,6 +286,7 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
             {activeTab === 'attendance' && <AttendanceTrackingTab departmentId={departmentId} />}
             {activeTab === 'performance' && <PerformanceTab departmentId={departmentId} />}
             {activeTab === 'onboarding' && <OnboardingTab departmentId={departmentId} />}
+            {activeTab === 'weekend' && <WeekendRotationTab departmentId={departmentId} />}
             {activeTab === 'analytics' && <HRAnalyticsTab departmentId={departmentId} />}
           </motion.div>
         </AnimatePresence>
