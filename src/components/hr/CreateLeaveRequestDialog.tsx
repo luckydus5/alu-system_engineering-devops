@@ -140,13 +140,30 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
             </DialogTitle>
           </DialogHeader>
 
+          {/* On-behalf notice banner */}
+          {isOnBehalf && (
+            <div className="mt-3 p-3 rounded-lg bg-blue-500/10 border border-blue-200 dark:border-blue-800 flex items-start gap-2.5">
+              <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  This leave request is being filed on behalf of an employee.
+                </p>
+                <p className="text-[11px] text-blue-600/80 dark:text-blue-400/80 mt-0.5">
+                  Select the employee below. To request leave for yourself instead, switch the toggle off.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* On Behalf Toggle */}
           <div className="flex items-center justify-between mt-3 p-2.5 rounded-lg bg-muted/50 border border-border/60">
             <div className="flex items-center gap-2.5">
               <div className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center">
                 <Users className="h-3.5 w-3.5 text-primary" />
               </div>
-              <span className="text-sm font-medium">Filing on behalf of an employee</span>
+              <span className="text-sm font-medium">
+                {isOnBehalf ? 'Filing on behalf of an employee' : 'Filing for myself'}
+              </span>
             </div>
             <Switch 
               checked={isOnBehalf} 
