@@ -162,34 +162,166 @@ export default function MyDashboard() {
     );
   }
 
-  // Access denied for users with no position
-  if (!isAnyApprover && !canFileForOthers) {
+  const pendingCount = myRequests.filter(r => r.status === 'pending' || r.status === 'manager_approved' || r.status === 'gm_pending').length;
+  const approvedCount = myRequests.filter(r => r.status === 'approved').length;
+
+  const isStaffOnly = !isAnyApprover && !canFileForOthers;
+
+  // Staff-only simplified view: just their own requests + balance
+  if (isStaffOnly) {
     return (
       <DashboardLayout title="Leave Management" noBackground>
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <Card className="shadow-lg border-destructive/20 max-w-md w-full">
-            <CardContent className="py-14 text-center">
-              <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-5">
-                <ShieldAlert className="h-8 w-8 text-destructive" />
+        <div className="space-y-5 animate-fade-in">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-11 w-11 border-2 border-primary/20">
+                <AvatarImage src={profile?.avatar_url || undefined} />
+                <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">
+                  {initials}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h2 className="text-lg font-bold text-foreground">{profile?.full_name || 'User'}</h2>
+                <Badge variant="outline" className="text-[10px] capitalize opacity-60">
+                  {highestRole}
+                </Badge>
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">Access Denied</h3>
-              <p className="text-muted-foreground mb-6">
-                No special position has been assigned to you.<br />
-                Please contact your Super Admin to get a system position assigned.
-              </p>
-              <Button variant="outline" onClick={() => navigate('/')} className="gap-2">
-                <ArrowRight className="h-4 w-4 rotate-180" />
-                Return to Dashboard
+            </div>
+            {primaryDeptId && (
+              <Button onClick={() => setMyLeaveDialogOpen(true)} className="gap-2 shadow-sm">
+                <Plus className="h-4 w-4" />
+                Request Leave
               </Button>
+            )}
+          </div>
+
+          {/* Leave Balance Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <Card className="border">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0">
+                  <CalendarDays className="h-4.5 w-4.5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{annualBalance.remaining}</p>
+                  <p className="text-[10px] text-muted-foreground">Days Left</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <Clock className="h-4.5 w-4.5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{pendingCount}</p>
+                  <p className="text-[10px] text-muted-foreground">Pending</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="h-4.5 w-4.5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{approvedCount}</p>
+                  <p className="text-[10px] text-muted-foreground">Approved</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="border">
+              <CardContent className="p-3 flex items-center gap-3">
+                <div className="h-9 w-9 rounded-lg bg-red-500/10 flex items-center justify-center shrink-0">
+                  <XCircle className="h-4.5 w-4.5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-xl font-bold">{myRequests.filter(r => r.status === 'rejected').length}</p>
+                  <p className="text-[10px] text-muted-foreground">Rejected</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* My Leave Requests Table */}
+          <Card className="shadow-sm">
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FileText className="h-5 w-5 text-primary" />
+                My Leave Requests
+              </CardTitle>
+              <Badge variant="secondary" className="text-[10px]">{myRequests.length} total</Badge>
+            </CardHeader>
+            <CardContent className="p-0">
+              {myRequests.length === 0 ? (
+                <div className="py-12 text-center text-muted-foreground">
+                  <CalendarDays className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                  <p className="text-sm">No leave requests yet</p>
+                  {primaryDeptId && (
+                    <Button variant="outline" size="sm" className="mt-3 gap-1.5" onClick={() => setMyLeaveDialogOpen(true)}>
+                      <Plus className="h-3.5 w-3.5" /> Request Leave
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <ScrollArea className="max-h-[500px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/50 hover:bg-muted/50">
+                        <TableHead className="text-[10px] font-bold uppercase w-[36px] text-center">#</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase">Type</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase">Start</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase">End</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase text-center">Days</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase">Status</TableHead>
+                        <TableHead className="text-[10px] font-bold uppercase text-center w-[50px]"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {myRequests.map((req, i) => (
+                        <TableRow key={req.id} className="text-sm">
+                          <TableCell className="text-center text-muted-foreground font-mono text-xs py-2">{i + 1}</TableCell>
+                          <TableCell className="font-medium py-2">{LEAVE_TYPE_LABELS[req.leave_type as LeaveType]}</TableCell>
+                          <TableCell className="font-mono text-xs py-2">{format(parseISO(req.start_date), 'dd MMM yyyy')}</TableCell>
+                          <TableCell className="font-mono text-xs py-2">{format(parseISO(req.end_date), 'dd MMM yyyy')}</TableCell>
+                          <TableCell className="text-center font-semibold py-2">{req.total_days}</TableCell>
+                          <TableCell className="py-2">
+                            <Badge className={cn("text-[9px]", STATUS_COLORS[req.status as LeaveStatus])}>
+                              {LEAVE_STATUS_LABELS[req.status as LeaveStatus]}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center py-2">
+                            {req.status === 'approved' ? (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDownloadPdf(req)} title="Download PDF">
+                                <Download className="h-3.5 w-3.5" />
+                              </Button>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* My Own Leave Dialog */}
+        {primaryDeptId && (
+          <CreateLeaveRequestDialog
+            open={myLeaveDialogOpen}
+            onOpenChange={setMyLeaveDialogOpen}
+            departmentId={primaryDeptId}
+          />
+        )}
       </DashboardLayout>
     );
   }
 
-  const pendingCount = myRequests.filter(r => r.status === 'pending' || r.status === 'manager_approved' || r.status === 'gm_pending').length;
-  const approvedCount = myRequests.filter(r => r.status === 'approved').length;
 
   return (
     <DashboardLayout title="Leave Management" noBackground>
