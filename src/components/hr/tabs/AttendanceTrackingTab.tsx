@@ -849,7 +849,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     }
     setIsParsing(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [users, departmentId, toast]);
+  }, [users, employees, departmentId, toast, companies, departments, classifier, policyValues, selectedCompanyId]);
 
   // State for unmatched employees review
   const [showUnmatchedReview, setShowUnmatchedReview] = useState(false);
@@ -948,27 +948,123 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
     setIsImporting(true);
     try {
-      // Smart duplicate handling: for each user+date, merge with existing records
-      // The upsert with onConflict handles this - newer data overwrites
-      // But we need to be smart: if new record has null clock_out, preserve existing
-      const importData = validRecords.map(r => ({
-        user_id: r.userId, 
-        department_id: r.departmentId, 
-        attendance_date: r.date,
-        clock_in: r.clockInRaw, 
-        clock_out: r.clockOutRaw, 
-        status: r.status,
-        shift_type: r.shiftType || 'day',
-        total_hours: r.totalHours || 0,
-        regular_hours: r.regularHours || 0,
-        overtime_hours: r.overtimeHours || 0,
-        notes: `Imported from Excel | ${r.classifiedCompany || 'Unclassified'} | ${(r.shiftType || 'day').toUpperCase()} shift | OT: ${r.overtimeHours || 0}h`,
-      }));
+      // ── Smart duplicate merge ──
+      // Fetch existing records for the same user+date combos so we can merge intelligently
+      const uniqueKeys = [...new Set(validRecords.map(r => `${r.userId}|${r.date}`))];
+      const userIds = [...new Set(validRecords.map(r => r.userId))];
+      const dates = [...new Set(validRecords.map(r => r.date))];
 
-      await bulkImportAttendance.mutateAsync(importData);
+      // Fetch existing records in batches
+      const existingMap = new Map<string, any>();
+      const FETCH_BATCH = 50;
+      for (let i = 0; i < userIds.length; i += FETCH_BATCH) {
+        const batchUserIds = userIds.slice(i, i + FETCH_BATCH);
+        const { data: existing } = await supabase
+          .from('attendance_records')
+          .select('user_id, attendance_date, clock_in, clock_out, status, shift_type, total_hours, regular_hours, overtime_hours')
+          .in('user_id', batchUserIds)
+          .in('attendance_date', dates);
+        
+        existing?.forEach(rec => {
+          existingMap.set(`${rec.user_id}|${rec.attendance_date}`, rec);
+        });
+      }
+
+      // Merge new data with existing: pick earliest clock_in, latest clock_out
+      const importData = validRecords.map(r => {
+        const key = `${r.userId}|${r.date}`;
+        const existing = existingMap.get(key);
+
+        let mergedClockIn = r.clockInRaw;
+        let mergedClockOut = r.clockOutRaw;
+
+        if (existing) {
+          // Keep earliest check-in
+          if (existing.clock_in && mergedClockIn) {
+            mergedClockIn = new Date(existing.clock_in) < new Date(mergedClockIn) ? existing.clock_in : mergedClockIn;
+          } else if (existing.clock_in && !mergedClockIn) {
+            mergedClockIn = existing.clock_in;
+          }
+
+          // Keep latest check-out
+          if (existing.clock_out && mergedClockOut) {
+            mergedClockOut = new Date(existing.clock_out) > new Date(mergedClockOut) ? existing.clock_out : mergedClockOut;
+          } else if (existing.clock_out && !mergedClockOut) {
+            mergedClockOut = existing.clock_out;
+          }
+        }
+
+        // Re-process with merged times for accurate shift/OT calculation
+        const clockInDate = mergedClockIn ? new Date(mergedClockIn) : null;
+        const clockOutDate = mergedClockOut ? new Date(mergedClockOut) : null;
+        const reprocessed = processAttendanceRecord(clockInDate, clockOutDate, policyValues);
+
+        return {
+          user_id: r.userId,
+          department_id: r.departmentId,
+          attendance_date: r.date,
+          clock_in: mergedClockIn,
+          clock_out: mergedClockOut,
+          status: reprocessed.status,
+          shift_type: reprocessed.shiftType || 'day',
+          total_hours: reprocessed.totalHours || 0,
+          regular_hours: reprocessed.regularHours || 0,
+          overtime_hours: reprocessed.overtimeHours || 0,
+          notes: `Imported from Excel | ${r.classifiedCompany || 'Unclassified'} | ${(reprocessed.shiftType || 'day').toUpperCase()} shift | OT: ${reprocessed.overtimeHours || 0}h`,
+        };
+      });
+
+      // Deduplicate: if multiple rows for same user+date, keep the one with most data
+      const deduped = new Map<string, typeof importData[0]>();
+      importData.forEach(rec => {
+        const key = `${rec.user_id}|${rec.attendance_date}`;
+        const existing = deduped.get(key);
+        if (!existing) {
+          deduped.set(key, rec);
+        } else {
+          // Merge: keep earliest clock_in, latest clock_out
+          const mergedIn = existing.clock_in && rec.clock_in
+            ? (new Date(existing.clock_in) < new Date(rec.clock_in) ? existing.clock_in : rec.clock_in)
+            : existing.clock_in || rec.clock_in;
+          const mergedOut = existing.clock_out && rec.clock_out
+            ? (new Date(existing.clock_out) > new Date(rec.clock_out) ? existing.clock_out : rec.clock_out)
+            : existing.clock_out || rec.clock_out;
+          
+          const ci = mergedIn ? new Date(mergedIn) : null;
+          const co = mergedOut ? new Date(mergedOut) : null;
+          const reproc = processAttendanceRecord(ci, co, policyValues);
+          
+          deduped.set(key, {
+            ...rec,
+            clock_in: mergedIn,
+            clock_out: mergedOut,
+            status: reproc.status,
+            shift_type: reproc.shiftType || 'day',
+            total_hours: reproc.totalHours || 0,
+            regular_hours: reproc.regularHours || 0,
+            overtime_hours: reproc.overtimeHours || 0,
+          });
+        }
+      });
+
+      const finalData = Array.from(deduped.values());
+      const mergedCount = importData.length - finalData.length;
+
+      await bulkImportAttendance.mutateAsync(finalData);
+      
+      if (mergedCount > 0 || existingMap.size > 0) {
+        toast({ 
+          title: `${finalData.length} records imported successfully`,
+          description: `${existingMap.size} existing records merged, ${mergedCount} duplicates consolidated`
+        });
+      }
+      
       setUploadPreview(null);
       setClassificationSummary(null);
       setShowUnmatchedReview(false);
+      setUnmatchedReviewed(false);
+    } catch (err) {
+      toast({ title: 'Import failed', description: String(err), variant: 'destructive' });
     } finally {
       setIsImporting(false);
     }
