@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getWeek } from 'date-fns';
 import { toast } from 'sonner';
-import * as XLSX from 'xlsx';
+import { exportWeekendSchedule } from '@/lib/weekendExcelExport';
 
 interface WeekendRotationTabProps {
   departmentId: string;
@@ -120,147 +120,21 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
     setFilterDepartment('all');
   };
 
-  // Excel export with per-department sheets — professional layout
-  const handleExportExcel = () => {
-    const allActive = employees.filter(e => e.employment_status === 'active');
-    const wb = XLSX.utils.book_new();
-
-    // Group all employees by department
-    const deptGroups: Record<string, { deptName: string; companyName: string; emps: typeof allActive }> = {};
-    
-    allActive.forEach(emp => {
-      const deptId = emp.department_id || 'unassigned';
-      if (!deptGroups[deptId]) {
-        const dept = departments.find(d => d.id === deptId);
-        const company = companies.find(c => c.id === emp.company_id);
-        deptGroups[deptId] = {
-          deptName: dept?.name || 'Unassigned',
-          companyName: company?.name || 'Unknown',
-          emps: [],
-        };
-      }
-      deptGroups[deptId].emps.push(emp);
-    });
-
-    const dateRange = `${format(weekStart, 'MMMM d')} – ${format(weekEnd, 'MMMM d, yyyy')}`;
-    const generatedDate = format(new Date(), 'dd/MM/yyyy HH:mm');
-
-    // ── SUMMARY SHEET ──
-    const summaryRows: any[][] = [
-      ['HQ POWER MANAGEMENT SYSTEMS'],
-      ['WEEKEND DUTY SCHEDULE — SUMMARY REPORT'],
-      [],
-      [`Week:`, `Week ${weekNumber}`],
-      [`Period:`, dateRange],
-      [`Generated:`, generatedDate],
-      [],
-      [],
-      ['#', 'DEPARTMENT', 'COMPANY', 'ON DUTY', 'OFF DUTY', 'TOTAL STAFF'],
-    ];
-
-    let globalIdx = 0;
-    const sortedDepts = Object.entries(deptGroups).sort(([, a], [, b]) => a.deptName.localeCompare(b.deptName));
-    let totalOnAll = 0;
-    let totalOffAll = 0;
-
-    sortedDepts.forEach(([, group]) => {
-      globalIdx++;
-      const onDuty = group.emps.filter(e => !isEmployeeOffDuty(e.id)).length;
-      const offDuty = group.emps.filter(e => isEmployeeOffDuty(e.id)).length;
-      totalOnAll += onDuty;
-      totalOffAll += offDuty;
-      summaryRows.push([globalIdx, group.deptName, group.companyName, onDuty, offDuty, group.emps.length]);
-    });
-
-    summaryRows.push([]);
-    summaryRows.push(['', 'TOTAL', '', totalOnAll, totalOffAll, allActive.length]);
-    summaryRows.push([]);
-    summaryRows.push([]);
-    summaryRows.push(['Prepared by: _______________________', '', '', 'Approved by: _______________________']);
-
-    const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
-    summaryWs['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
-    // Merge title rows
-    summaryWs['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
-    ];
-    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
-
-    // ── PER-DEPARTMENT SHEETS ──
-    sortedDepts.forEach(([, group]) => {
-      const sortedEmps = [...group.emps].sort((a, b) => a.full_name.localeCompare(b.full_name));
-      const onDutyList = sortedEmps.filter(e => !isEmployeeOffDuty(e.id));
-      const offDutyList = sortedEmps.filter(e => isEmployeeOffDuty(e.id));
-
-      const rows: any[][] = [
-        ['HQ POWER MANAGEMENT SYSTEMS'],
-        [`WEEKEND DUTY SCHEDULE — ${group.deptName.toUpperCase()}`],
-        [],
-        ['Company:', group.companyName],
-        ['Week:', `Week ${weekNumber} — ${dateRange}`],
-        ['Generated:', generatedDate],
-        [],
-      ];
-
-      // ON DUTY section
-      rows.push([]);
-      rows.push(['ON DUTY EMPLOYEES']);
-      rows.push(['#', 'EMP NO.', 'FULL NAME', 'STATUS']);
-
-      if (onDutyList.length > 0) {
-        onDutyList.forEach((emp, idx) => {
-          rows.push([idx + 1, emp.employee_number, emp.full_name, 'ON DUTY']);
-        });
-      } else {
-        rows.push(['', '', 'No employees on duty', '']);
-      }
-
-      rows.push([]);
-      rows.push([`Total On Duty: ${onDutyList.length}`]);
-
-      // OFF DUTY section
-      rows.push([]);
-      rows.push([]);
-      rows.push(['OFF DUTY EMPLOYEES (WEEKEND OFF)']);
-      rows.push(['#', 'EMP NO.', 'FULL NAME', 'STATUS']);
-
-      if (offDutyList.length > 0) {
-        offDutyList.forEach((emp, idx) => {
-          rows.push([idx + 1, emp.employee_number, emp.full_name, 'OFF DUTY']);
-        });
-      } else {
-        rows.push(['', '', 'No employees off duty', '']);
-      }
-
-      rows.push([]);
-      rows.push([`Total Off Duty: ${offDutyList.length}`]);
-
-      // Footer summary
-      rows.push([]);
-      rows.push([]);
-      rows.push(['SUMMARY']);
-      rows.push(['On Duty:', onDutyList.length, 'Off Duty:', offDutyList.length]);
-      rows.push(['Total Staff:', group.emps.length]);
-      rows.push([]);
-      rows.push([]);
-      rows.push(['Prepared by: _______________________', '', 'Approved by: _______________________']);
-
-      const ws = XLSX.utils.aoa_to_sheet(rows);
-      ws['!cols'] = [{ wch: 6 }, { wch: 18 }, { wch: 35 }, { wch: 14 }];
-      // Merge title rows
-      ws['!merges'] = [
-        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
-      ];
-
-      const sheetName = group.deptName.replace(/[\\\/\?\*\[\]:]/g, '').slice(0, 31);
-      XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    });
-
-    const filename = `Weekend_Schedule_Week${weekNumber}_${format(weekStart, 'yyyy-MM-dd')}.xlsx`;
-    XLSX.writeFile(wb, filename);
-    toast.success(`Exported ${sortedDepts.length + 1} sheets to ${filename}`);
+  // Excel export using ExcelJS with color-coded styling
+  const handleExportExcel = async () => {
+    try {
+      const allActive = employees.filter(e => e.employment_status === 'active');
+      const result = await exportWeekendSchedule({
+        employees: allActive,
+        departments,
+        companies,
+        isEmployeeOffDuty,
+        currentWeek,
+      });
+      toast.success(`Exported ${result.sheetCount} sheets to Excel`);
+    } catch (err: any) {
+      toast.error('Export failed: ' + err.message);
+    }
   };
 
   return (
