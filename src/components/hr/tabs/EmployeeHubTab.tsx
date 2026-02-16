@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -398,6 +398,169 @@ function EmployeeProfileDialog({ employee, open, onClose }: {
   );
 }
 
+// ─────────── Edit Employee Dialog ───────────
+function EditEmployeeDialog({ employee, open, onClose, departments, positions, companies, onUpdate }: {
+  employee: Employee | null;
+  open: boolean;
+  onClose: () => void;
+  departments: Array<{ id: string; name: string }>;
+  positions: Array<{ id: string; name: string }>;
+  companies: Array<{ id: string; name: string; parent_id: string | null }>;
+  onUpdate: (id: string, updates: Partial<EmployeeInsert>) => Promise<{ error: Error | null }>;
+}) {
+  const { toast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    full_name: '',
+    department_id: '' as string | null,
+    position_id: '' as string | null,
+    company_id: '' as string | null,
+    employment_status: 'active',
+    employment_type: 'full_time',
+    email: '',
+    phone: '',
+  });
+
+  // Sync form when employee changes
+  useEffect(() => {
+    if (employee) {
+      setForm({
+        full_name: employee.full_name,
+        department_id: employee.department_id || '',
+        position_id: employee.position_id || '',
+        company_id: employee.company_id || '',
+        employment_status: employee.employment_status,
+        employment_type: employee.employment_type,
+        email: employee.email || '',
+        phone: employee.phone || '',
+      });
+    }
+  }, [employee]);
+
+  if (!employee) return null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    const updates: Partial<EmployeeInsert> = {
+      full_name: form.full_name,
+      department_id: form.department_id || null,
+      position_id: form.position_id || null,
+      company_id: form.company_id || null,
+      employment_status: form.employment_status,
+      employment_type: form.employment_type,
+      email: form.email || undefined,
+      phone: form.phone || undefined,
+    };
+    const { error } = await onUpdate(employee.id, updates);
+    setSaving(false);
+    if (error) {
+      toast({ title: 'Failed to update', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Employee updated successfully!' });
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-xl">
+            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+              <Edit className="h-5 w-5 text-primary" />
+            </div>
+            Edit Employee
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label>Full Name</Label>
+            <Input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Phone</Label>
+              <Input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-2">
+            <Label>Company</Label>
+            <Select value={form.company_id || ''} onValueChange={v => setForm(f => ({ ...f, company_id: v || null }))}>
+              <SelectTrigger><SelectValue placeholder="Select company" /></SelectTrigger>
+              <SelectContent>
+                {companies.filter(c => !c.parent_id).map(c => (
+                  <SelectItem key={c.id} value={c.id}>🏢 {c.name}</SelectItem>
+                ))}
+                {companies.filter(c => c.parent_id).map(c => (
+                  <SelectItem key={c.id} value={c.id}>└ {c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Department</Label>
+            <Select value={form.department_id || ''} onValueChange={v => setForm(f => ({ ...f, department_id: v || null }))}>
+              <SelectTrigger><SelectValue placeholder="Select department" /></SelectTrigger>
+              <SelectContent>
+                {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Position</Label>
+            <Select value={form.position_id || ''} onValueChange={v => setForm(f => ({ ...f, position_id: v || null }))}>
+              <SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger>
+              <SelectContent>
+                {positions.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Status</Label>
+              <Select value={form.employment_status} onValueChange={v => setForm(f => ({ ...f, employment_status: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(STATUS_CONFIG).map(([k, v]) => <SelectItem key={k} value={k}>{v.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={form.employment_type} onValueChange={v => setForm(f => ({ ...f, employment_type: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─────────── Main Component ───────────
 export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
   const { toast } = useToast();
@@ -408,8 +571,10 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [editEmployee, setEditEmployee] = useState<Employee | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
-  const { employees, loading, addEmployee, deleteEmployee } = useEmployees();
+  const { employees, loading, addEmployee, updateEmployee, deleteEmployee } = useEmployees();
   const { departments } = useDepartments();
   const { activePositions } = usePositions();
   const { companies } = useCompanies();
@@ -626,6 +791,9 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); handleView(emp); }}>
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); setEditEmployee(emp); setEditDialogOpen(true); }}>
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={e => { e.stopPropagation(); handleDelete(emp); }}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
@@ -683,6 +851,9 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); handleView(emp); }}>
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => { e.stopPropagation(); setEditEmployee(emp); setEditDialogOpen(true); }}>
+                            <Edit className="h-3.5 w-3.5" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={e => { e.stopPropagation(); handleDelete(emp); }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -710,6 +881,15 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
         employee={selectedEmployee}
         open={profileOpen}
         onClose={() => { setProfileOpen(false); setSelectedEmployee(null); }}
+      />
+      <EditEmployeeDialog
+        employee={editEmployee}
+        open={editDialogOpen}
+        onClose={() => { setEditDialogOpen(false); setEditEmployee(null); }}
+        departments={departments}
+        positions={activePositions}
+        companies={companies}
+        onUpdate={updateEmployee}
       />
     </div>
   );
