@@ -265,6 +265,7 @@ export type Database = {
           description: string | null
           icon: string | null
           id: string
+          is_hr_only: boolean
           name: string
           updated_at: string
         }
@@ -276,6 +277,7 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          is_hr_only?: boolean
           name: string
           updated_at?: string
         }
@@ -287,6 +289,7 @@ export type Database = {
           description?: string | null
           icon?: string | null
           id?: string
+          is_hr_only?: boolean
           name?: string
           updated_at?: string
         }

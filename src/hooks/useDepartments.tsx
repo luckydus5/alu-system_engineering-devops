@@ -9,6 +9,7 @@ export interface Department {
   icon: string | null;
   color: string | null;
   company_id: string | null;
+  is_hr_only: boolean;
 }
 
 export function useDepartments() {

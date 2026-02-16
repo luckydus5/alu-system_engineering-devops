@@ -15,7 +15,7 @@ export function GrantedDepartments() {
 
   // Get granted departments (excluding primary)
   const grantedDepts = departments.filter(
-    d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId
+    d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId && !d.is_hr_only
   );
 
   if (!primaryDept && grantedDepts.length === 0) {
