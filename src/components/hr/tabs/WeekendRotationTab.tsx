@@ -9,15 +9,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from '@/components/ui/table';
 import { 
   CalendarDays, Users, ChevronLeft, ChevronRight, 
-  Shield, UserCheck, AlertCircle, CheckSquare, XSquare, Save
+  Shield, UserCheck, AlertCircle, CheckSquare, XSquare,
+  Download, Globe, Building2
 } from 'lucide-react';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
+import { useCompanies } from '@/hooks/useCompanies';
 import { useWeekendSchedules } from '@/hooks/useWeekendSchedules';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getWeek } from 'date-fns';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 
 interface WeekendRotationTabProps {
   departmentId: string;
@@ -26,8 +29,10 @@ interface WeekendRotationTabProps {
 export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
   const { employees } = useEmployees();
   const { departments } = useDepartments();
+  const { companies = [], parentCompanies = [] } = useCompanies();
   const { user } = useAuth();
   const [currentWeek, setCurrentWeek] = useState(new Date());
+  const [filterCompany, setFilterCompany] = useState<string>('all');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [view, setView] = useState<'assign' | 'on-duty' | 'off-duty'>('assign');
 
@@ -37,17 +42,45 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
 
   const { schedules, isLoading, upsertSchedule, bulkUpsert, isEmployeeOffDuty } = useWeekendSchedules(currentWeek);
 
-  // Filter employees
+  // Get departments filtered by company
+  const filteredDepartments = useMemo(() => {
+    if (filterCompany === 'all') return departments;
+    return departments.filter(d => d.company_id === filterCompany);
+  }, [departments, filterCompany]);
+
+  // Filter employees by company then department
   const activeEmployees = useMemo(() => {
     let emps = employees.filter(e => e.employment_status === 'active');
+    if (filterCompany !== 'all') {
+      emps = emps.filter(e => e.company_id === filterCompany);
+    }
     if (filterDepartment !== 'all') {
       emps = emps.filter(e => e.department_id === filterDepartment);
     }
-    return emps;
-  }, [employees, filterDepartment]);
+    return emps.sort((a, b) => a.full_name.localeCompare(b.full_name));
+  }, [employees, filterCompany, filterDepartment]);
 
   const offDutyEmployees = useMemo(() => activeEmployees.filter(e => isEmployeeOffDuty(e.id)), [activeEmployees, isEmployeeOffDuty]);
   const onDutyEmployees = useMemo(() => activeEmployees.filter(e => !isEmployeeOffDuty(e.id)), [activeEmployees, isEmployeeOffDuty]);
+
+  // Group employees by department for display
+  const employeesByDept = useMemo(() => {
+    const grouped: Record<string, { deptName: string; companyName: string; employees: typeof activeEmployees }> = {};
+    activeEmployees.forEach(emp => {
+      const deptId = emp.department_id || 'unassigned';
+      if (!grouped[deptId]) {
+        const dept = departments.find(d => d.id === deptId);
+        const company = companies.find(c => c.id === emp.company_id);
+        grouped[deptId] = {
+          deptName: dept?.name || 'Unassigned',
+          companyName: company?.name || 'Unknown',
+          employees: [],
+        };
+      }
+      grouped[deptId].employees.push(emp);
+    });
+    return grouped;
+  }, [activeEmployees, departments, companies]);
 
   const handleToggle = (employeeId: string) => {
     if (!user) return;
@@ -76,19 +109,114 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
     return departments.find(d => d.id === deptId)?.name || 'Unassigned';
   };
 
+  const getCompanyName = (companyId: string | null) => {
+    if (!companyId) return 'Unknown';
+    return companies.find(c => c.id === companyId)?.name || 'Unknown';
+  };
+
+  // Reset department filter when company changes
+  const handleCompanyChange = (value: string) => {
+    setFilterCompany(value);
+    setFilterDepartment('all');
+  };
+
+  // Excel export with per-department sheets
+  const handleExportExcel = () => {
+    const allActive = employees.filter(e => e.employment_status === 'active');
+    const wb = XLSX.utils.book_new();
+
+    // Group all employees by department
+    const deptGroups: Record<string, { deptName: string; companyName: string; emps: typeof allActive }> = {};
+    
+    allActive.forEach(emp => {
+      const deptId = emp.department_id || 'unassigned';
+      if (!deptGroups[deptId]) {
+        const dept = departments.find(d => d.id === deptId);
+        const company = companies.find(c => c.id === emp.company_id);
+        deptGroups[deptId] = {
+          deptName: dept?.name || 'Unassigned',
+          companyName: company?.name || 'Unknown',
+          emps: [],
+        };
+      }
+      deptGroups[deptId].emps.push(emp);
+    });
+
+    // Summary sheet
+    const summaryData = [
+      ['WEEKEND SCHEDULE REPORT'],
+      [`Week ${weekNumber}: ${format(weekStart, 'MMMM d')} – ${format(weekEnd, 'MMMM d, yyyy')}`],
+      [],
+      ['Department', 'Company', 'On Duty', 'Off Duty', 'Total'],
+    ];
+
+    Object.entries(deptGroups).forEach(([deptId, group]) => {
+      const onDuty = group.emps.filter(e => !isEmployeeOffDuty(e.id)).length;
+      const offDuty = group.emps.filter(e => isEmployeeOffDuty(e.id)).length;
+      summaryData.push([group.deptName, group.companyName, String(onDuty), String(offDuty), String(group.emps.length)]);
+    });
+
+    const totalOn = allActive.filter(e => !isEmployeeOffDuty(e.id)).length;
+    const totalOff = allActive.filter(e => isEmployeeOffDuty(e.id)).length;
+    summaryData.push([]);
+    summaryData.push(['TOTAL', '', String(totalOn), String(totalOff), String(allActive.length)]);
+
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+    summaryWs['!cols'] = [{ wch: 25 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+    XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
+
+    // Per-department sheets
+    Object.entries(deptGroups).forEach(([deptId, group]) => {
+      const sheetData = [
+        [`${group.deptName} – Weekend Schedule`],
+        [`Company: ${group.companyName}`],
+        [`Week ${weekNumber}: ${format(weekStart, 'MMMM d')} – ${format(weekEnd, 'MMMM d, yyyy')}`],
+        [],
+        ['#', 'Employee Number', 'Full Name', 'Status', 'Company'],
+      ];
+
+      const sortedEmps = [...group.emps].sort((a, b) => a.full_name.localeCompare(b.full_name));
+      sortedEmps.forEach((emp, idx) => {
+        const isOff = isEmployeeOffDuty(emp.id);
+        sheetData.push([
+          String(idx + 1),
+          emp.employee_number,
+          emp.full_name,
+          isOff ? 'OFF DUTY' : 'ON DUTY',
+          getCompanyName(emp.company_id),
+        ]);
+      });
+
+      const onCount = group.emps.filter(e => !isEmployeeOffDuty(e.id)).length;
+      const offCount = group.emps.filter(e => isEmployeeOffDuty(e.id)).length;
+      sheetData.push([]);
+      sheetData.push([`On Duty: ${onCount}`, '', `Off Duty: ${offCount}`, '', `Total: ${group.emps.length}`]);
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 30 }, { wch: 12 }, { wch: 20 }];
+
+      // Sanitize sheet name (max 31 chars, no special chars)
+      const sheetName = group.deptName.replace(/[\\\/\?\*\[\]:]/g, '').slice(0, 31);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+
+    const filename = `Weekend_Schedule_Week${weekNumber}_${format(weekStart, 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    toast.success(`Exported to ${filename}`);
+  };
+
   return (
     <div className="space-y-6">
       {/* KPI Strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Card className="border-0 shadow-sm bg-gradient-to-br from-primary/10 to-primary/5">
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-medium text-muted-foreground">On Duty</p>
                 <p className="text-2xl font-bold mt-1">{onDutyEmployees.length}</p>
-                <p className="text-xs text-muted-foreground">this weekend</p>
               </div>
-              <div className="p-2.5 rounded-xl bg-primary/20">
+              <div className="p-2 rounded-xl bg-primary/20">
                 <UserCheck className="h-4 w-4 text-primary" />
               </div>
             </div>
@@ -101,9 +229,8 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Off Duty</p>
                 <p className="text-2xl font-bold mt-1">{offDutyEmployees.length}</p>
-                <p className="text-xs text-muted-foreground">weekend off</p>
               </div>
-              <div className="p-2.5 rounded-xl bg-chart-4/20">
+              <div className="p-2 rounded-xl bg-chart-4/20">
                 <CalendarDays className="h-4 w-4 text-chart-4" />
               </div>
             </div>
@@ -114,11 +241,10 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           <CardContent className="p-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Week</p>
-                <p className="text-2xl font-bold mt-1">{weekNumber}</p>
-                <p className="text-xs text-muted-foreground">{format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}</p>
+                <p className="text-xs font-medium text-muted-foreground">Week {weekNumber}</p>
+                <p className="text-sm font-semibold mt-1">{format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}</p>
               </div>
-              <div className="p-2.5 rounded-xl bg-success/20">
+              <div className="p-2 rounded-xl bg-success/20">
                 <Shield className="h-4 w-4 text-success" />
               </div>
             </div>
@@ -131,9 +257,8 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
               <div>
                 <p className="text-xs font-medium text-muted-foreground">Total Staff</p>
                 <p className="text-2xl font-bold mt-1">{activeEmployees.length}</p>
-                <p className="text-xs text-muted-foreground">active employees</p>
               </div>
-              <div className="p-2.5 rounded-xl bg-warning/20">
+              <div className="p-2 rounded-xl bg-warning/20">
                 <Users className="h-4 w-4 text-warning" />
               </div>
             </div>
@@ -141,34 +266,65 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
         </Card>
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="text-sm font-semibold px-3 py-1.5 rounded-lg bg-muted">
-            {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
+      {/* Controls Row */}
+      <div className="flex flex-col gap-3">
+        {/* Week Navigation */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentWeek(subWeeks(currentWeek, 1))}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="text-sm font-semibold px-3 py-1.5 rounded-lg bg-muted">
+              {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
+            </div>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="sm" className="text-xs" onClick={() => setCurrentWeek(new Date())}>
+              Today
+            </Button>
           </div>
-          <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setCurrentWeek(addWeeks(currentWeek, 1))}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="text-xs" onClick={() => setCurrentWeek(new Date())}>
-            Today
+          <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleExportExcel}>
+            <Download className="h-3.5 w-3.5" />
+            Export Excel
           </Button>
         </div>
 
-        <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-          <SelectTrigger className="w-[200px] h-8 text-xs">
-            <SelectValue placeholder="All Departments" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departments.map(d => (
-              <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+            <Select value={filterCompany} onValueChange={handleCompanyChange}>
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue placeholder="All Companies" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Companies</SelectItem>
+                {parentCompanies.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+                {companies.filter(c => c.parent_id).map(c => (
+                  <SelectItem key={c.id} value={c.id}>↳ {c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+            <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+              <SelectTrigger className="w-[180px] h-8 text-xs">
+                <SelectValue placeholder="All Departments" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Departments</SelectItem>
+                {filteredDepartments.map(d => (
+                  <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       {/* Tabbed Views */}
@@ -176,7 +332,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
         <TabsList className="grid w-full grid-cols-3 max-w-md">
           <TabsTrigger value="assign" className="text-xs gap-1.5">
             <CheckSquare className="h-3.5 w-3.5" />
-            Assign Weekend
+            Assign
           </TabsTrigger>
           <TabsTrigger value="on-duty" className="text-xs gap-1.5">
             <UserCheck className="h-3.5 w-3.5" />
@@ -188,7 +344,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           </TabsTrigger>
         </TabsList>
 
-        {/* Assign Tab - Excel-like table */}
+        {/* Assign Tab - Grouped by department */}
         <TabsContent value="assign">
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
@@ -203,88 +359,94 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="w-12 text-center">#</TableHead>
-                      <TableHead className="w-12 text-center">Off?</TableHead>
-                      <TableHead>Employee Name</TableHead>
-                      <TableHead>Department</TableHead>
-                      <TableHead>Employee ID</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {activeEmployees.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                          <AlertCircle className="h-5 w-5 mx-auto mb-2" />
-                          No active employees found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      activeEmployees.map((emp, idx) => {
-                        const isOff = isEmployeeOffDuty(emp.id);
-                        return (
-                          <TableRow
-                            key={emp.id}
-                            className={cn(
-                              "cursor-pointer transition-colors",
-                              isOff ? "bg-chart-4/5" : "hover:bg-muted/30"
-                            )}
-                            onClick={() => handleToggle(emp.id)}
-                          >
-                            <TableCell className="text-center text-xs text-muted-foreground font-mono">
-                              {idx + 1}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Checkbox
-                                checked={isOff}
-                                onCheckedChange={() => handleToggle(emp.id)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="mx-auto"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <div className="flex items-center gap-2.5">
-                                <Avatar className="h-7 w-7">
-                                  <AvatarFallback className={cn(
-                                    "text-[10px] font-semibold",
-                                    isOff ? "bg-chart-4/20 text-chart-4" : "bg-primary/15 text-primary"
-                                  )}>
-                                    {getInitials(emp.full_name)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <span className="text-sm font-medium">{emp.full_name}</span>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {getDeptName(emp.department_id)}
-                            </TableCell>
-                            <TableCell className="text-xs text-muted-foreground font-mono">
-                              {emp.employee_number}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Badge
-                                variant="outline"
-                                className={cn(
-                                  "text-[10px] px-2",
-                                  isOff
-                                    ? "border-chart-4/30 text-chart-4 bg-chart-4/10"
-                                    : "border-primary/30 text-primary bg-primary/10"
-                                )}
-                              >
-                                {isOff ? 'Off Duty' : 'On Duty'}
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
+              {Object.keys(employeesByDept).length === 0 ? (
+                <div className="flex items-center gap-2 py-12 justify-center text-muted-foreground">
+                  <AlertCircle className="h-5 w-5" />
+                  <p className="text-sm">No active employees found</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  {Object.entries(employeesByDept).map(([deptId, group]) => {
+                    const deptOnDuty = group.employees.filter(e => !isEmployeeOffDuty(e.id)).length;
+                    const deptOffDuty = group.employees.filter(e => isEmployeeOffDuty(e.id)).length;
+                    return (
+                      <div key={deptId}>
+                        {/* Department header */}
+                        <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-2.5 bg-muted/70 border-y">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-xs font-bold uppercase tracking-wide">{group.deptName}</span>
+                            <span className="text-[10px] text-muted-foreground">• {group.companyName}</span>
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px]">
+                            <span className="text-primary font-medium">{deptOnDuty} on</span>
+                            <span className="text-chart-4 font-medium">{deptOffDuty} off</span>
+                            <Badge variant="secondary" className="text-[10px] h-5">{group.employees.length}</Badge>
+                          </div>
+                        </div>
+                        <Table>
+                          <TableBody>
+                            {group.employees.sort((a, b) => a.full_name.localeCompare(b.full_name)).map((emp, idx) => {
+                              const isOff = isEmployeeOffDuty(emp.id);
+                              return (
+                                <TableRow
+                                  key={emp.id}
+                                  className={cn(
+                                    "cursor-pointer transition-colors",
+                                    isOff ? "bg-chart-4/5" : "hover:bg-muted/30"
+                                  )}
+                                  onClick={() => handleToggle(emp.id)}
+                                >
+                                  <TableCell className="w-10 text-center text-xs text-muted-foreground font-mono">
+                                    {idx + 1}
+                                  </TableCell>
+                                  <TableCell className="w-10 text-center">
+                                    <Checkbox
+                                      checked={isOff}
+                                      onCheckedChange={() => handleToggle(emp.id)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="mx-auto"
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex items-center gap-2.5">
+                                      <Avatar className="h-7 w-7">
+                                        <AvatarFallback className={cn(
+                                          "text-[10px] font-semibold",
+                                          isOff ? "bg-chart-4/20 text-chart-4" : "bg-primary/15 text-primary"
+                                        )}>
+                                          {getInitials(emp.full_name)}
+                                        </AvatarFallback>
+                                      </Avatar>
+                                      <span className="text-sm font-medium">{emp.full_name}</span>
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-xs text-muted-foreground font-mono">
+                                    {emp.employee_number}
+                                  </TableCell>
+                                  <TableCell className="text-center w-24">
+                                    <Badge
+                                      variant="outline"
+                                      className={cn(
+                                        "text-[10px] px-2",
+                                        isOff
+                                          ? "border-chart-4/30 text-chart-4 bg-chart-4/10"
+                                          : "border-primary/30 text-primary bg-primary/10"
+                                      )}
+                                    >
+                                      {isOff ? 'Off Duty' : 'On Duty'}
+                                    </Badge>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -295,6 +457,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
             employees={onDutyEmployees}
             status="on-duty"
             getDeptName={getDeptName}
+            getCompanyName={getCompanyName}
             getInitials={getInitials}
           />
         </TabsContent>
@@ -305,6 +468,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
             employees={offDutyEmployees}
             status="off-duty"
             getDeptName={getDeptName}
+            getCompanyName={getCompanyName}
             getInitials={getInitials}
           />
         </TabsContent>
@@ -313,16 +477,17 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
   );
 }
 
-// Sub-component for On Duty / Off Duty lists
 function EmployeeStatusList({ 
   employees, 
   status, 
-  getDeptName, 
+  getDeptName,
+  getCompanyName,
   getInitials 
 }: { 
   employees: any[];
   status: 'on-duty' | 'off-duty';
   getDeptName: (id: string | null) => string;
+  getCompanyName: (id: string | null) => string;
   getInitials: (name: string) => string;
 }) {
   const isOnDuty = status === 'on-duty';
@@ -364,7 +529,7 @@ function EmployeeStatusList({
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{emp.full_name}</p>
-                  <p className="text-xs text-muted-foreground">{getDeptName(emp.department_id)}</p>
+                  <p className="text-[10px] text-muted-foreground">{getDeptName(emp.department_id)} • {getCompanyName(emp.company_id)}</p>
                 </div>
                 <Badge variant="outline" className={cn(
                   "text-[10px] px-2 shrink-0",
