@@ -287,9 +287,9 @@ function EmployeeProfileDialog({ employee, open, onClose }: {
             <div className="pb-2 flex-1">
               <h2 className="text-2xl font-bold">{employee.full_name}</h2>
               <div className="flex items-center gap-2 mt-1">
-                <Badge variant="outline" className="font-mono text-xs">
+               <Badge variant="outline" className="font-mono text-xs">
                   <Hash className="h-3 w-3 mr-1" />
-                  {employee.employee_number}
+                  {employee.fingerprint_number ? `FP-${employee.fingerprint_number}` : employee.employee_number}
                 </Badge>
                 <Badge variant="outline" className={cn("text-xs border", status.color)}>
                   {status.label}
@@ -419,6 +419,7 @@ function EditEmployeeDialog({ employee, open, onClose, departments, positions, c
     employment_type: 'full_time',
     email: '',
     phone: '',
+    fingerprint_number: '',
   });
 
   // Sync form when employee changes
@@ -433,6 +434,7 @@ function EditEmployeeDialog({ employee, open, onClose, departments, positions, c
         employment_type: employee.employment_type,
         email: employee.email || '',
         phone: employee.phone || '',
+        fingerprint_number: employee.fingerprint_number || '',
       });
     }
   }, [employee]);
@@ -441,7 +443,7 @@ function EditEmployeeDialog({ employee, open, onClose, departments, positions, c
 
   const handleSave = async () => {
     setSaving(true);
-    const updates: Partial<EmployeeInsert> = {
+    const updates: any = {
       full_name: form.full_name,
       department_id: form.department_id || null,
       position_id: form.position_id || null,
@@ -450,6 +452,7 @@ function EditEmployeeDialog({ employee, open, onClose, departments, positions, c
       employment_type: form.employment_type,
       email: form.email || undefined,
       phone: form.phone || undefined,
+      fingerprint_number: form.fingerprint_number || null,
     };
     const { error } = await onUpdate(employee.id, updates);
     setSaving(false);
@@ -474,9 +477,15 @@ function EditEmployeeDialog({ employee, open, onClose, departments, positions, c
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="space-y-2">
-            <Label>Full Name</Label>
-            <Input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="col-span-2 sm:col-span-1 space-y-2">
+              <Label>Full Name</Label>
+              <Input value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} />
+            </div>
+            <div className="space-y-2">
+              <Label>Fingerprint No.</Label>
+              <Input value={form.fingerprint_number} onChange={e => setForm(f => ({ ...f, fingerprint_number: e.target.value }))} placeholder="e.g. 43, 99, 102" />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -584,6 +593,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
       const matchesSearch =
         emp.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         emp.employee_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (emp.fingerprint_number && emp.fingerprint_number.includes(searchTerm)) ||
         emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDept = departmentFilter === 'all' || emp.department_id === departmentFilter;
       const matchesStatus = statusFilter === 'all' || emp.employment_status === statusFilter;
@@ -756,7 +766,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-sm truncate">{emp.full_name}</h3>
-                      <p className="text-xs text-muted-foreground font-mono">{emp.employee_number}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{emp.fingerprint_number ? `FP-${emp.fingerprint_number}` : emp.employee_number}</p>
                     </div>
                     <Badge variant="outline" className={cn("text-[10px] shrink-0 border", status.color)}>
                       {status.label}
@@ -836,7 +846,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
                           </Avatar>
                           <div className="min-w-0">
                             <p className="font-medium truncate">{emp.full_name}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{emp.employee_number}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{emp.fingerprint_number ? `FP-${emp.fingerprint_number}` : emp.employee_number}</p>
                           </div>
                         </div>
                       </td>

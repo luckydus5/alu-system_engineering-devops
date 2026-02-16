@@ -318,6 +318,7 @@ export type Database = {
           employee_number: string
           employment_status: string
           employment_type: string
+          fingerprint_number: string | null
           full_name: string
           gender: string | null
           hire_date: string
@@ -342,6 +343,7 @@ export type Database = {
           employee_number: string
           employment_status?: string
           employment_type?: string
+          fingerprint_number?: string | null
           full_name: string
           gender?: string | null
           hire_date?: string
@@ -366,6 +368,7 @@ export type Database = {
           employee_number?: string
           employment_status?: string
           employment_type?: string
+          fingerprint_number?: string | null
           full_name?: string
           gender?: string | null
           hire_date?: string

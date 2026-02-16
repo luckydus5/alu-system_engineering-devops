@@ -21,6 +21,7 @@ export interface Employee {
   avatar_url: string | null;
   notes: string | null;
   linked_user_id: string | null;
+  fingerprint_number: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
