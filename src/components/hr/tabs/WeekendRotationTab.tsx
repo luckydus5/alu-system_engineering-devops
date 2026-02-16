@@ -7,10 +7,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableHead, TableRow, TableBody, TableCell } from '@/components/ui/table';
+import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   CalendarDays, Users, ChevronLeft, ChevronRight, 
   Shield, UserCheck, AlertCircle, CheckSquare, XSquare,
-  Download, Globe, Building2
+  Download, Globe, Building2, Eye, FileSpreadsheet
 } from 'lucide-react';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -35,6 +38,8 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
   const [filterCompany, setFilterCompany] = useState<string>('all');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [view, setView] = useState<'assign' | 'on-duty' | 'off-duty'>('assign');
+  const [showExportPreview, setShowExportPreview] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
@@ -82,6 +87,26 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
     return grouped;
   }, [activeEmployees, departments, companies]);
 
+  // All employees grouped by dept (unfiltered) for export preview
+  const allEmployeesByDept = useMemo(() => {
+    const allActive = employees.filter(e => e.employment_status === 'active');
+    const grouped: Record<string, { deptName: string; companyName: string; employees: typeof allActive }> = {};
+    allActive.forEach(emp => {
+      const deptId = emp.department_id || 'unassigned';
+      if (!grouped[deptId]) {
+        const dept = departments.find(d => d.id === deptId);
+        const company = companies.find(c => c.id === emp.company_id);
+        grouped[deptId] = {
+          deptName: dept?.name || 'Unassigned',
+          companyName: company?.name || 'Unknown',
+          employees: [],
+        };
+      }
+      grouped[deptId].employees.push(emp);
+    });
+    return Object.entries(grouped).sort(([, a], [, b]) => a.deptName.localeCompare(b.deptName));
+  }, [employees, departments, companies]);
+
   const handleToggle = (employeeId: string) => {
     if (!user) return;
     const current = isEmployeeOffDuty(employeeId);
@@ -122,6 +147,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
 
   // Excel export using ExcelJS with color-coded styling
   const handleExportExcel = async () => {
+    setIsExporting(true);
     try {
       const allActive = employees.filter(e => e.employment_status === 'active');
       const result = await exportWeekendSchedule({
@@ -132,8 +158,11 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
         currentWeek,
       });
       toast.success(`Exported ${result.sheetCount} sheets to Excel`);
+      setShowExportPreview(false);
     } catch (err: any) {
       toast.error('Export failed: ' + err.message);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -216,9 +245,9 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
               Today
             </Button>
           </div>
-          <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={handleExportExcel}>
-            <Download className="h-3.5 w-3.5" />
-            Export Excel
+          <Button variant="outline" size="sm" className="text-xs gap-1.5" onClick={() => setShowExportPreview(true)}>
+            <Eye className="h-3.5 w-3.5" />
+            Preview & Export
           </Button>
         </div>
 
@@ -405,6 +434,145 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           />
         </TabsContent>
       </Tabs>
+
+      {/* Export Preview Dialog */}
+      <Dialog open={showExportPreview} onOpenChange={setShowExportPreview}>
+        <DialogContent className="max-w-3xl max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5 text-primary" />
+              Export Preview — Week {weekNumber}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              {format(weekStart, 'MMMM d')} – {format(weekEnd, 'MMMM d, yyyy')} • {allEmployeesByDept.length + 1} sheets will be generated (1 Summary + {allEmployeesByDept.length} departments)
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 -mx-6 px-6">
+            {/* Summary preview card */}
+            <Card className="mb-4 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-8 w-8 rounded-lg bg-primary/15 flex items-center justify-center">
+                    <FileSpreadsheet className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold">Summary Sheet</p>
+                    <p className="text-[10px] text-muted-foreground">All departments overview with totals</p>
+                  </div>
+                  <Badge className="ml-auto text-[10px] bg-primary/10 text-primary border-primary/20" variant="outline">Sheet 1</Badge>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg bg-background p-2.5 text-center border">
+                    <p className="text-lg font-bold text-primary">{employees.filter(e => e.employment_status === 'active' && !isEmployeeOffDuty(e.id)).length}</p>
+                    <p className="text-[10px] text-muted-foreground">On Duty</p>
+                  </div>
+                  <div className="rounded-lg bg-background p-2.5 text-center border">
+                    <p className="text-lg font-bold text-chart-4">{employees.filter(e => e.employment_status === 'active' && isEmployeeOffDuty(e.id)).length}</p>
+                    <p className="text-[10px] text-muted-foreground">Off Duty</p>
+                  </div>
+                  <div className="rounded-lg bg-background p-2.5 text-center border">
+                    <p className="text-lg font-bold">{employees.filter(e => e.employment_status === 'active').length}</p>
+                    <p className="text-[10px] text-muted-foreground">Total</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Department preview thumbnails */}
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Department Sheets</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {allEmployeesByDept.map(([deptId, group], idx) => {
+                const on = group.employees.filter(e => !isEmployeeOffDuty(e.id)).length;
+                const off = group.employees.filter(e => isEmployeeOffDuty(e.id)).length;
+                const total = group.employees.length;
+                const onPercent = total > 0 ? Math.round((on / total) * 100) : 0;
+
+                return (
+                  <Card key={deptId} className="border hover:border-primary/30 transition-colors group">
+                    <CardContent className="p-3.5">
+                      <div className="flex items-start justify-between mb-2.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold truncate">{group.deptName}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">{group.companyName}</p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="text-[9px] shrink-0">Sheet {idx + 2}</Badge>
+                      </div>
+
+                      {/* Status bar */}
+                      <div className="mb-2">
+                        <div className="flex h-2 rounded-full overflow-hidden bg-muted">
+                          {on > 0 && (
+                            <div 
+                              className="bg-primary rounded-l-full transition-all" 
+                              style={{ width: `${onPercent}%` }} 
+                            />
+                          )}
+                          {off > 0 && (
+                            <div 
+                              className="bg-chart-4 transition-all" 
+                              style={{ width: `${100 - onPercent}%` }} 
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Counts */}
+                      <div className="flex items-center justify-between text-[10px]">
+                        <div className="flex items-center gap-1">
+                          <div className="h-2 w-2 rounded-full bg-primary" />
+                          <span className="font-medium text-primary">{on} on duty</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <div className="h-2 w-2 rounded-full bg-chart-4" />
+                          <span className="font-medium text-chart-4">{off} off duty</span>
+                        </div>
+                        <span className="text-muted-foreground font-medium">{total} total</span>
+                      </div>
+
+                      {/* Mini employee preview */}
+                      {total > 0 && (
+                        <div className="flex items-center gap-0.5 mt-2.5 -space-x-1">
+                          {group.employees.slice(0, 6).map(emp => (
+                            <Avatar key={emp.id} className="h-5 w-5 border border-background">
+                              <AvatarFallback className={cn(
+                                "text-[7px] font-bold",
+                                isEmployeeOffDuty(emp.id)
+                                  ? "bg-chart-4/20 text-chart-4"
+                                  : "bg-primary/15 text-primary"
+                              )}>
+                                {getInitials(emp.full_name)}
+                              </AvatarFallback>
+                            </Avatar>
+                          ))}
+                          {total > 6 && (
+                            <span className="text-[9px] text-muted-foreground ml-1.5">+{total - 6}</span>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="flex-row gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={() => setShowExportPreview(false)} className="flex-1 sm:flex-none">
+              Cancel
+            </Button>
+            <Button onClick={handleExportExcel} disabled={isExporting} className="flex-1 sm:flex-none gap-2">
+              <Download className="h-4 w-4" />
+              {isExporting ? 'Generating...' : `Export ${allEmployeesByDept.length + 1} Sheets`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
