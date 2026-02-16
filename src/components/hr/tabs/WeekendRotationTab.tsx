@@ -120,7 +120,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
     setFilterDepartment('all');
   };
 
-  // Excel export with per-department sheets
+  // Excel export with per-department sheets — professional layout
   const handleExportExcel = () => {
     const allActive = employees.filter(e => e.employment_status === 'active');
     const wb = XLSX.utils.book_new();
@@ -142,67 +142,125 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
       deptGroups[deptId].emps.push(emp);
     });
 
-    // Summary sheet
-    const summaryData = [
-      ['WEEKEND SCHEDULE REPORT'],
-      [`Week ${weekNumber}: ${format(weekStart, 'MMMM d')} – ${format(weekEnd, 'MMMM d, yyyy')}`],
+    const dateRange = `${format(weekStart, 'MMMM d')} – ${format(weekEnd, 'MMMM d, yyyy')}`;
+    const generatedDate = format(new Date(), 'dd/MM/yyyy HH:mm');
+
+    // ── SUMMARY SHEET ──
+    const summaryRows: any[][] = [
+      ['HQ POWER MANAGEMENT SYSTEMS'],
+      ['WEEKEND DUTY SCHEDULE — SUMMARY REPORT'],
       [],
-      ['Department', 'Company', 'On Duty', 'Off Duty', 'Total'],
+      [`Week:`, `Week ${weekNumber}`],
+      [`Period:`, dateRange],
+      [`Generated:`, generatedDate],
+      [],
+      [],
+      ['#', 'DEPARTMENT', 'COMPANY', 'ON DUTY', 'OFF DUTY', 'TOTAL STAFF'],
     ];
 
-    Object.entries(deptGroups).forEach(([deptId, group]) => {
+    let globalIdx = 0;
+    const sortedDepts = Object.entries(deptGroups).sort(([, a], [, b]) => a.deptName.localeCompare(b.deptName));
+    let totalOnAll = 0;
+    let totalOffAll = 0;
+
+    sortedDepts.forEach(([, group]) => {
+      globalIdx++;
       const onDuty = group.emps.filter(e => !isEmployeeOffDuty(e.id)).length;
       const offDuty = group.emps.filter(e => isEmployeeOffDuty(e.id)).length;
-      summaryData.push([group.deptName, group.companyName, String(onDuty), String(offDuty), String(group.emps.length)]);
+      totalOnAll += onDuty;
+      totalOffAll += offDuty;
+      summaryRows.push([globalIdx, group.deptName, group.companyName, onDuty, offDuty, group.emps.length]);
     });
 
-    const totalOn = allActive.filter(e => !isEmployeeOffDuty(e.id)).length;
-    const totalOff = allActive.filter(e => isEmployeeOffDuty(e.id)).length;
-    summaryData.push([]);
-    summaryData.push(['TOTAL', '', String(totalOn), String(totalOff), String(allActive.length)]);
+    summaryRows.push([]);
+    summaryRows.push(['', 'TOTAL', '', totalOnAll, totalOffAll, allActive.length]);
+    summaryRows.push([]);
+    summaryRows.push([]);
+    summaryRows.push(['Prepared by: _______________________', '', '', 'Approved by: _______________________']);
 
-    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
-    summaryWs['!cols'] = [{ wch: 25 }, { wch: 20 }, { wch: 12 }, { wch: 12 }, { wch: 10 }];
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryRows);
+    summaryWs['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 22 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+    // Merge title rows
+    summaryWs['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
+    ];
     XLSX.utils.book_append_sheet(wb, summaryWs, 'Summary');
 
-    // Per-department sheets
-    Object.entries(deptGroups).forEach(([deptId, group]) => {
-      const sheetData = [
-        [`${group.deptName} – Weekend Schedule`],
-        [`Company: ${group.companyName}`],
-        [`Week ${weekNumber}: ${format(weekStart, 'MMMM d')} – ${format(weekEnd, 'MMMM d, yyyy')}`],
+    // ── PER-DEPARTMENT SHEETS ──
+    sortedDepts.forEach(([, group]) => {
+      const sortedEmps = [...group.emps].sort((a, b) => a.full_name.localeCompare(b.full_name));
+      const onDutyList = sortedEmps.filter(e => !isEmployeeOffDuty(e.id));
+      const offDutyList = sortedEmps.filter(e => isEmployeeOffDuty(e.id));
+
+      const rows: any[][] = [
+        ['HQ POWER MANAGEMENT SYSTEMS'],
+        [`WEEKEND DUTY SCHEDULE — ${group.deptName.toUpperCase()}`],
         [],
-        ['#', 'Employee Number', 'Full Name', 'Status', 'Company'],
+        ['Company:', group.companyName],
+        ['Week:', `Week ${weekNumber} — ${dateRange}`],
+        ['Generated:', generatedDate],
+        [],
       ];
 
-      const sortedEmps = [...group.emps].sort((a, b) => a.full_name.localeCompare(b.full_name));
-      sortedEmps.forEach((emp, idx) => {
-        const isOff = isEmployeeOffDuty(emp.id);
-        sheetData.push([
-          String(idx + 1),
-          emp.employee_number,
-          emp.full_name,
-          isOff ? 'OFF DUTY' : 'ON DUTY',
-          getCompanyName(emp.company_id),
-        ]);
-      });
+      // ON DUTY section
+      rows.push([]);
+      rows.push(['ON DUTY EMPLOYEES']);
+      rows.push(['#', 'EMP NO.', 'FULL NAME', 'STATUS']);
 
-      const onCount = group.emps.filter(e => !isEmployeeOffDuty(e.id)).length;
-      const offCount = group.emps.filter(e => isEmployeeOffDuty(e.id)).length;
-      sheetData.push([]);
-      sheetData.push([`On Duty: ${onCount}`, '', `Off Duty: ${offCount}`, '', `Total: ${group.emps.length}`]);
+      if (onDutyList.length > 0) {
+        onDutyList.forEach((emp, idx) => {
+          rows.push([idx + 1, emp.employee_number, emp.full_name, 'ON DUTY']);
+        });
+      } else {
+        rows.push(['', '', 'No employees on duty', '']);
+      }
 
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
-      ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 30 }, { wch: 12 }, { wch: 20 }];
+      rows.push([]);
+      rows.push([`Total On Duty: ${onDutyList.length}`]);
 
-      // Sanitize sheet name (max 31 chars, no special chars)
+      // OFF DUTY section
+      rows.push([]);
+      rows.push([]);
+      rows.push(['OFF DUTY EMPLOYEES (WEEKEND OFF)']);
+      rows.push(['#', 'EMP NO.', 'FULL NAME', 'STATUS']);
+
+      if (offDutyList.length > 0) {
+        offDutyList.forEach((emp, idx) => {
+          rows.push([idx + 1, emp.employee_number, emp.full_name, 'OFF DUTY']);
+        });
+      } else {
+        rows.push(['', '', 'No employees off duty', '']);
+      }
+
+      rows.push([]);
+      rows.push([`Total Off Duty: ${offDutyList.length}`]);
+
+      // Footer summary
+      rows.push([]);
+      rows.push([]);
+      rows.push(['SUMMARY']);
+      rows.push(['On Duty:', onDutyList.length, 'Off Duty:', offDutyList.length]);
+      rows.push(['Total Staff:', group.emps.length]);
+      rows.push([]);
+      rows.push([]);
+      rows.push(['Prepared by: _______________________', '', 'Approved by: _______________________']);
+
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      ws['!cols'] = [{ wch: 6 }, { wch: 18 }, { wch: 35 }, { wch: 14 }];
+      // Merge title rows
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+      ];
+
       const sheetName = group.deptName.replace(/[\\\/\?\*\[\]:]/g, '').slice(0, 31);
       XLSX.utils.book_append_sheet(wb, ws, sheetName);
     });
 
     const filename = `Weekend_Schedule_Week${weekNumber}_${format(weekStart, 'yyyy-MM-dd')}.xlsx`;
     XLSX.writeFile(wb, filename);
-    toast.success(`Exported to ${filename}`);
+    toast.success(`Exported ${sortedDepts.length + 1} sheets to ${filename}`);
   };
 
   return (
