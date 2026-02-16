@@ -639,6 +639,14 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const userLookup = users.map(u => ({ ...u, nameLower: u.full_name?.toLowerCase().trim() || '' }));
       const employeeLookup = employees.map(e => ({ ...e, nameLower: e.full_name?.toLowerCase().trim() || '' }));
 
+      // Build fingerprint number lookup map for fast matching
+      const fingerprintMap = new Map<string, typeof employeeLookup[0]>();
+      for (const e of employeeLookup) {
+        if (e.fingerprint_number) {
+          fingerprintMap.set(e.fingerprint_number.trim(), e);
+        }
+      }
+
       // Company/department classification using advanced classifier
       const fallbackCo = selectedCompanyId && selectedCompanyId !== 'none' ? selectedCompanyId : undefined;
       const classifyDept = (excelDept: string) => classifier.classify(excelDept, fallbackCo);
@@ -647,46 +655,53 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const normalizeName = (n: string) => n.toLowerCase().replace(/[._-]/g, ' ').replace(/\s+/g, ' ').trim();
       
       // Check if two names refer to the same person using word-level matching
+      // Stricter: requires at least 2 matching words (or all words if shorter has only 1)
       const namesMatch = (a: string, b: string): boolean => {
-        const aParts = normalizeName(a).split(' ').filter(p => p.length > 1);
-        const bParts = normalizeName(b).split(' ').filter(p => p.length > 1);
+        const aParts = normalizeName(a).split(' ').filter(p => p.length > 2);
+        const bParts = normalizeName(b).split(' ').filter(p => p.length > 2);
         if (aParts.length === 0 || bParts.length === 0) return false;
         // Count how many words from the shorter name appear in the longer name
         const shorter = aParts.length <= bParts.length ? aParts : bParts;
         const longer = aParts.length <= bParts.length ? bParts : aParts;
         let matched = 0;
         for (const word of shorter) {
-          if (longer.some(w => w === word || (word.length >= 4 && w.startsWith(word)) || (w.length >= 4 && word.startsWith(w)))) {
+          if (longer.some(w => w === word || (word.length >= 5 && w.startsWith(word)) || (w.length >= 5 && word.startsWith(w)))) {
             matched++;
           }
         }
-        // Require at least half of the shorter name's words to match, and at least 1
-        return matched >= 1 && matched >= Math.ceil(shorter.length / 2);
+        // Require at least 2 matched words, or if single-word name require exact match in other
+        if (shorter.length === 1) return matched === 1 && longer.length === 1;
+        return matched >= 2;
       };
 
       const matchUser = (name: string, empNo?: string) => {
         const searchName = name.toLowerCase().trim();
-        // Try exact employee number match first
+        // 1. Try fingerprint number match FIRST (most reliable)
+        if (empNo) {
+          const byFingerprint = fingerprintMap.get(empNo.trim());
+          if (byFingerprint) return { type: 'employee' as const, ...byFingerprint };
+        }
+        // 2. Try exact employee number match
         if (empNo) {
           const byNo = employeeLookup.find(e => e.employee_number === `EMP-${empNo.padStart(4, '0')}` || e.employee_number === empNo);
           if (byNo) return { type: 'employee' as const, ...byNo };
         }
-        // Try exact name match (normalized) against employees first
+        // 3. Try exact name match (normalized) against employees first
         const searchNorm = normalizeName(name);
         let match = employeeLookup.find(e => normalizeName(e.full_name || '') === searchNorm);
         if (match) return { type: 'employee' as const, ...match };
-        // Try word-level match against employees
+        // 4. Try word-level match against employees (require at least 2 words to match for safety)
         match = employeeLookup.find(e => namesMatch(name, e.full_name || ''));
         if (match) return { type: 'employee' as const, ...match };
-        // Try profiles/users - exact normalized
+        // 5. Try profiles/users - exact normalized
         let uMatch = userLookup.find(u => normalizeName(u.full_name || '') === searchNorm);
         if (uMatch) return { type: 'user' as const, ...uMatch };
-        // Try word-level match against users
+        // 6. Try word-level match against users
         uMatch = userLookup.find(u => namesMatch(name, u.full_name || ''));
         if (uMatch) return { type: 'user' as const, ...uMatch };
-        // Try last name only match (for single-name entries like "MANIRAKOZE")
+        // 7. Try last name only match (for single-name entries) - only if name is very specific
         const parts = searchNorm.split(/\s+/);
-        if (parts.length === 1 && parts[0].length >= 4) {
+        if (parts.length === 1 && parts[0].length >= 5) {
           match = employeeLookup.find(e => {
             const eParts = normalizeName(e.full_name || '').split(/\s+/);
             return eParts.some(p => p === parts[0]);
@@ -932,6 +947,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         const { error } = await supabase.from('employees').insert({
           full_name: emp.name,
           employee_number: '', // auto-generated by trigger
+          fingerprint_number: emp.empNo || null, // Store fingerprint number from Excel
           department_id: deptId,
           created_by: currentUser?.id || null,
           employment_status: 'active',
