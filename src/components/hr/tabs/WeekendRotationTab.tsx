@@ -16,6 +16,7 @@ import {
   Download, Globe, Building2, Eye, FileSpreadsheet
 } from 'lucide-react';
 import { useEmployees } from '@/hooks/useEmployees';
+import { usePositions } from '@/hooks/usePositions';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useWeekendSchedules } from '@/hooks/useWeekendSchedules';
@@ -31,6 +32,7 @@ interface WeekendRotationTabProps {
 
 export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
   const { employees } = useEmployees();
+  const { positions } = usePositions();
   const { departments } = useDepartments();
   const { companies = [], parentCompanies = [] } = useCompanies();
   const { user } = useAuth();
@@ -154,6 +156,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
         employees: allActive,
         departments,
         companies,
+        positions,
         isEmployeeOffDuty,
         currentWeek,
       });

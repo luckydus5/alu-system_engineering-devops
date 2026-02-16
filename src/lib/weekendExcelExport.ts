@@ -8,6 +8,12 @@ interface Employee {
   department_id: string | null;
   company_id: string | null;
   employment_status: string;
+  position_id: string | null;
+}
+
+interface Position {
+  id: string;
+  name: string;
 }
 
 interface Department {
@@ -25,6 +31,7 @@ interface ExportConfig {
   employees: Employee[];
   departments: Department[];
   companies: Company[];
+  positions: Position[];
   isEmployeeOffDuty: (id: string) => boolean;
   currentWeek: Date;
 }
@@ -161,7 +168,9 @@ function groupByDept(employees: Employee[], departments: Department[], companies
 }
 
 export async function exportWeekendSchedule(config: ExportConfig) {
-  const { employees, departments, companies, isEmployeeOffDuty, currentWeek } = config;
+  const { employees, departments, companies, positions, isEmployeeOffDuty, currentWeek } = config;
+  const posMap = new Map(positions.map(p => [p.id, p.name]));
+  const getPosition = (emp: Employee) => posMap.get(emp.position_id || '') || '—';
   const allActive = employees.filter(e => e.employment_status === 'active');
   const weekStart = startOfWeek(currentWeek, { weekStartsOn: 1 });
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 1 });
@@ -245,111 +254,111 @@ export async function exportWeekendSchedule(config: ExportConfig) {
   // ═══════════════════════════════════════
   // PER-DEPARTMENT SHEETS
   // ═══════════════════════════════════════
-  const DEPT_COLS = 4;
+  const DEPT_COLS = 5;
 
   sortedDepts.forEach(([, group]) => {
     const sheetName = group.deptName.replace(/[\\\/\?\*\[\]:]/g, '').slice(0, 31);
     const ds = wb.addWorksheet(sheetName, { views: [{ showGridLines: false }] });
-    ds.columns = [{ width: 6 }, { width: 18 }, { width: 36 }, { width: 16 }];
+    ds.columns = [{ width: 6 }, { width: 18 }, { width: 32 }, { width: 24 }, { width: 16 }];
 
     const sortedEmps = [...group.emps].sort((a, b) => a.full_name.localeCompare(b.full_name));
     const onList = sortedEmps.filter(e => !isEmployeeOffDuty(e.id));
     const offList = sortedEmps.filter(e => isEmployeeOffDuty(e.id));
 
     // Title
-    const t1 = ds.addRow(['HQ POWER MANAGEMENT SYSTEMS', '', '', '']);
+    const t1 = ds.addRow(['HQ POWER MANAGEMENT SYSTEMS', '', '', '', '']);
     ds.mergeCells(t1.number, 1, t1.number, DEPT_COLS);
     applyTitleStyle(t1, DEPT_COLS);
 
-    const t2 = ds.addRow([`${group.deptName.toUpperCase()} — WEEKEND SCHEDULE`, '', '', '']);
+    const t2 = ds.addRow([`${group.deptName.toUpperCase()} — WEEKEND SCHEDULE`, '', '', '', '']);
     ds.mergeCells(t2.number, 1, t2.number, DEPT_COLS);
     applySubtitleStyle(t2, DEPT_COLS);
 
     ds.addRow([]);
 
-    const dm1 = ds.addRow(['Company:', group.companyName, '', '']);
+    const dm1 = ds.addRow(['Company:', group.companyName, '', '', '']);
     applyMetaRow(dm1);
-    const dm2 = ds.addRow(['Week:', `Week ${weekNumber} — ${dateRange}`, '', '']);
+    const dm2 = ds.addRow(['Week:', `Week ${weekNumber} — ${dateRange}`, '', '', '']);
     applyMetaRow(dm2);
-    const dm3 = ds.addRow(['Generated:', generated, '', '']);
+    const dm3 = ds.addRow(['Generated:', generated, '', '', '']);
     applyMetaRow(dm3);
 
     ds.addRow([]);
 
     // ── ON DUTY section ──
-    const onSec = ds.addRow([`  ✅  ON DUTY EMPLOYEES (${onList.length})`, '', '', '']);
+    const onSec = ds.addRow([`  ✅  ON DUTY EMPLOYEES (${onList.length})`, '', '', '', '']);
     ds.mergeCells(onSec.number, 1, onSec.number, DEPT_COLS);
     applySectionHeader(onSec, DEPT_COLS);
     onSec.getCell(1).font = { ...onSec.getCell(1).font!, color: { argb: COLORS.onDutyBorder } };
 
-    const onHdr = ds.addRow(['#', 'EMP NO.', 'FULL NAME', 'STATUS']);
+    const onHdr = ds.addRow(['#', 'EMP NO.', 'FULL NAME', 'POSITION', 'STATUS']);
     applyHeaderStyle(onHdr, DEPT_COLS);
 
     if (onList.length > 0) {
       onList.forEach((emp, idx) => {
-        const row = ds.addRow([idx + 1, emp.employee_number, emp.full_name, 'ON DUTY']);
+        const row = ds.addRow([idx + 1, emp.employee_number, emp.full_name, getPosition(emp), 'ON DUTY']);
         applyDataRow(row, DEPT_COLS, idx % 2 === 1);
         row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-        applyStatusCell(row.getCell(4), true);
+        applyStatusCell(row.getCell(5), true);
       });
     } else {
-      const emptyRow = ds.addRow(['', '', '— No employees on duty —', '']);
+      const emptyRow = ds.addRow(['', '', '— No employees on duty —', '', '']);
       emptyRow.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '999999' } };
       emptyRow.alignment = { horizontal: 'center' };
     }
 
-    const onTotal = ds.addRow(['', '', `Total On Duty: ${onList.length}`, '']);
+    const onTotal = ds.addRow(['', '', `Total On Duty: ${onList.length}`, '', '']);
     applyTotalRow(onTotal, DEPT_COLS);
 
     ds.addRow([]);
 
     // ── OFF DUTY section ──
-    const offSec = ds.addRow([`  🔴  OFF DUTY EMPLOYEES (${offList.length})`, '', '', '']);
+    const offSec = ds.addRow([`  🔴  OFF DUTY EMPLOYEES (${offList.length})`, '', '', '', '']);
     ds.mergeCells(offSec.number, 1, offSec.number, DEPT_COLS);
     applySectionHeader(offSec, DEPT_COLS);
     offSec.getCell(1).font = { ...offSec.getCell(1).font!, color: { argb: COLORS.offDutyBorder } };
 
-    const offHdr = ds.addRow(['#', 'EMP NO.', 'FULL NAME', 'STATUS']);
+    const offHdr = ds.addRow(['#', 'EMP NO.', 'FULL NAME', 'POSITION', 'STATUS']);
     applyHeaderStyle(offHdr, DEPT_COLS);
 
     if (offList.length > 0) {
       offList.forEach((emp, idx) => {
-        const row = ds.addRow([idx + 1, emp.employee_number, emp.full_name, 'OFF DUTY']);
+        const row = ds.addRow([idx + 1, emp.employee_number, emp.full_name, getPosition(emp), 'OFF DUTY']);
         applyDataRow(row, DEPT_COLS, idx % 2 === 1);
         row.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
-        applyStatusCell(row.getCell(4), false);
+        applyStatusCell(row.getCell(5), false);
       });
     } else {
-      const emptyRow = ds.addRow(['', '', '— No employees off duty —', '']);
+      const emptyRow = ds.addRow(['', '', '— No employees off duty —', '', '']);
       emptyRow.font = { name: 'Calibri', size: 10, italic: true, color: { argb: '999999' } };
       emptyRow.alignment = { horizontal: 'center' };
     }
 
-    const offTotal = ds.addRow(['', '', `Total Off Duty: ${offList.length}`, '']);
+    const offTotal = ds.addRow(['', '', `Total Off Duty: ${offList.length}`, '', '']);
     applyTotalRow(offTotal, DEPT_COLS);
 
     ds.addRow([]);
     ds.addRow([]);
 
     // Footer summary box
-    const sumLabel = ds.addRow(['DEPARTMENT SUMMARY', '', '', '']);
+    const sumLabel = ds.addRow(['DEPARTMENT SUMMARY', '', '', '', '']);
     ds.mergeCells(sumLabel.number, 1, sumLabel.number, DEPT_COLS);
     applySectionHeader(sumLabel, DEPT_COLS);
     sumLabel.getCell(1).font = { name: 'Calibri', bold: true, size: 10, color: { argb: COLORS.gold } };
 
-    const sumRow1 = ds.addRow(['On Duty:', onList.length, 'Off Duty:', offList.length]);
+    const sumRow1 = ds.addRow(['On Duty:', onList.length, '', 'Off Duty:', offList.length]);
     applyDataRow(sumRow1, DEPT_COLS, false);
     sumRow1.getCell(1).font = { name: 'Calibri', bold: true, size: 10, color: { argb: COLORS.onDutyText } };
-    sumRow1.getCell(3).font = { name: 'Calibri', bold: true, size: 10, color: { argb: COLORS.offDutyText } };
+    sumRow1.getCell(4).font = { name: 'Calibri', bold: true, size: 10, color: { argb: COLORS.offDutyText } };
     sumRow1.getCell(2).alignment = { horizontal: 'center' };
-    sumRow1.getCell(4).alignment = { horizontal: 'center' };
+    sumRow1.getCell(5).alignment = { horizontal: 'center' };
 
-    const sumRow2 = ds.addRow(['Total Staff:', group.emps.length, '', '']);
+    const sumRow2 = ds.addRow(['Total Staff:', group.emps.length, '', '', '']);
     applyTotalRow(sumRow2, DEPT_COLS);
 
     ds.addRow([]);
     ds.addRow([]);
-    const sig = ds.addRow(['Prepared by: _____________________', '', 'Approved by: _____________________', '']);
+    const sig = ds.addRow(['Prepared by: _____________________', '', '', 'Approved by: _____________________', '']);
     sig.font = { name: 'Calibri', size: 9, italic: true, color: { argb: '888888' } };
   });
 
