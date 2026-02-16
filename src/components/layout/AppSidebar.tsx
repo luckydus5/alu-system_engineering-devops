@@ -44,7 +44,7 @@ export function AppSidebar() {
   const collapsed = state === 'collapsed';
   const { signOut } = useAuth();
   const { profile, highestRole } = useUserRole();
-  const { departments } = useDepartments();
+  const { operationalDepartments: departments } = useDepartments();
   const { canFileForOthers } = useCurrentUserLeavePermissions();
   const { isAnyApprover } = useCurrentUserApproverRoles();
 

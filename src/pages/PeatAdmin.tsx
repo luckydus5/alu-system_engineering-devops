@@ -40,11 +40,11 @@ export default function PeatAdmin() {
 
   // Get granted departments (excluding primary)
   const grantedDepts = departments.filter(
-    d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId
+    d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId && !d.is_hr_only
   );
 
   // All accessible departments
-  const allDepts = [primaryDept, ...grantedDepts].filter(Boolean);
+  const allDepts = [primaryDept, ...grantedDepts].filter(d => d && !d.is_hr_only);
 
   // Fetch leave requests filed by this user on behalf of others
   const { leaveRequests, isLoading: leavesLoading } = useLeaveRequests(primaryDeptId, false);

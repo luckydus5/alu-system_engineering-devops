@@ -37,5 +37,8 @@ export function useDepartments() {
     fetchDepartments();
   }, []);
 
-  return { departments, loading, error };
+  // Operational departments (excludes HR-only classification departments)
+  const operationalDepartments = departments.filter(d => !d.is_hr_only);
+
+  return { departments, operationalDepartments, loading, error };
 }

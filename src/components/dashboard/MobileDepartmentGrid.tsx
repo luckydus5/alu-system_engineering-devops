@@ -65,9 +65,10 @@ export function MobileDepartmentGrid() {
   const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
   
   // All accessible departments for the user
+  const operationalDepts = departments.filter(d => !d.is_hr_only);
   const accessibleDepts = hasFullAccess
-    ? departments
-    : [primaryDept, ...grantedDepts].filter(Boolean) as typeof departments;
+    ? operationalDepts
+    : [primaryDept, ...grantedDepts].filter(d => d && !d.is_hr_only) as typeof departments;
 
   if (loading) {
     return (
