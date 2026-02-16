@@ -77,7 +77,7 @@ export function DepartmentAccessCards() {
 
   // Get granted departments (excluding primary)
   const grantedDepts = departments.filter(
-    d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId
+    d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId && !d.is_hr_only
   );
 
   // Full access only for super_admin + director
