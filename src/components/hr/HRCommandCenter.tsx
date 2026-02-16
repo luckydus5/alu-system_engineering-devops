@@ -4,8 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  LayoutDashboard, Users, Calendar, Clock, Target, 
-  UserPlus, BarChart3, CalendarDays,
+  LayoutDashboard, Users, Calendar, Clock,
+  BarChart3, CalendarDays,
   Home, ChevronRight, Globe, ChevronDown
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
@@ -22,8 +22,6 @@ import { HROverviewTab } from './tabs/HROverviewTab';
 import { EmployeeHubTab } from './tabs/EmployeeHubTab';
 import { LeaveManagementTab } from './tabs/LeaveManagementTab';
 import { AttendanceTrackingTab } from './tabs/AttendanceTrackingTab';
-import { PerformanceTab } from './tabs/PerformanceTab';
-import { OnboardingTab } from './tabs/OnboardingTab';
 import { HRAnalyticsTab } from './tabs/HRAnalyticsTab';
 import { WeekendRotationTab } from './tabs/WeekendRotationTab';
 
@@ -38,8 +36,6 @@ const NAVIGATION_ITEMS = [
   { id: 'employees', label: 'Employee Hub', icon: Users },
   { id: 'leave', label: 'Leave Management', icon: Calendar },
   { id: 'attendance', label: 'Attendance', icon: Clock },
-  { id: 'performance', label: 'Performance', icon: Target },
-  { id: 'onboarding', label: 'Onboarding', icon: UserPlus },
   { id: 'weekend', label: 'Weekend & Rotation', icon: CalendarDays },
   { id: 'analytics', label: 'Analytics', icon: BarChart3 },
 ];
@@ -284,8 +280,6 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
             {activeTab === 'employees' && <EmployeeHubTab departmentId={departmentId} />}
             {activeTab === 'leave' && <LeaveManagementTab departmentId={departmentId} />}
             {activeTab === 'attendance' && <AttendanceTrackingTab departmentId={departmentId} />}
-            {activeTab === 'performance' && <PerformanceTab departmentId={departmentId} />}
-            {activeTab === 'onboarding' && <OnboardingTab departmentId={departmentId} />}
             {activeTab === 'weekend' && <WeekendRotationTab departmentId={departmentId} />}
             {activeTab === 'analytics' && <HRAnalyticsTab departmentId={departmentId} />}
           </motion.div>
