@@ -586,6 +586,7 @@ function EditEmployeeDialog({ employee, open, onClose, departments, positions, c
 export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
+  const [companyFilter, setCompanyFilter] = useState<string>('all');
   const [departmentFilter, setDepartmentFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -607,11 +608,12 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
         emp.employee_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (emp.fingerprint_number && emp.fingerprint_number.includes(searchTerm)) ||
         emp.email?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCompany = companyFilter === 'all' || emp.company_id === companyFilter;
       const matchesDept = departmentFilter === 'all' || emp.department_id === departmentFilter;
       const matchesStatus = statusFilter === 'all' || emp.employment_status === statusFilter;
-      return matchesSearch && matchesDept && matchesStatus;
+      return matchesSearch && matchesCompany && matchesDept && matchesStatus;
     });
-  }, [employees, searchTerm, departmentFilter, statusFilter]);
+  }, [employees, searchTerm, companyFilter, departmentFilter, statusFilter]);
 
   const stats = useMemo(() => ({
     total: employees.length,
@@ -691,9 +693,18 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
                   className="pl-10 bg-muted/50 border-0 focus-visible:ring-1"
                 />
               </div>
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <Select value={companyFilter} onValueChange={setCompanyFilter}>
                 <SelectTrigger className="w-full sm:w-[170px] bg-muted/50 border-0">
                   <Building2 className="h-4 w-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Company" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Companies</SelectItem>
+                  {companies.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                <SelectTrigger className="w-full sm:w-[150px] bg-muted/50 border-0">
                   <SelectValue placeholder="Department" />
                 </SelectTrigger>
                 <SelectContent>
