@@ -259,6 +259,18 @@ function AddEmployeeDialog({ open, onClose, departments, positions, companies, o
 }
 
 // ─────────── Employee Profile Dialog ───────────
+function getCompanyPrefix(companyName?: string | null): string {
+  if (!companyName) return 'ID';
+  // Use first 2 characters of the company name (e.g., "HQ Power" → "HQ", "Farmers" → "FA")
+  return companyName.substring(0, 2).toUpperCase();
+}
+
+function formatFingerprintDisplay(fingerprintNumber: string | null, companyName?: string | null, employeeNumber?: string): string {
+  if (!fingerprintNumber) return employeeNumber || '—';
+  const prefix = getCompanyPrefix(companyName);
+  return `${prefix}-${fingerprintNumber}`;
+}
+
 function EmployeeProfileDialog({ employee, open, onClose }: {
   employee: Employee | null;
   open: boolean;
@@ -289,7 +301,7 @@ function EmployeeProfileDialog({ employee, open, onClose }: {
               <div className="flex items-center gap-2 mt-1">
                <Badge variant="outline" className="font-mono text-xs">
                   <Hash className="h-3 w-3 mr-1" />
-                  {employee.fingerprint_number ? `FP-${employee.fingerprint_number}` : employee.employee_number}
+                  {formatFingerprintDisplay(employee.fingerprint_number, employee.company_name, employee.employee_number)}
                 </Badge>
                 <Badge variant="outline" className={cn("text-xs border", status.color)}>
                   {status.label}
@@ -766,7 +778,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
                     </Avatar>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-sm truncate">{emp.full_name}</h3>
-                      <p className="text-xs text-muted-foreground font-mono">{emp.fingerprint_number ? `FP-${emp.fingerprint_number}` : emp.employee_number}</p>
+<p className="text-xs text-muted-foreground font-mono">{formatFingerprintDisplay(emp.fingerprint_number, emp.company_name, emp.employee_number)}</p>
                     </div>
                     <Badge variant="outline" className={cn("text-[10px] shrink-0 border", status.color)}>
                       {status.label}
@@ -846,7 +858,7 @@ export function EmployeeHubTab({ departmentId }: EmployeeHubTabProps) {
                           </Avatar>
                           <div className="min-w-0">
                             <p className="font-medium truncate">{emp.full_name}</p>
-                            <p className="text-xs text-muted-foreground font-mono">{emp.fingerprint_number ? `FP-${emp.fingerprint_number}` : emp.employee_number}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{formatFingerprintDisplay(emp.fingerprint_number, emp.company_name, emp.employee_number)}</p>
                           </div>
                         </div>
                       </td>
