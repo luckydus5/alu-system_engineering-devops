@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 export type LeaveType = 'annual' | 'sick' | 'personal' | 'maternity' | 'paternity' | 'bereavement' | 'unpaid';
-export type LeaveStatus = 'pending' | 'manager_approved' | 'gm_pending' | 'approved' | 'rejected' | 'cancelled';
+export type LeaveStatus = 'pending' | 'hr_approved' | 'manager_approved' | 'gm_pending' | 'approved' | 'rejected' | 'cancelled';
 
 export interface LeaveRequest {
   id: string;
@@ -55,8 +55,9 @@ export const LEAVE_TYPE_LABELS: Record<LeaveType, string> = {
 };
 
 export const LEAVE_STATUS_LABELS: Record<LeaveStatus, string> = {
-  pending: 'Pending',
-  manager_approved: 'Manager Approved',
+  pending: 'Pending HR',
+  hr_approved: 'HR Approved',
+  manager_approved: 'Mgr Approved',
   gm_pending: 'Awaiting GM',
   approved: 'Approved',
   rejected: 'Rejected',

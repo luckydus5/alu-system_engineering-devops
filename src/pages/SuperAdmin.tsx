@@ -14,6 +14,7 @@ import { ApproversManagement } from '@/components/admin/ApproversManagement';
 import { LeaveManagersManagement } from '@/components/admin/LeaveManagersManagement';
 import { LeaveApproversManagement } from '@/components/admin/LeaveApproversManagement';
 import { CompanyPoliciesPortal } from '@/components/admin/CompanyPoliciesPortal';
+import { LeaveWorkflowConfig } from '@/components/admin/LeaveWorkflowConfig';
 import { 
   Shield, 
   Activity, 
@@ -48,6 +49,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   CalendarDays,
+  GitBranch,
 } from 'lucide-react';
 import {
   Table,
@@ -137,6 +139,7 @@ const actionColors: Record<string, string> = {
 const sidebarTools = [
   { id: 'audit', label: 'Audit Logs', icon: History, description: 'System activity history' },
   { id: 'policies', label: 'Company Policies', icon: Layers, description: 'Attendance, Leave & OT rules' },
+  { id: 'workflows', label: 'Leave Workflows', icon: GitBranch, description: 'Per-company approval chains' },
   { id: 'users', label: 'User Overview', icon: Users, description: 'All system users' },
   { id: 'departments', label: 'Departments', icon: Building2, description: 'Department management' },
   { id: 'warehouse', label: 'Warehouse', icon: Database, description: 'Stock transactions' },
@@ -919,6 +922,9 @@ export default function SuperAdmin() {
 
       case 'policies':
         return <CompanyPoliciesPortal />;
+
+      case 'workflows':
+        return <LeaveWorkflowConfig />;
 
       case 'departments':
         return (

@@ -36,6 +36,7 @@ interface LeaveManagementTabProps {
 
 const STATUS_CONFIG: Record<LeaveStatus, { color: string; bgColor: string; icon: React.ElementType }> = {
   pending: { color: 'text-amber-600', bgColor: 'bg-amber-500/10', icon: Clock },
+  hr_approved: { color: 'text-cyan-600', bgColor: 'bg-cyan-500/10', icon: ArrowUpRight },
   manager_approved: { color: 'text-blue-600', bgColor: 'bg-blue-500/10', icon: AlertCircle },
   gm_pending: { color: 'text-indigo-600', bgColor: 'bg-indigo-500/10', icon: ArrowUpRight },
   approved: { color: 'text-emerald-600', bgColor: 'bg-emerald-500/10', icon: CheckCircle2 },
@@ -722,22 +723,29 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
 
   const stats = useMemo(() => ({
     pending: leaveRequests.filter(r => r.status === 'pending').length,
+    hrApproved: leaveRequests.filter(r => r.status === 'hr_approved').length,
     managerApproved: leaveRequests.filter(r => r.status === 'manager_approved').length,
     gmPending: leaveRequests.filter(r => r.status === 'gm_pending').length,
     approved: leaveRequests.filter(r => r.status === 'approved').length,
     rejected: leaveRequests.filter(r => r.status === 'rejected').length,
   }), [leaveRequests]);
 
+  // New workflow: pending (HR) → hr_approved (Manager) → manager_approved (GM/OM) → approved
   const handleApprove = async (id: string, currentStatus: LeaveStatus) => {
     let newStatus: LeaveStatus;
     if (currentStatus === 'pending') {
+      // HR approves → goes to department manager
+      newStatus = 'hr_approved';
+    } else if (currentStatus === 'hr_approved') {
+      // Department manager approves → goes to GM/OM
       newStatus = 'manager_approved';
-    } else if (currentStatus === 'manager_approved') {
-      newStatus = 'gm_pending';
+    } else if (currentStatus === 'manager_approved' || currentStatus === 'gm_pending') {
+      // GM/OM gives final approval
+      newStatus = 'approved';
     } else {
       newStatus = 'approved';
     }
-    await updateRequestStatus.mutateAsync({ id, status: newStatus, isManager: currentStatus === 'pending' });
+    await updateRequestStatus.mutateAsync({ id, status: newStatus, isHR: currentStatus === 'pending', isManager: currentStatus === 'hr_approved' });
   };
 
   const handleReject = async (id: string) => {
@@ -755,7 +763,19 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
             </div>
             <div>
               <p className="text-2xl font-bold">{stats.pending}</p>
-              <p className="text-sm text-muted-foreground">Pending</p>
+              <p className="text-sm text-muted-foreground">Pending HR</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className={cn("cursor-pointer transition-all hover:shadow-md", statusFilter === 'hr_approved' && "ring-2 ring-cyan-500")} onClick={() => setStatusFilter('hr_approved')}>
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+              <ArrowUpRight className="h-6 w-6 text-cyan-600" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{stats.hrApproved}</p>
+              <p className="text-sm text-muted-foreground">HR Approved</p>
             </div>
           </CardContent>
         </Card>
@@ -768,18 +788,6 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
             <div>
               <p className="text-2xl font-bold">{stats.managerApproved}</p>
               <p className="text-sm text-muted-foreground">Mgr Approved</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className={cn("cursor-pointer transition-all hover:shadow-md", statusFilter === 'gm_pending' && "ring-2 ring-indigo-500")} onClick={() => setStatusFilter('gm_pending')}>
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-              <ArrowUpRight className="h-6 w-6 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{stats.gmPending}</p>
-              <p className="text-sm text-muted-foreground">Awaiting GM</p>
             </div>
           </CardContent>
         </Card>

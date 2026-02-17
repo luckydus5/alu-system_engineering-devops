@@ -212,6 +212,44 @@ export type Database = {
           },
         ]
       }
+      company_leave_workflows: {
+        Row: {
+          company_id: string
+          created_at: string
+          final_approver_role: string
+          hr_review_enabled: boolean
+          id: string
+          manager_review_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          final_approver_role?: string
+          hr_review_enabled?: boolean
+          id?: string
+          manager_review_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          final_approver_role?: string
+          hr_review_enabled?: boolean
+          id?: string
+          manager_review_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_leave_workflows_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       company_policies: {
         Row: {
           company_id: string | null
@@ -2036,6 +2074,7 @@ export type Database = {
         | "peat_admin"
       leave_status:
         | "pending"
+        | "hr_approved"
         | "manager_approved"
         | "approved"
         | "rejected"
@@ -2223,6 +2262,7 @@ export const Constants = {
       ],
       leave_status: [
         "pending",
+        "hr_approved",
         "manager_approved",
         "approved",
         "rejected",

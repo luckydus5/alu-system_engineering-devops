@@ -19,6 +19,7 @@ import { format, parseISO } from 'date-fns';
 
 const STATUS_COLORS: Record<LeaveStatus, string> = {
   pending: 'text-amber-600 bg-amber-500/10',
+  hr_approved: 'text-cyan-600 bg-cyan-500/10',
   manager_approved: 'text-blue-600 bg-blue-500/10',
   gm_pending: 'text-indigo-600 bg-indigo-500/10',
   approved: 'text-emerald-600 bg-emerald-500/10',
@@ -36,16 +37,19 @@ export default function LeaveApproval() {
   const [actionType, setActionType] = useState<'approve' | 'reject' | null>(null);
   const [comment, setComment] = useState('');
 
-  // Determine what requests this user can act on
+  // New workflow: pending → hr_approved → manager_approved → approved
   const actionableRequests = useMemo(() => {
-    if (isPeatManager) {
+    if (isHRReviewer) {
+      // HR acts on pending requests
       return leaveRequests.filter(r => r.status === 'pending');
     }
-    if (isHRReviewer) {
-      return leaveRequests.filter(r => r.status === 'manager_approved');
+    if (isPeatManager) {
+      // Peat Manager acts on HR-approved requests (as dept manager)
+      return leaveRequests.filter(r => r.status === 'hr_approved');
     }
     if (isGMApprover || isOMApprover) {
-      return leaveRequests.filter(r => r.status === 'gm_pending');
+      // GM/OM acts on manager-approved requests
+      return leaveRequests.filter(r => r.status === 'manager_approved' || r.status === 'gm_pending');
     }
     return [];
   }, [leaveRequests, isPeatManager, isHRReviewer, isGMApprover, isOMApprover]);
@@ -64,11 +68,14 @@ export default function LeaveApproval() {
     let newStatus: LeaveStatus;
     if (actionType === 'reject') {
       newStatus = 'rejected';
-    } else if (isPeatManager) {
-      newStatus = 'manager_approved';
     } else if (isHRReviewer) {
-      newStatus = 'gm_pending';
+      // HR approves → goes to department manager
+      newStatus = 'hr_approved';
+    } else if (isPeatManager) {
+      // Manager approves → goes to GM/OM
+      newStatus = 'manager_approved';
     } else {
+      // GM/OM final approval
       newStatus = 'approved';
     }
 
@@ -76,8 +83,8 @@ export default function LeaveApproval() {
       id: selectedRequest.id,
       status: newStatus,
       comment: comment || undefined,
-      isManager: isPeatManager,
       isHR: isHRReviewer,
+      isManager: isPeatManager,
     });
 
     setSelectedRequest(null);
@@ -143,9 +150,9 @@ export default function LeaveApproval() {
                 </h1>
               </div>
               <p className="text-sm text-muted-foreground">
-                {isPeatManager && 'Review and approve leave requests before forwarding to HR'}
-                {isHRReviewer && 'Review manager-approved requests and forward to GM for final approval'}
-                {isGMApprover && 'Final approval for leave requests forwarded by HR'}
+                {isHRReviewer && 'Review new leave requests and forward to department manager'}
+                {isPeatManager && 'Review HR-approved requests and forward to GM/OM for final approval'}
+                {isGMApprover && 'Final approval for leave requests forwarded by department manager'}
                 {isOMApprover && 'Review and approve leave requests as Operations Manager'}
               </p>
               <div className="flex gap-2 mt-2">
@@ -319,13 +326,13 @@ export default function LeaveApproval() {
                   rows={3}
                 />
               </div>
-              {actionType === 'approve' && isPeatManager && (
+              {actionType === 'approve' && isHRReviewer && (
                 <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-xs text-blue-700 dark:text-blue-300">
                   <ArrowUpRight className="h-3.5 w-3.5 inline mr-1" />
-                  This will be forwarded to HR for further review.
+                  This will be forwarded to the Department Manager for review.
                 </div>
               )}
-              {actionType === 'approve' && isHRReviewer && (
+              {actionType === 'approve' && isPeatManager && (
                 <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 text-xs text-indigo-700 dark:text-indigo-300">
                   <ArrowUpRight className="h-3.5 w-3.5 inline mr-1" />
                   This will be forwarded to GM/OM for final approval.
@@ -347,7 +354,7 @@ export default function LeaveApproval() {
               className={actionType === 'approve' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-red-600 hover:bg-red-700'}
             >
               {updateRequestStatus.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-              {actionType === 'approve' ? (isPeatManager ? 'Approve & Forward' : isHRReviewer ? 'Forward to GM' : 'Approve') : 'Reject'}
+              {actionType === 'approve' ? (isHRReviewer ? 'Approve & Forward' : isPeatManager ? 'Approve & Forward' : 'Approve') : 'Reject'}
             </Button>
           </DialogFooter>
         </DialogContent>
