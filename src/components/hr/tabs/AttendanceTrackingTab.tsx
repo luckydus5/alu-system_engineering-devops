@@ -813,17 +813,27 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               const nextSorted = [...nextGroup.events].sort((a, b) => a.getTime() - b.getTime());
 
               // Pattern detection for night shifts:
-              // If current day has only 1 event (afternoon/evening check-in, no check-out)
-              // and next day has only 1 event (morning check-out, no check-in) → night shift
-              // If current day has 2+ events, it's a complete shift — never merge
-              const lastCurrentEvent = currentSorted[currentSorted.length - 1];
-              const lastCurrentHour = lastCurrentEvent.getHours();
+              // A complete DAY shift has events spanning morning-to-afternoon (e.g. 07:55 in, 16:52 out)
+              // A night shift START has all events in the afternoon/evening with NO morning event
+              // Next day's morning-only events are the night shift END
+              const firstCurrentHour = currentSorted[0].getHours();
+              const lastCurrentHour = currentSorted[currentSorted.length - 1].getHours();
               const firstNextHour = nextSorted[0].getHours();
+              const lastNextHour = nextSorted[nextSorted.length - 1].getHours();
 
-              const currentIsIncomplete = currentSorted.length === 1 && lastCurrentHour >= 14;
-              const nextLooksLikeMorningEnd = firstNextHour <= 12 && nextSorted.length === 1;
+              // Current day is a complete day shift if it has an event before 12:00 AND an event after 14:00
+              // (e.g., check-in 07:55 + check-out 16:52) — never merge these
+              const currentHasMorningEvent = firstCurrentHour < 12;
+              const currentHasAfternoonEvent = lastCurrentHour >= 14;
+              const currentIsCompleteDayShift = currentHasMorningEvent && currentHasAfternoonEvent;
 
-              if (currentIsIncomplete && nextLooksLikeMorningEnd) {
+              // Current looks like night shift start: all events are afternoon/evening (no morning event)
+              const currentIsNightStart = !currentIsCompleteDayShift && lastCurrentHour >= 14;
+
+              // Next day looks like night shift end: all events are morning-only (before noon)
+              const nextIsMorningOnly = lastNextHour < 12;
+
+              if (currentIsNightStart && nextIsMorningOnly) {
                 // Merge next day's events into current day
                 currentGroup.events.push(...nextGroup.events);
                 grouped.delete(nextKey);
