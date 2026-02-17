@@ -25,6 +25,7 @@ interface LeaveRequestDetailDialogProps {
 
 const STATUS_STYLES: Record<LeaveStatus, { bg: string; text: string }> = {
   pending: { bg: 'bg-amber-500/10', text: 'text-amber-600' },
+  hr_approved: { bg: 'bg-cyan-500/10', text: 'text-cyan-600' },
   manager_approved: { bg: 'bg-blue-500/10', text: 'text-blue-600' },
   gm_pending: { bg: 'bg-indigo-500/10', text: 'text-indigo-600' },
   approved: { bg: 'bg-emerald-500/10', text: 'text-emerald-600' },
@@ -61,27 +62,28 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
   if (!request) return null;
 
   const LeaveIcon = LEAVE_ICONS[request.leave_type];
-  const canApprove = isHR && (request.status === 'pending' || request.status === 'manager_approved' || request.status === 'gm_pending');
+  const canApprove = isHR && (request.status === 'pending' || request.status === 'hr_approved' || request.status === 'manager_approved' || request.status === 'gm_pending');
   const canCancel = !isHR && request.status === 'pending';
-  const isManagerApproval = request.status === 'pending';
-  const isHRForward = request.status === 'manager_approved';
-  const isGMApproval = request.status === 'gm_pending';
+  const isHRReview = request.status === 'pending';
+  const isManagerReview = request.status === 'hr_approved';
+  const isGMApproval = request.status === 'manager_approved' || request.status === 'gm_pending';
   const statusStyle = STATUS_STYLES[request.status];
 
   const handleApprove = async () => {
     let newStatus: LeaveStatus;
-    if (isManagerApproval) {
-      newStatus = 'manager_approved';
-    } else if (isHRForward) {
-      newStatus = 'gm_pending';
+    if (isHRReview) {
+      newStatus = 'hr_approved'; // HR approves → goes to manager
+    } else if (isManagerReview) {
+      newStatus = 'manager_approved'; // Manager approves → goes to GM/OM
     } else {
-      newStatus = 'approved';
+      newStatus = 'approved'; // GM/OM final approval
     }
     await updateRequestStatus.mutateAsync({
       id: requestId,
       status: newStatus,
       comment: comment || undefined,
-      isManager: isManagerApproval,
+      isHR: isHRReview,
+      isManager: isManagerReview,
     });
     setComment('');
     onOpenChange(false);
@@ -92,7 +94,8 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
       id: requestId,
       status: 'rejected',
       comment: comment || undefined,
-      isManager: isManagerApproval,
+      isHR: isHRReview,
+      isManager: isManagerReview,
     });
     setComment('');
     onOpenChange(false);
@@ -273,13 +276,14 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
               )}
 
               {/* Pending indicator */}
-              {(request.status === 'pending' || request.status === 'manager_approved' || request.status === 'gm_pending') && (
+              {(request.status === 'pending' || request.status === 'hr_approved' || request.status === 'manager_approved' || request.status === 'gm_pending') && (
                 <div className="relative">
                   <div className="absolute -left-6 top-1 h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
                   <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
                     <p className="text-sm font-medium text-amber-600">
-                      {request.status === 'pending' ? 'Awaiting Department Manager' : 
-                       request.status === 'manager_approved' ? 'Awaiting HR to Forward to GM' :
+                      {request.status === 'pending' ? 'Awaiting HR Review' : 
+                       request.status === 'hr_approved' ? 'Awaiting Department Manager' :
+                       request.status === 'manager_approved' ? 'Awaiting GM/OM Final Approval' :
                        'Awaiting General Manager Approval'}
                     </p>
                   </div>
@@ -337,7 +341,7 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
                 ) : (
                   <Check className="h-4 w-4 mr-2" />
                 )}
-                {isManagerApproval ? 'Manager Approve' : isHRForward ? 'Forward to GM' : 'GM Approve'}
+                {isHRReview ? 'HR Approve' : isManagerReview ? 'Manager Approve' : 'Final Approve'}
               </Button>
             </>
           )}

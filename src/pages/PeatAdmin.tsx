@@ -21,6 +21,7 @@ import { Link } from 'react-router-dom';
 
 const STATUS_COLORS: Record<LeaveStatus, string> = {
   pending: 'text-amber-600 bg-amber-500/10',
+  hr_approved: 'text-cyan-600 bg-cyan-500/10',
   manager_approved: 'text-blue-600 bg-blue-500/10',
   gm_pending: 'text-indigo-600 bg-indigo-500/10',
   approved: 'text-emerald-600 bg-emerald-500/10',
