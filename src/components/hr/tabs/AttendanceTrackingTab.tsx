@@ -675,44 +675,24 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       };
 
       const matchUser = (name: string, empNo?: string) => {
-        const searchName = name.toLowerCase().trim();
-        // 1. Try fingerprint number match FIRST (most reliable)
+        // 1. Try fingerprint number match FIRST (most reliable — unique per employee)
         if (empNo) {
           const byFingerprint = fingerprintMap.get(empNo.trim());
           if (byFingerprint) return { type: 'employee' as const, ...byFingerprint };
         }
-        // 2. Try exact employee number match
-        if (empNo) {
-          const byNo = employeeLookup.find(e => e.employee_number === `EMP-${empNo.padStart(4, '0')}` || e.employee_number === empNo);
-          if (byNo) return { type: 'employee' as const, ...byNo };
-        }
-        // 3. Try exact name match (normalized) against employees first
+        // 2. Try exact name match (normalized) against employees
         const searchNorm = normalizeName(name);
         let match = employeeLookup.find(e => normalizeName(e.full_name || '') === searchNorm);
         if (match) return { type: 'employee' as const, ...match };
-        // 4. Try word-level match against employees (require at least 2 words to match for safety)
+        // 3. Try word-level match against employees (strict: require ALL words from shorter name to match)
         match = employeeLookup.find(e => namesMatch(name, e.full_name || ''));
         if (match) return { type: 'employee' as const, ...match };
-        // 5. Try profiles/users - exact normalized
+        // 4. Try profiles/users - exact normalized only
         let uMatch = userLookup.find(u => normalizeName(u.full_name || '') === searchNorm);
         if (uMatch) return { type: 'user' as const, ...uMatch };
-        // 6. Try word-level match against users
+        // 5. Try word-level match against users (strict)
         uMatch = userLookup.find(u => namesMatch(name, u.full_name || ''));
         if (uMatch) return { type: 'user' as const, ...uMatch };
-        // 7. Try last name only match (for single-name entries) - only if name is very specific
-        const parts = searchNorm.split(/\s+/);
-        if (parts.length === 1 && parts[0].length >= 5) {
-          match = employeeLookup.find(e => {
-            const eParts = normalizeName(e.full_name || '').split(/\s+/);
-            return eParts.some(p => p === parts[0]);
-          });
-          if (match) return { type: 'employee' as const, ...match };
-          uMatch = userLookup.find(u => {
-            const uParts = normalizeName(u.full_name || '').split(/\s+/);
-            return uParts.some(p => p === parts[0]);
-          });
-          if (uMatch) return { type: 'user' as const, ...uMatch };
-        }
         return null;
       };
 
@@ -1090,11 +1070,37 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const mergedCount = importData.length - finalData.length;
 
       await bulkImportAttendance.mutateAsync(finalData);
+
+      // Auto-save fingerprint numbers for matched employees that don't have one yet
+      const fingerprintUpdates: { id: string; fingerprint_number: string }[] = [];
+      if (uploadPreview) {
+        const seen = new Set<string>();
+        for (const r of uploadPreview) {
+          if (r.matched && r.matchedUser && r.empNo && r.matchedUser.type === 'employee') {
+            const empId = r.matchedUser.id;
+            if (!seen.has(empId) && !r.matchedUser.fingerprint_number) {
+              seen.add(empId);
+              fingerprintUpdates.push({ id: empId, fingerprint_number: r.empNo.trim() });
+            }
+          }
+        }
+      }
+      if (fingerprintUpdates.length > 0) {
+        for (const upd of fingerprintUpdates) {
+          await supabase.from('employees').update({ fingerprint_number: upd.fingerprint_number }).eq('id', upd.id);
+        }
+        console.log(`Auto-saved ${fingerprintUpdates.length} fingerprint numbers to employees`);
+      }
       
       if (mergedCount > 0 || existingMap.size > 0) {
         toast({ 
           title: `${finalData.length} records imported successfully`,
-          description: `${existingMap.size} existing records merged, ${mergedCount} duplicates consolidated`
+          description: `${existingMap.size} existing records merged, ${mergedCount} duplicates consolidated${fingerprintUpdates.length > 0 ? `, ${fingerprintUpdates.length} fingerprint IDs saved` : ''}`
+        });
+      } else if (fingerprintUpdates.length > 0) {
+        toast({
+          title: `${finalData.length} records imported successfully`,
+          description: `${fingerprintUpdates.length} fingerprint IDs auto-saved to Employee Hub`
         });
       }
       
