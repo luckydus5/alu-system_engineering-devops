@@ -139,6 +139,33 @@ export function useLeaveRequests(departmentId?: string, isHR = false) {
         .single();
 
       if (error) throw error;
+
+      // Check if company has hr_auto_approve enabled
+      if (data && request.company_id) {
+        const { data: workflow } = await supabase
+          .from('company_leave_workflows')
+          .select('hr_auto_approve, hr_review_enabled, manager_review_enabled')
+          .eq('company_id', request.company_id)
+          .single();
+
+        if (workflow?.hr_review_enabled && workflow?.hr_auto_approve) {
+          // Auto-approve HR step → advance to next status
+          const nextStatus = workflow.manager_review_enabled ? 'hr_approved' : 'manager_approved';
+          const { data: updated, error: updateError } = await supabase
+            .from('leave_requests')
+            .update({
+              status: nextStatus,
+              hr_reviewer_id: userData.user.id,
+              hr_action_at: new Date().toISOString(),
+              hr_comment: 'Auto-approved by system',
+            } as any)
+            .eq('id', (data as any).id)
+            .select()
+            .single();
+          if (!updateError && updated) return updated;
+        }
+      }
+
       return data;
     },
     onSuccess: () => {

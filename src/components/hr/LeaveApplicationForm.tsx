@@ -237,13 +237,19 @@ export function LeaveApplicationForm({
         department_id: departmentId,
       };
 
+      // Look up company_id from department
+      const { data: dept } = await supabase.from('departments').select('company_id').eq('id', departmentId).single();
+      if (dept?.company_id) requestData.company_id = dept.company_id;
+
       // If filing for another employee, set the employee_id
       if (filingForOther && selectedEmployee) {
         requestData.employee_id = selectedEmployee;
-        // Find the employee's department
         const emp = employees.find(e => e.id === selectedEmployee);
         if (emp?.department_id) {
           requestData.department_id = emp.department_id;
+        }
+        if ((emp as any)?.company_id) {
+          requestData.company_id = (emp as any).company_id;
         }
       }
 

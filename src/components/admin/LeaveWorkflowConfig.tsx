@@ -69,6 +69,7 @@ function CompanyWorkflowCard({ company }: { company: { id: string; name: string 
   const workflow = getWorkflowForCompany(company.id);
 
   const [hrEnabled, setHrEnabled] = useState(workflow?.hr_review_enabled ?? true);
+  const [hrAutoApprove, setHrAutoApprove] = useState(workflow?.hr_auto_approve ?? false);
   const [managerEnabled, setManagerEnabled] = useState(workflow?.manager_review_enabled ?? true);
   const [finalRole, setFinalRole] = useState<'gm' | 'om' | 'either'>(workflow?.final_approver_role ?? 'either');
   const [isDirty, setIsDirty] = useState(false);
@@ -76,6 +77,7 @@ function CompanyWorkflowCard({ company }: { company: { id: string; name: string 
   useEffect(() => {
     if (workflow) {
       setHrEnabled(workflow.hr_review_enabled);
+      setHrAutoApprove(workflow.hr_auto_approve);
       setManagerEnabled(workflow.manager_review_enabled);
       setFinalRole(workflow.final_approver_role);
     }
@@ -85,6 +87,7 @@ function CompanyWorkflowCard({ company }: { company: { id: string; name: string 
     upsertWorkflow.mutate({
       company_id: company.id,
       hr_review_enabled: hrEnabled,
+      hr_auto_approve: hrAutoApprove,
       manager_review_enabled: managerEnabled,
       final_approver_role: finalRole,
     });
@@ -118,14 +121,27 @@ function CompanyWorkflowCard({ company }: { company: { id: string; name: string 
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Toggles */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
             <div className="flex items-center gap-2">
               <FileText className="h-4 w-4 text-blue-600" />
               <Label className="text-sm font-medium">HR Review</Label>
             </div>
-            <Switch checked={hrEnabled} onCheckedChange={(v) => { setHrEnabled(v); markDirty(); }} />
+            <Switch checked={hrEnabled} onCheckedChange={(v) => { setHrEnabled(v); if (!v) setHrAutoApprove(false); markDirty(); }} />
           </div>
+
+          {hrEnabled && (
+            <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <div>
+                  <Label className="text-sm font-medium">HR Auto-Approve</Label>
+                  <p className="text-[10px] text-muted-foreground">Skip manual HR review</p>
+                </div>
+              </div>
+              <Switch checked={hrAutoApprove} onCheckedChange={(v) => { setHrAutoApprove(v); markDirty(); }} />
+            </div>
+          )}
 
           <div className="flex items-center justify-between p-3 rounded-lg border bg-card">
             <div className="flex items-center gap-2">
@@ -158,21 +174,22 @@ function CompanyWorkflowCard({ company }: { company: { id: string; name: string 
         {/* Preview */}
         <div>
           <p className="text-xs text-muted-foreground mb-2">Approval Flow Preview:</p>
-          <WorkflowStepsPreview hrEnabled={hrEnabled} managerEnabled={managerEnabled} finalRole={finalRole} />
+          <WorkflowStepsPreview hrEnabled={hrEnabled} hrAutoApprove={hrAutoApprove} managerEnabled={managerEnabled} finalRole={finalRole} />
         </div>
       </CardContent>
     </Card>
   );
 }
 
-function WorkflowStepsPreview({ hrEnabled, managerEnabled, finalRole }: {
+function WorkflowStepsPreview({ hrEnabled, hrAutoApprove, managerEnabled, finalRole }: {
   hrEnabled: boolean;
+  hrAutoApprove?: boolean;
   managerEnabled: boolean;
   finalRole: 'gm' | 'om' | 'either';
 }) {
   const steps = [
     { label: 'Employee Submits', color: 'bg-slate-500/10 text-slate-700', always: true },
-    { label: 'HR Review', color: 'bg-blue-500/10 text-blue-700', always: false, enabled: hrEnabled },
+    { label: hrAutoApprove ? 'HR Auto-Approve ⚡' : 'HR Review', color: 'bg-blue-500/10 text-blue-700', always: false, enabled: hrEnabled },
     { label: 'Dept Manager', color: 'bg-amber-500/10 text-amber-700', always: false, enabled: managerEnabled },
     { 
       label: finalRole === 'gm' ? 'General Manager' : finalRole === 'om' ? 'Operations Manager' : 'GM / OM', 
