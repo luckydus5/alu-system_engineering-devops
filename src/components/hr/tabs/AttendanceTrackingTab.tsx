@@ -639,11 +639,20 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const userLookup = users.map(u => ({ ...u, nameLower: u.full_name?.toLowerCase().trim() || '' }));
       const employeeLookup = employees.map(e => ({ ...e, nameLower: e.full_name?.toLowerCase().trim() || '' }));
 
-      // Build fingerprint number lookup map for fast matching
-      const fingerprintMap = new Map<string, typeof employeeLookup[0]>();
+      // Build fingerprint number lookup map — keyed by "companyId:fingerprint" for company-aware matching
+      // Also keep a global fallback map for cases where company can't be determined
+      const fingerprintByCompanyMap = new Map<string, typeof employeeLookup[0]>();
+      const fingerprintGlobalMap = new Map<string, typeof employeeLookup[0]>();
       for (const e of employeeLookup) {
         if (e.fingerprint_number) {
-          fingerprintMap.set(e.fingerprint_number.trim(), e);
+          const fp = e.fingerprint_number.trim();
+          if (e.company_id) {
+            fingerprintByCompanyMap.set(`${e.company_id}:${fp}`, e);
+          }
+          // Global map: only set if not already set (first wins — less reliable)
+          if (!fingerprintGlobalMap.has(fp)) {
+            fingerprintGlobalMap.set(fp, e);
+          }
         }
       }
 
@@ -674,10 +683,23 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         return matched >= 2;
       };
 
-      const matchUser = (name: string, empNo?: string) => {
-        // 1. Try fingerprint number match FIRST (most reliable — unique per employee)
+      const matchUser = (name: string, empNo?: string, excelDept?: string) => {
+        // Determine the company from the Excel department for scoped fingerprint matching
+        let classifiedCompanyId: string | undefined;
+        if (excelDept) {
+          const cls = classifyDept(excelDept);
+          classifiedCompanyId = cls.company?.companyId;
+        }
+
+        // 1. Try fingerprint number match scoped by company FIRST (most reliable)
         if (empNo) {
-          const byFingerprint = fingerprintMap.get(empNo.trim());
+          const fp = empNo.trim();
+          if (classifiedCompanyId) {
+            const byCompanyFp = fingerprintByCompanyMap.get(`${classifiedCompanyId}:${fp}`);
+            if (byCompanyFp) return { type: 'employee' as const, ...byCompanyFp };
+          }
+          // Fallback: try global fingerprint map (only if no company-specific match)
+          const byFingerprint = fingerprintGlobalMap.get(fp);
           if (byFingerprint) return { type: 'employee' as const, ...byFingerprint };
         }
         // 2. Try exact name match (normalized) against employees
@@ -739,7 +761,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const earliestIn = group.checkIns.length > 0 ? group.checkIns.sort((a, b) => a.getTime() - b.getTime())[0] : null;
           const latestOut = group.checkOuts.length > 0 ? group.checkOuts.sort((a, b) => b.getTime() - a.getTime())[0] : null;
 
-          const matchedUser = matchUser(name, group.empNo);
+          const matchedUser = matchUser(name, group.empNo, group.excelDept);
           const classification = classifyDept(group.excelDept);
 
           // Apply business rules from policy engine
@@ -801,7 +823,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const parsedDate = parseDate(dateVal);
           if (!parsedDate) continue;
 
-          const matchedUser = matchUser(name);
+          const matchedUser = matchUser(name, undefined, excelDept);
           const classification = classifyDept(excelDept);
 
           const parseTime = (timeStr: string, dateBase: Date): string | null => {
