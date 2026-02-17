@@ -73,7 +73,7 @@ const DAY_ABBREV = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /* ─── KPI Summary Cards ─── */
-function AttendanceKPICards({ records, users, selectedMonth }: { records: any[]; users: any[]; selectedMonth: Date }) {
+function AttendanceKPICards({ records, users, employees, selectedMonth }: { records: any[]; users: any[]; employees: any[]; selectedMonth: Date }) {
   const stats = useMemo(() => {
     const monthStart = startOfMonth(selectedMonth);
     const monthEnd = endOfMonth(selectedMonth);
@@ -89,8 +89,11 @@ function AttendanceKPICards({ records, users, selectedMonth }: { records: any[];
     const total = monthRecords.length || 1;
     const attendanceRate = Math.round(((present + late) / total) * 100);
 
-    return { present, late, absent, onLeave, attendanceRate, totalEmployees: users.length, totalRecords: monthRecords.length };
-  }, [records, users, selectedMonth]);
+    // Use employees count as primary, fall back to auth users if no employees
+    const totalEmployees = employees.length > 0 ? employees.length : users.length;
+
+    return { present, late, absent, onLeave, attendanceRate, totalEmployees, totalRecords: monthRecords.length };
+  }, [records, users, employees, selectedMonth]);
 
   const cards = [
     { title: 'Total Employees', value: stats.totalEmployees, icon: Users, color: 'bg-primary', iconColor: 'text-primary-foreground' },
@@ -1321,7 +1324,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   return (
     <div className="space-y-5">
       {/* KPI Cards */}
-      <AttendanceKPICards records={records} users={users} selectedMonth={selectedMonth} />
+      <AttendanceKPICards records={records} users={users} employees={employees} selectedMonth={selectedMonth} />
 
       {/* Charts Row */}
       <AttendanceCharts records={records} selectedMonth={selectedMonth} />
