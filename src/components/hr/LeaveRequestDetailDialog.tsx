@@ -15,6 +15,7 @@ import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveStatus, 
 import { cn } from '@/lib/utils';
 import { generateLeaveApprovalPdf } from '@/lib/generateLeavePdf';
 import { supabase } from '@/integrations/supabase/client';
+import { LeaveWorkflowProgress } from './LeaveWorkflowProgress';
 
 interface LeaveRequestDetailDialogProps {
   requestId: string;
@@ -193,103 +194,45 @@ export function LeaveRequestDetailDialog({ requestId, open, onOpenChange, isHR =
 
           <Separator />
 
-          {/* Approval Timeline */}
+          {/* Workflow Progress */}
           <div className="space-y-3">
-            <Label className="text-base font-semibold">Approval Timeline</Label>
-            
-            <div className="relative pl-6 space-y-4">
-              {/* Submitted */}
-              <div className="relative">
-                <div className="absolute -left-6 top-1 h-3 w-3 rounded-full bg-primary" />
-                <div className="absolute -left-[18px] top-4 bottom-0 w-0.5 bg-border" />
-                <div className="p-3 rounded-lg border bg-card">
-                  <p className="text-sm font-medium">Request Submitted</p>
-                  <p className="text-xs text-muted-foreground">
-                    {format(new Date(request.created_at), 'MMM d, yyyy h:mm a')}
-                  </p>
-                </div>
-              </div>
-
-              {/* Manager Action */}
-              {request.manager_action_at && (
-                <div className="relative">
-                  <div className={cn(
-                    "absolute -left-6 top-1 h-3 w-3 rounded-full",
-                    request.status === 'rejected' ? 'bg-red-500' : 'bg-blue-500'
-                  )} />
-                  <div className="absolute -left-[18px] top-4 bottom-0 w-0.5 bg-border" />
-                  <div className="p-3 rounded-lg border bg-card">
-                    <p className="text-sm font-medium">Manager Review</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(request.manager_action_at), 'MMM d, yyyy h:mm a')}
-                    </p>
-                    {request.manager_comment && (
-                      <p className="text-sm mt-2 text-muted-foreground italic">
-                        "{request.manager_comment}"
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* HR Action */}
-              {request.hr_action_at && (
-                <div className="relative">
-                  <div className={cn(
-                    "absolute -left-6 top-1 h-3 w-3 rounded-full",
-                    request.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'
-                  )} />
-                  <div className="p-3 rounded-lg border bg-card">
-                    <p className="text-sm font-medium">HR Final Review</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date(request.hr_action_at), 'MMM d, yyyy h:mm a')}
-                    </p>
-                    {request.hr_comment && (
-                      <p className="text-sm mt-2 text-muted-foreground italic">
-                        "{request.hr_comment}"
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* GM Action */}
-              {(request as any).gm_action_at && (
-                <div className="relative">
-                  <div className={cn(
-                    "absolute -left-6 top-1 h-3 w-3 rounded-full",
-                    request.status === 'approved' ? 'bg-emerald-500' : 'bg-red-500'
-                  )} />
-                  <div className="absolute -left-[18px] top-4 bottom-0 w-0.5 bg-border" />
-                  <div className="p-3 rounded-lg border bg-card">
-                    <p className="text-sm font-medium">General Manager Review</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(new Date((request as any).gm_action_at), 'MMM d, yyyy h:mm a')}
-                    </p>
-                    {(request as any).gm_comment && (
-                      <p className="text-sm mt-2 text-muted-foreground italic">
-                        "{(request as any).gm_comment}"
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Pending indicator */}
-              {(request.status === 'pending' || request.status === 'hr_approved' || request.status === 'manager_approved' || request.status === 'gm_pending') && (
-                <div className="relative">
-                  <div className="absolute -left-6 top-1 h-3 w-3 rounded-full bg-amber-500 animate-pulse" />
-                  <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
-                    <p className="text-sm font-medium text-amber-600">
-                      {request.status === 'pending' ? 'Awaiting HR Review' : 
-                       request.status === 'hr_approved' ? 'Awaiting Department Manager' :
-                       request.status === 'manager_approved' ? 'Awaiting GM/OM Final Approval' :
-                       'Awaiting General Manager Approval'}
-                    </p>
-                  </div>
-                </div>
-              )}
+            <Label className="text-base font-semibold">Approval Workflow</Label>
+            <div className="p-4 rounded-xl border bg-card">
+              <LeaveWorkflowProgress
+                requestStatus={request.status}
+                createdAt={request.created_at}
+                hrActionAt={request.hr_action_at}
+                hrComment={request.hr_comment}
+                managerActionAt={request.manager_action_at}
+                managerComment={request.manager_comment}
+                gmActionAt={request.gm_action_at}
+                gmComment={request.gm_comment}
+              />
             </div>
+            
+            {/* Comments from reviewers */}
+            {(request.hr_comment || request.manager_comment || request.gm_comment) && (
+              <div className="space-y-2 mt-3">
+                {request.hr_comment && (
+                  <div className="p-3 rounded-lg bg-cyan-500/5 border border-cyan-500/20">
+                    <p className="text-xs font-medium text-cyan-600 mb-1">HR Comment</p>
+                    <p className="text-sm text-foreground">"{request.hr_comment}"</p>
+                  </div>
+                )}
+                {request.manager_comment && (
+                  <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
+                    <p className="text-xs font-medium text-blue-600 mb-1">Manager Comment</p>
+                    <p className="text-sm text-foreground">"{request.manager_comment}"</p>
+                  </div>
+                )}
+                {request.gm_comment && (
+                  <div className="p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
+                    <p className="text-xs font-medium text-indigo-600 mb-1">GM/OM Comment</p>
+                    <p className="text-sm text-foreground">"{request.gm_comment}"</p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Comment Input for Approvers */}

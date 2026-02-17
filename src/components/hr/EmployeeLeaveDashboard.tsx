@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { generateLeaveApprovalPdf } from '@/lib/generateLeavePdf';
 import { supabase } from '@/integrations/supabase/client';
+import { LeaveWorkflowProgress } from './LeaveWorkflowProgress';
 
 const LEAVE_ICONS: Record<LeaveType, React.ElementType> = {
   annual: Palmtree,
@@ -202,11 +203,11 @@ export function EmployeeLeaveDashboard({ departmentId }: { departmentId: string 
                 <TableHeader>
                   <TableRow className="bg-muted/60 hover:bg-muted/60">
                     <TableHead className="text-xs font-bold uppercase tracking-wider w-[40px] text-center">#</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider">Type</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider">Start Date</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider">End Date</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider text-center">Days</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider">Status</TableHead>
+                     <TableHead className="text-xs font-bold uppercase tracking-wider">Type</TableHead>
+                     <TableHead className="text-xs font-bold uppercase tracking-wider">Dates</TableHead>
+                     <TableHead className="text-xs font-bold uppercase tracking-wider text-center">Days</TableHead>
+                     <TableHead className="text-xs font-bold uppercase tracking-wider min-w-[200px]">Workflow Progress</TableHead>
+                     <TableHead className="text-xs font-bold uppercase tracking-wider text-center">Action</TableHead>
                     <TableHead className="text-xs font-bold uppercase tracking-wider text-center">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -220,16 +221,21 @@ export function EmployeeLeaveDashboard({ departmentId }: { departmentId: string 
                           {LEAVE_TYPE_LABELS[request.leave_type as LeaveType]}
                         </TableCell>
                         <TableCell className="font-mono text-xs">
-                          {format(parseISO(request.start_date), 'dd MMM yyyy')}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs">
-                          {format(parseISO(request.end_date), 'dd MMM yyyy')}
+                          {format(parseISO(request.start_date), 'dd MMM')} – {format(parseISO(request.end_date), 'dd MMM yy')}
                         </TableCell>
                         <TableCell className="text-center font-semibold">{request.total_days}</TableCell>
                         <TableCell>
-                          <Badge className={cn("text-[10px]", STATUS_COLORS[request.status as LeaveStatus])}>
-                            {LEAVE_STATUS_LABELS[request.status as LeaveStatus]}
-                          </Badge>
+                          <LeaveWorkflowProgress
+                            requestStatus={request.status as LeaveStatus}
+                            createdAt={request.created_at}
+                            hrActionAt={request.hr_action_at}
+                            hrComment={request.hr_comment}
+                            managerActionAt={request.manager_action_at}
+                            managerComment={request.manager_comment}
+                            gmActionAt={(request as any).gm_action_at}
+                            gmComment={(request as any).gm_comment}
+                            compact
+                          />
                         </TableCell>
                         <TableCell className="text-center">
                           {isApproved ? (
