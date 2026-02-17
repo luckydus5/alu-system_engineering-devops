@@ -310,15 +310,11 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
   );
 }
 
-// Leave Date Calculator matching Excel Page 2 rules
-function calculateLeaveDays(lastDayWork: Date, returnDate: Date): { calendarDays: number; workingDays: number; saturdays: number; sundays: number; totalLeaveDays: number } {
-  // Rule: Last Day of Work & Return Day are NOT counted as leave
-  const startLeave = addDays(lastDayWork, 1);
-  const endLeave = addDays(returnDate, -1);
+// Leave Date Calculator — uses Leave Start Date and Leave End Date (both inclusive)
+function calculateLeaveDays(leaveStart: Date, leaveEnd: Date): { calendarDays: number; workingDays: number; saturdays: number; sundays: number; totalLeaveDays: number } {
+  if (leaveEnd < leaveStart) return { calendarDays: 0, workingDays: 0, saturdays: 0, sundays: 0, totalLeaveDays: 0 };
   
-  if (endLeave < startLeave) return { calendarDays: 0, workingDays: 0, saturdays: 0, sundays: 0, totalLeaveDays: 0 };
-  
-  const days = eachDayOfInterval({ start: startLeave, end: endLeave });
+  const days = eachDayOfInterval({ start: leaveStart, end: leaveEnd });
   let workingDays = 0, saturdays = 0, sundays = 0;
   
   days.forEach(day => {
@@ -334,21 +330,21 @@ function calculateLeaveDays(lastDayWork: Date, returnDate: Date): { calendarDays
 }
 
 function LeaveDateCalculator() {
-  const [lastDayWork, setLastDayWork] = useState('');
-  const [returnDate, setReturnDate] = useState('');
+  const [leaveStart, setLeaveStart] = useState('');
+  const [leaveEnd, setLeaveEnd] = useState('');
   
   const result = useMemo(() => {
-    if (!lastDayWork || !returnDate) return null;
+    if (!leaveStart || !leaveEnd) return null;
     try {
-      return calculateLeaveDays(new Date(lastDayWork), new Date(returnDate));
+      return calculateLeaveDays(new Date(leaveStart), new Date(leaveEnd));
     } catch { return null; }
-  }, [lastDayWork, returnDate]);
+  }, [leaveStart, leaveEnd]);
 
   const examples = [
-    { lastDay: '2025-11-02', returnDay: '2025-11-11', expected: 6.5 },
-    { lastDay: '2025-01-10', returnDay: '2025-01-20', expected: 6 },
-    { lastDay: '2025-07-01', returnDay: '2025-07-14', expected: 9 },
-    { lastDay: '2025-09-12', returnDay: '2025-10-06', expected: 17 },
+    { start: '2025-11-03', end: '2025-11-10' },
+    { start: '2025-01-13', end: '2025-01-17' },
+    { start: '2025-07-02', end: '2025-07-11' },
+    { start: '2025-09-15', end: '2025-10-03' },
   ];
 
   return (
@@ -359,17 +355,17 @@ function LeaveDateCalculator() {
             <Calculator className="h-5 w-5 text-primary" />
             📅 Quick Date Range Calculator
           </CardTitle>
-          <CardDescription>Enter Last Day of Work and Return Date to calculate leave days</CardDescription>
+          <CardDescription>Enter the first and last day of leave to calculate total leave days</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium text-muted-foreground mb-1 block">Last Day of Work</label>
-              <Input type="date" value={lastDayWork} onChange={e => setLastDayWork(e.target.value)} />
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Leave Start Date</label>
+              <Input type="date" value={leaveStart} onChange={e => setLeaveStart(e.target.value)} />
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground mb-1 block">Return to Work</label>
-              <Input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Leave End Date</label>
+              <Input type="date" value={leaveEnd} onChange={e => setLeaveEnd(e.target.value)} />
             </div>
           </div>
 
@@ -398,7 +394,7 @@ function LeaveDateCalculator() {
           )}
 
           <div className="text-xs text-muted-foreground space-y-1 pt-2 border-t">
-            <p>📝 Rule: Last Day of Work & Return Day are NOT counted as leave</p>
+            <p>📝 Rule: Start & End dates are both counted as leave days (inclusive)</p>
             <p>📝 Formula: Mon-Fri (full) + Saturdays × 0.5 + Sundays × 0</p>
           </div>
         </CardContent>
@@ -412,18 +408,18 @@ function LeaveDateCalculator() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b">
-                <th className="text-left py-2 font-medium">Last Day Work</th>
-                <th className="text-left py-2 font-medium">Return Date</th>
+                <th className="text-left py-2 font-medium">Leave Start</th>
+                <th className="text-left py-2 font-medium">Leave End</th>
                 <th className="text-right py-2 font-medium">Leave Days</th>
               </tr>
             </thead>
             <tbody>
               {examples.map((ex, i) => {
-                const calc = calculateLeaveDays(new Date(ex.lastDay), new Date(ex.returnDay));
+                const calc = calculateLeaveDays(new Date(ex.start), new Date(ex.end));
                 return (
                   <tr key={i} className="border-b hover:bg-muted/30">
-                    <td className="py-2">{format(new Date(ex.lastDay), 'dd-MMM-yyyy')}</td>
-                    <td className="py-2">{format(new Date(ex.returnDay), 'dd-MMM-yyyy')}</td>
+                    <td className="py-2">{format(new Date(ex.start), 'dd-MMM-yyyy')}</td>
+                    <td className="py-2">{format(new Date(ex.end), 'dd-MMM-yyyy')}</td>
                     <td className="py-2 text-right font-bold text-primary">{calc.totalLeaveDays}</td>
                   </tr>
                 );
