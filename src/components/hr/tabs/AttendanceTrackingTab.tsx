@@ -815,10 +815,13 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               // Pattern detection:
               // Current day's latest event is in afternoon/evening (>= 14:00)
               // Next day's earliest event is in the morning (<= 12:00) and next day has only 1 event
-              const lastCurrentHour = currentSorted[currentSorted.length - 1].getHours();
+              const lastCurrentEvent = currentSorted[currentSorted.length - 1];
+              const lastCurrentHour = lastCurrentEvent.getHours();
               const firstNextHour = nextSorted[0].getHours();
 
-              const currentLooksLikeNightStart = lastCurrentHour >= 14;
+              // Only merge if last event on current day is >= 18:00 (actual night shift start)
+              // A 16:52 checkout is a normal day shift end, NOT a night shift — don't merge
+              const currentLooksLikeNightStart = lastCurrentHour >= 18;
               const nextLooksLikeMorningEnd = firstNextHour <= 12 && nextSorted.length === 1;
 
               if (currentLooksLikeNightStart && nextLooksLikeMorningEnd) {
