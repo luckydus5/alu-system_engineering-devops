@@ -812,19 +812,18 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               const currentSorted = [...currentGroup.events].sort((a, b) => a.getTime() - b.getTime());
               const nextSorted = [...nextGroup.events].sort((a, b) => a.getTime() - b.getTime());
 
-              // Pattern detection:
-              // Current day's latest event is in afternoon/evening (>= 14:00)
-              // Next day's earliest event is in the morning (<= 12:00) and next day has only 1 event
+              // Pattern detection for night shifts:
+              // If current day has only 1 event (afternoon/evening check-in, no check-out)
+              // and next day has only 1 event (morning check-out, no check-in) → night shift
+              // If current day has 2+ events, it's a complete shift — never merge
               const lastCurrentEvent = currentSorted[currentSorted.length - 1];
               const lastCurrentHour = lastCurrentEvent.getHours();
               const firstNextHour = nextSorted[0].getHours();
 
-              // Only merge if last event on current day is >= 18:00 (actual night shift start)
-              // A 16:52 checkout is a normal day shift end, NOT a night shift — don't merge
-              const currentLooksLikeNightStart = lastCurrentHour >= 18;
+              const currentIsIncomplete = currentSorted.length === 1 && lastCurrentHour >= 14;
               const nextLooksLikeMorningEnd = firstNextHour <= 12 && nextSorted.length === 1;
 
-              if (currentLooksLikeNightStart && nextLooksLikeMorningEnd) {
+              if (currentIsIncomplete && nextLooksLikeMorningEnd) {
                 // Merge next day's events into current day
                 currentGroup.events.push(...nextGroup.events);
                 grouped.delete(nextKey);
