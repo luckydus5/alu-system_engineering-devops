@@ -78,10 +78,20 @@ export function LeaveApplicationForm({
   const { hasRole, highestRole } = useUserRole();
   const { createRequest } = useLeaveRequests();
   const { canFileForOthers } = useCurrentUserLeavePermissions();
+  const { roles } = useUserRole();
   
+  // Check if user is in HR department (any role level gets full HR access)
+  const isInHRDepartment = useMemo(() => {
+    return roles.some(r => {
+      // We need to check if the role's department is the HR department
+      // The departmentId prop is the HR department ID when this form is opened from HR
+      return r.department_id === departmentId;
+    });
+  }, [roles, departmentId]);
+
   const isHRUser = useMemo(() => {
-    return hasRole('admin') || hasRole('super_admin') || highestRole === 'admin' || highestRole === 'super_admin';
-  }, [hasRole, highestRole]);
+    return hasRole('admin') || hasRole('super_admin') || highestRole === 'admin' || highestRole === 'super_admin' || isInHRDepartment;
+  }, [hasRole, highestRole, isInHRDepartment]);
 
   // Can file for others: HR users, super admins, or explicitly granted users
   const canFileOnBehalf = isHRUser || canFileForOthers;

@@ -697,8 +697,10 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   const { leaveRequests, isLoading, refetch, updateRequestStatus } = useLeaveRequests(undefined, true);
   const { employeeBalances, isLoading: balancesLoading, initializeBalances } = useAllLeaveBalances();
   const { canEditBalances: userCanEditBalances } = useCurrentUserLeavePermissions();
-  const { hasRole } = useUserRole();
-  const isHROrAdmin = hasRole('admin') || hasRole('super_admin');
+  const { hasRole, roles } = useUserRole();
+  // HR department staff get full access — check if user is in the HR department
+  const isInHRDept = roles.some(r => r.department_id === departmentId);
+  const isHROrAdmin = hasRole('admin') || hasRole('super_admin') || isInHRDept;
 
   // Fetch leave policy values
   const { getPolicyValue } = useCompanyPolicies();

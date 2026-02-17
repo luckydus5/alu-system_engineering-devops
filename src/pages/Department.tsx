@@ -21,13 +21,15 @@ export default function Department() {
 
   const department = departments.find(d => d.code.toLowerCase() === code?.toLowerCase());
 
-  // Check access: only super_admin/director can bypass department membership
-  const isPrivileged = hasRole('super_admin') || hasRole('director');
-  const canManage = hasRole('super_admin') || hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager');
-  const hasAccess = isPrivileged || (department && isInDepartment(department.id));
-
   // Check department types
   const deptCode = department?.code?.toUpperCase();
+
+  // Check access: only super_admin/director can bypass department membership
+  const isPrivileged = hasRole('super_admin') || hasRole('director');
+  const isHRMember = department && isInDepartment(department.id) && (deptCode === 'HR' || deptCode === 'HUMAN RESOURCES');
+  // HR department members get full management access regardless of role level
+  const canManage = hasRole('super_admin') || hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager') || !!isHRMember;
+  const hasAccess = isPrivileged || (department && isInDepartment(department.id));
   const isFleetDepartment = deptCode === 'FLEET';
   const isWarehouseDepartment = deptCode === 'WAREHOUSE' || deptCode === 'WH';
   const isOperationsDepartment = deptCode === 'OPS' || deptCode === 'PEAT' || deptCode === 'OPERATIONS';
