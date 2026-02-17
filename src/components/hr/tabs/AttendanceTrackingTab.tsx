@@ -1098,7 +1098,11 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       }
 
       // Merge new data with existing: pick earliest clock_in, latest clock_out
-      const importData = validRecords.map(r => {
+      // Skip true duplicates — only import if record is missing, has no clock_out, or has different hours
+      let skippedDuplicates = 0;
+      const importData: any[] = [];
+      
+      for (const r of validRecords) {
         const key = `${r.userId}|${r.date}`;
         const existing = existingMap.get(key);
 
@@ -1106,14 +1110,30 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         let mergedClockOut = r.clockOutRaw;
 
         if (existing) {
-          // Keep earliest check-in
+          // Check if the existing record is already complete and matches
+          const existingComplete = existing.clock_in && existing.clock_out;
+          const newClockIn = mergedClockIn ? new Date(mergedClockIn) : null;
+          const newClockOut = mergedClockOut ? new Date(mergedClockOut) : null;
+          const existingClockIn = existing.clock_in ? new Date(existing.clock_in) : null;
+          const existingClockOut = existing.clock_out ? new Date(existing.clock_out) : null;
+
+          // True duplicate: existing has both clock_in and clock_out, and times match (within 1 minute)
+          const timesMatch = existingComplete && newClockIn && newClockOut &&
+            Math.abs(existingClockIn!.getTime() - newClockIn.getTime()) < 60000 &&
+            Math.abs(existingClockOut!.getTime() - newClockOut.getTime()) < 60000;
+
+          if (timesMatch) {
+            skippedDuplicates++;
+            continue; // Skip — nothing new to add
+          }
+
+          // Not a true duplicate — merge: fill missing clock_out, keep earliest in / latest out
           if (existing.clock_in && mergedClockIn) {
             mergedClockIn = new Date(existing.clock_in) < new Date(mergedClockIn) ? existing.clock_in : mergedClockIn;
           } else if (existing.clock_in && !mergedClockIn) {
             mergedClockIn = existing.clock_in;
           }
 
-          // Keep latest check-out
           if (existing.clock_out && mergedClockOut) {
             mergedClockOut = new Date(existing.clock_out) > new Date(mergedClockOut) ? existing.clock_out : mergedClockOut;
           } else if (existing.clock_out && !mergedClockOut) {
@@ -1126,7 +1146,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         const clockOutDate = mergedClockOut ? new Date(mergedClockOut) : null;
         const reprocessed = processAttendanceRecord(clockInDate, clockOutDate, policyValues);
 
-        return {
+        importData.push({
           user_id: r.userId,
           department_id: r.departmentId,
           attendance_date: r.date,
@@ -1138,8 +1158,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           regular_hours: reprocessed.regularHours || 0,
           overtime_hours: reprocessed.overtimeHours || 0,
           notes: `Imported from Excel | ${r.classifiedCompany || 'Unclassified'} | ${(reprocessed.shiftType || 'day').toUpperCase()} shift | OT: ${reprocessed.overtimeHours || 0}h`,
-        };
-      });
+        });
+      }
 
       // Deduplicate: if multiple rows for same user+date, keep the one with most data
       const deduped = new Map<string, typeof importData[0]>();
@@ -1177,7 +1197,18 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const finalData = Array.from(deduped.values());
       const mergedCount = importData.length - finalData.length;
 
-      await bulkImportAttendance.mutateAsync(finalData);
+      if (finalData.length === 0 && skippedDuplicates > 0) {
+        toast({ 
+          title: 'No new records to import',
+          description: `${skippedDuplicates} records already exist with matching data. Only missing or incomplete records are imported.`
+        });
+        setIsImporting(false);
+        return;
+      }
+
+      if (finalData.length > 0) {
+        await bulkImportAttendance.mutateAsync(finalData);
+      }
 
       // Auto-save fingerprint numbers for matched employees that don't have one yet
       const fingerprintUpdates: { id: string; fingerprint_number: string }[] = [];
@@ -1199,18 +1230,17 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         }
         console.log(`Auto-saved ${fingerprintUpdates.length} fingerprint numbers to employees`);
       }
-      
-      if (mergedCount > 0 || existingMap.size > 0) {
-        toast({ 
-          title: `${finalData.length} records imported successfully`,
-          description: `${existingMap.size} existing records merged, ${mergedCount} duplicates consolidated${fingerprintUpdates.length > 0 ? `, ${fingerprintUpdates.length} fingerprint IDs saved` : ''}`
-        });
-      } else if (fingerprintUpdates.length > 0) {
-        toast({
-          title: `${finalData.length} records imported successfully`,
-          description: `${fingerprintUpdates.length} fingerprint IDs auto-saved to Employee Hub`
-        });
-      }
+
+      const parts: string[] = [];
+      if (skippedDuplicates > 0) parts.push(`${skippedDuplicates} duplicates skipped`);
+      if (existingMap.size > 0) parts.push(`${existingMap.size - skippedDuplicates} existing records updated`);
+      if (mergedCount > 0) parts.push(`${mergedCount} rows consolidated`);
+      if (fingerprintUpdates.length > 0) parts.push(`${fingerprintUpdates.length} fingerprint IDs saved`);
+
+      toast({ 
+        title: `${finalData.length} records imported successfully`,
+        description: parts.join(', ') || 'All records imported'
+      });
       
       setUploadPreview(null);
       setClassificationSummary(null);
