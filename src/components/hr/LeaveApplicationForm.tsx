@@ -52,6 +52,9 @@ interface EmployeeOption {
   email: string;
   department_id: string | null;
   department_name: string | null;
+  position_name?: string | null;
+  phone?: string | null;
+  fingerprint_number?: string | null;
 }
 
 const LEAVE_TYPE_CONFIG: { value: LeaveType; label: string; icon: React.ElementType; color: string }[] = [
@@ -125,29 +128,25 @@ export function LeaveApplicationForm({
     return { total: 18, used: 0, remaining: 18 };
   }, [balances, selectedLeaveType]);
 
-  // Fetch employees list when filing for others
+  // Fetch employees list from Employee Hub when filing for others
   useEffect(() => {
     async function loadEmployees() {
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, department_id')
+      const { data: emps } = await supabase
+        .from('employees')
+        .select('id, full_name, email, phone, department_id, position_id, departments(name), positions(name), fingerprint_number')
+        .eq('employment_status', 'active')
         .order('full_name');
 
-      if (profiles) {
-        // Fetch department names
-        const deptIds = [...new Set(profiles.filter(p => p.department_id).map(p => p.department_id!))];
-        const { data: depts } = await supabase
-          .from('departments')
-          .select('id, name')
-          .in('id', deptIds);
-        const deptMap = new Map(depts?.map(d => [d.id, d.name]) || []);
-
-        setEmployees(profiles.map(p => ({
-          id: p.id,
-          full_name: p.full_name || p.email,
-          email: p.email,
-          department_id: p.department_id,
-          department_name: p.department_id ? deptMap.get(p.department_id) || null : null,
+      if (emps) {
+        setEmployees(emps.map((e: any) => ({
+          id: e.id,
+          full_name: e.full_name,
+          email: e.email || '',
+          department_id: e.department_id,
+          department_name: e.departments?.name || null,
+          position_name: e.positions?.name || null,
+          phone: e.phone || null,
+          fingerprint_number: e.fingerprint_number || null,
         })));
       }
     }
@@ -160,45 +159,59 @@ export function LeaveApplicationForm({
   // Load current user info or selected employee info
   useEffect(() => {
     async function loadUserInfo() {
-      const userId = filingForOther && selectedEmployee ? selectedEmployee : user?.id;
-      if (!userId) return;
-      
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name, email, phone')
-        .eq('id', userId)
-        .single();
-      
-      if (profile) {
-        const nameParts = (profile.full_name || '').split(' ');
-        setEmployeeInfo({
-          firstName: nameParts[0] || '',
-          surname: nameParts.slice(1).join(' ') || '',
-          position: '',
-          contactPhone: profile.phone || '',
-          department: '',
-        });
-      }
+      if (filingForOther && selectedEmployee) {
+        // Load from Employee Hub record
+        const emp = employees.find(e => e.id === selectedEmployee);
+        if (emp) {
+          const nameParts = emp.full_name.split(' ');
+          setEmployeeInfo({
+            firstName: nameParts[0] || '',
+            surname: nameParts.slice(1).join(' ') || '',
+            position: emp.position_name || '',
+            contactPhone: emp.phone || '',
+            department: emp.department_name || '',
+          });
+        }
+      } else {
+        // Load current user's own info from profile
+        if (!user?.id) return;
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name, email, phone')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          const nameParts = (profile.full_name || '').split(' ');
+          setEmployeeInfo({
+            firstName: nameParts[0] || '',
+            surname: nameParts.slice(1).join(' ') || '',
+            position: '',
+            contactPhone: profile.phone || '',
+            department: '',
+          });
+        }
 
-      const { data: userRole } = await supabase
-        .from('user_roles')
-        .select('role, department:departments(name)')
-        .eq('user_id', userId)
-        .single();
-      
-      if (userRole) {
-        setEmployeeInfo(prev => ({
-          ...prev,
-          department: (userRole.department as { name: string } | null)?.name || '',
-          position: userRole.role || '',
-        }));
+        const { data: userRole } = await supabase
+          .from('user_roles')
+          .select('role, department:departments(name)')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (userRole) {
+          setEmployeeInfo(prev => ({
+            ...prev,
+            department: (userRole.department as { name: string } | null)?.name || '',
+            position: userRole.role || '',
+          }));
+        }
       }
     }
     
     if (open && mode === 'create') {
       loadUserInfo();
     }
-  }, [open, user, mode, filingForOther, selectedEmployee]);
+  }, [open, user, mode, filingForOther, selectedEmployee, employees]);
 
   const handleSubmit = async () => {
     if (!lastDateOfWork || !returnDate) return;
@@ -250,7 +263,8 @@ export function LeaveApplicationForm({
     const search = employeeSearch.toLowerCase();
     return employees.filter(e => 
       e.full_name.toLowerCase().includes(search) || 
-      e.email.toLowerCase().includes(search)
+      e.email.toLowerCase().includes(search) ||
+      (e.fingerprint_number && e.fingerprint_number.includes(search))
     ).slice(0, 20);
   }, [employees, employeeSearch]);
 
