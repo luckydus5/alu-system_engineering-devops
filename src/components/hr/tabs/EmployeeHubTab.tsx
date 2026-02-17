@@ -261,7 +261,7 @@ function AddEmployeeDialog({ open, onClose, departments, positions, companies, o
 // ─────────── Employee Profile Dialog ───────────
 function getCompanyPrefix(companyName?: string | null): string {
   if (!companyName) return 'ID';
-  // Use first 2 characters of the company name (e.g., "HQ Power" → "HQ", "Farmers" → "FA")
+  if (companyName === 'HQ Peat') return 'HP';
   return companyName.substring(0, 2).toUpperCase();
 }
 
