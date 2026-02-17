@@ -6,6 +6,7 @@ export interface CompanyLeaveWorkflow {
   id: string;
   company_id: string;
   hr_review_enabled: boolean;
+  hr_auto_approve: boolean;
   manager_review_enabled: boolean;
   final_approver_role: 'gm' | 'om' | 'either';
   created_at: string;
@@ -32,6 +33,7 @@ export function useCompanyLeaveWorkflows() {
     mutationFn: async (params: {
       company_id: string;
       hr_review_enabled: boolean;
+      hr_auto_approve: boolean;
       manager_review_enabled: boolean;
       final_approver_role: 'gm' | 'om' | 'either';
     }) => {
@@ -40,6 +42,7 @@ export function useCompanyLeaveWorkflows() {
         .upsert({
           company_id: params.company_id,
           hr_review_enabled: params.hr_review_enabled,
+          hr_auto_approve: params.hr_auto_approve,
           manager_review_enabled: params.manager_review_enabled,
           final_approver_role: params.final_approver_role,
         } as any, { onConflict: 'company_id' })

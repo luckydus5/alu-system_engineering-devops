@@ -20,6 +20,7 @@ import { format, differenceInBusinessDays, addDays, isWeekend } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LeaveType } from '@/hooks/useLeaveRequests';
 import { useEmployees, Employee } from '@/hooks/useEmployees';
+import { supabase } from '@/integrations/supabase/client';
 
 interface CreateLeaveRequestDialogProps {
   open: boolean;
@@ -100,8 +101,14 @@ export function CreateLeaveRequestDialog({ open, onOpenChange, departmentId, def
     };
 
     if (isOnBehalf && selectedEmployee) {
-      // Use linked_user_id (auth.users id) if available, otherwise use employee table id
       requestData.employee_id = selectedEmployee.linked_user_id || selectedEmployee.id;
+      if (selectedEmployee.company_id) {
+        requestData.company_id = selectedEmployee.company_id;
+      }
+    } else {
+      // Look up company_id from department
+      const { data: dept } = await supabase.from('departments').select('company_id').eq('id', departmentId).single();
+      if (dept?.company_id) requestData.company_id = dept.company_id;
     }
 
     await createRequest.mutateAsync(requestData);

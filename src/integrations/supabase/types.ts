@@ -217,6 +217,7 @@ export type Database = {
           company_id: string
           created_at: string
           final_approver_role: string
+          hr_auto_approve: boolean
           hr_review_enabled: boolean
           id: string
           manager_review_enabled: boolean
@@ -226,6 +227,7 @@ export type Database = {
           company_id: string
           created_at?: string
           final_approver_role?: string
+          hr_auto_approve?: boolean
           hr_review_enabled?: boolean
           id?: string
           manager_review_enabled?: boolean
@@ -235,6 +237,7 @@ export type Database = {
           company_id?: string
           created_at?: string
           final_approver_role?: string
+          hr_auto_approve?: boolean
           hr_review_enabled?: boolean
           id?: string
           manager_review_enabled?: boolean
