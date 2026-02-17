@@ -691,28 +691,53 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           classifiedCompanyId = cls.company?.companyId;
         }
 
-        // 1. Try fingerprint number match scoped by company FIRST (most reliable)
+        const searchNorm = normalizeName(name);
+
+        // 1. Try fingerprint + name dual validation (most accurate)
+        //    Fingerprint alone is NOT enough — same IDs exist across different biometric devices.
+        //    We accept a fingerprint match ONLY if the name also matches.
         if (empNo) {
           const fp = empNo.trim();
+          const candidatesFromFp: (typeof employeeLookup[0])[] = [];
+
+          // Gather fingerprint candidates (company-scoped first, then global)
           if (classifiedCompanyId) {
             const byCompanyFp = fingerprintByCompanyMap.get(`${classifiedCompanyId}:${fp}`);
-            if (byCompanyFp) return { type: 'employee' as const, ...byCompanyFp };
+            if (byCompanyFp) candidatesFromFp.push(byCompanyFp);
           }
-          // Fallback: try global fingerprint map (only if no company-specific match)
-          const byFingerprint = fingerprintGlobalMap.get(fp);
-          if (byFingerprint) return { type: 'employee' as const, ...byFingerprint };
+          const byGlobalFp = fingerprintGlobalMap.get(fp);
+          if (byGlobalFp && !candidatesFromFp.includes(byGlobalFp)) {
+            candidatesFromFp.push(byGlobalFp);
+          }
+
+          // Accept fingerprint match ONLY if name also validates
+          for (const candidate of candidatesFromFp) {
+            if (normalizeName(candidate.full_name || '') === searchNorm || namesMatch(name, candidate.full_name || '')) {
+              return { type: 'employee' as const, ...candidate };
+            }
+          }
+          // If fingerprint matched but name didn't — DON'T trust it, fall through to name matching
         }
-        // 2. Try exact name match (normalized) against employees
-        const searchNorm = normalizeName(name);
+
+        // 2. Try name-based matching against employees (scoped by company if available)
+        //    Prefer employees in the same company as the Excel department
+        if (classifiedCompanyId) {
+          const companyEmployees = employeeLookup.filter(e => e.company_id === classifiedCompanyId);
+          let match = companyEmployees.find(e => normalizeName(e.full_name || '') === searchNorm);
+          if (match) return { type: 'employee' as const, ...match };
+          match = companyEmployees.find(e => namesMatch(name, e.full_name || ''));
+          if (match) return { type: 'employee' as const, ...match };
+        }
+
+        // 3. Try all employees (any company)
         let match = employeeLookup.find(e => normalizeName(e.full_name || '') === searchNorm);
         if (match) return { type: 'employee' as const, ...match };
-        // 3. Try word-level match against employees (strict: require ALL words from shorter name to match)
         match = employeeLookup.find(e => namesMatch(name, e.full_name || ''));
         if (match) return { type: 'employee' as const, ...match };
-        // 4. Try profiles/users - exact normalized only
+
+        // 4. Try profiles/users
         let uMatch = userLookup.find(u => normalizeName(u.full_name || '') === searchNorm);
         if (uMatch) return { type: 'user' as const, ...uMatch };
-        // 5. Try word-level match against users (strict)
         uMatch = userLookup.find(u => namesMatch(name, u.full_name || ''));
         if (uMatch) return { type: 'user' as const, ...uMatch };
         return null;
