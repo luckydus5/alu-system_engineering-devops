@@ -8,6 +8,7 @@ import {
 import { format } from 'date-fns';
 import { LeaveRequest, LeaveType, LeaveStatus, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS } from '@/hooks/useLeaveRequests';
 import { cn } from '@/lib/utils';
+import { LeaveWorkflowProgress } from './LeaveWorkflowProgress';
 
 interface LeaveRequestCardProps {
   request: LeaveRequest;
@@ -148,6 +149,19 @@ export function LeaveRequestCard({
               {request.total_days} day{request.total_days > 1 ? 's' : ''}
             </div>
           </div>
+
+          {/* Workflow Progress */}
+          <LeaveWorkflowProgress
+            requestStatus={request.status}
+            createdAt={request.created_at}
+            hrActionAt={request.hr_action_at}
+            hrComment={request.hr_comment}
+            managerActionAt={request.manager_action_at}
+            managerComment={request.manager_comment}
+            gmActionAt={request.gm_action_at}
+            gmComment={request.gm_comment}
+            compact
+          />
 
           {/* Reason Preview */}
           {request.reason && (
