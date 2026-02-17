@@ -536,6 +536,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [parseProgress, setParseProgress] = useState('');
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [previewGroupBy, setPreviewGroupBy] = useState<'company' | 'flat'>('company');
+  const [uploadTargetDate, setUploadTargetDate] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -776,12 +777,57 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           await yieldToUI();
         }
 
+          setParseProgress('Consolidating cross-midnight shifts...');
+        await yieldToUI();
+
+        // ── Cross-midnight consolidation ──
+        // Night shifts: check-in on day X (no check-out), check-out on day X+1 (no check-in)
+        // Merge them into one record on the check-in date.
+        const personNames = new Set<string>();
+        grouped.forEach((_, key) => personNames.add(key.split('|||')[0]));
+
+        for (const personName of personNames) {
+          // Get all date keys for this person, sorted by date
+          const personKeys = Array.from(grouped.keys())
+            .filter(k => k.startsWith(`${personName}|||`))
+            .sort((a, b) => a.localeCompare(b));
+
+          for (let ki = 0; ki < personKeys.length - 1; ki++) {
+            const currentKey = personKeys[ki];
+            const nextKey = personKeys[ki + 1];
+            const currentGroup = grouped.get(currentKey)!;
+            const nextGroup = grouped.get(nextKey)!;
+
+            // Pattern: current day has check-in(s) but NO check-out, next day has check-out(s) but NO check-in
+            const currentHasInOnly = currentGroup.checkIns.length > 0 && currentGroup.checkOuts.length === 0;
+            const nextHasOutOnly = nextGroup.checkOuts.length > 0 && nextGroup.checkIns.length === 0;
+
+            if (currentHasInOnly && nextHasOutOnly) {
+              // Also verify the dates are consecutive (1 day apart)
+              const currentDateStr = currentKey.split('|||')[1];
+              const nextDateStr = nextKey.split('|||')[1];
+              const dayDiff = (new Date(nextDateStr).getTime() - new Date(currentDateStr).getTime()) / (1000 * 60 * 60 * 24);
+              
+              if (dayDiff === 1) {
+                // Merge: move next day's check-outs into current day's record
+                currentGroup.checkOuts.push(...nextGroup.checkOuts);
+                // Remove the orphan next-day entry
+                grouped.delete(nextKey);
+                // Adjust the keys list since we removed one
+                personKeys.splice(ki + 1, 1);
+                ki--; // Re-check current in case of chained entries
+              }
+            }
+          }
+        }
+
         setParseProgress('Matching employees & departments...');
         await yieldToUI();
 
         const parsed: any[] = [];
         grouped.forEach((group, key) => {
           const [name, dateStr] = key.split('|||');
+          // If user specified an upload target date, use it for context (but actual date comes from Excel)
           const parsedDate = new Date(dateStr);
           const earliestIn = group.checkIns.length > 0 ? group.checkIns.sort((a, b) => a.getTime() - b.getTime())[0] : null;
           const latestOut = group.checkOuts.length > 0 ? group.checkOuts.sort((a, b) => b.getTime() - a.getTime())[0] : null;
@@ -1239,17 +1285,30 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                 <p className="text-[10px] text-muted-foreground">Upload mixed-company Excel · auto-classifies</p>
               </div>
             </div>
-            <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-              <SelectTrigger className="w-full h-9 mb-2">
-                <SelectValue placeholder="Default company (optional)" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No default — auto-detect all</SelectItem>
-                {companies.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.name} {c.parent_id ? '(subsidiary)' : '(parent)'}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2 mb-2">
+              <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                <SelectTrigger className="flex-1 h-9">
+                  <SelectValue placeholder="Company (auto)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Auto-detect all</SelectItem>
+                  {companies.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="mb-2">
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Attendance Date (for reference)</label>
+              <Input
+                type="date"
+                value={uploadTargetDate}
+                onChange={e => setUploadTargetDate(e.target.value)}
+                className="h-9 text-xs"
+                placeholder="Select date..."
+              />
+              <p className="text-[9px] text-muted-foreground mt-0.5">Cross-midnight night shifts auto-consolidated</p>
+            </div>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing} />
             {isParsing ? (
               <div className="w-full text-center space-y-1.5">
