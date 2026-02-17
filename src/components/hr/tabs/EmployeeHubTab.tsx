@@ -261,8 +261,13 @@ function AddEmployeeDialog({ open, onClose, departments, positions, companies, o
 // ─────────── Employee Profile Dialog ───────────
 function getCompanyPrefix(companyName?: string | null): string {
   if (!companyName) return 'ID';
-  if (companyName === 'HQ Peat') return 'HP';
-  return companyName.substring(0, 2).toUpperCase();
+  const prefixMap: Record<string, string> = {
+    'HQ Peat': 'HP',
+    'HQ Power': 'HQ',
+    'HQ Service': 'HS',
+    'Farmers': 'FM',
+  };
+  return prefixMap[companyName] || companyName.substring(0, 2).toUpperCase();
 }
 
 function formatFingerprintDisplay(fingerprintNumber: string | null, companyName?: string | null, employeeNumber?: string): string {
