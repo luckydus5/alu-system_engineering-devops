@@ -537,6 +537,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
   const [previewGroupBy, setPreviewGroupBy] = useState<'company' | 'flat'>('company');
   const [uploadTargetDate, setUploadTargetDate] = useState<string>('');
+  const [crossMidnightEnabled, setCrossMidnightEnabled] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -745,8 +746,11 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       };
 
       if (isMachineFormat) {
-        // ── Machine format: each row is one event (C/In or C/Out) ──
-        const grouped = new Map<string, { checkIns: Date[]; checkOuts: Date[]; excelDept: string; empNo: string }>();
+        // ── Machine format: each row is one event ──
+        // IMPORTANT: We collect ALL timestamps as generic "events" regardless of C/In or C/Out label.
+        // Many biometric devices mark EVERYTHING as "C/In" even for check-outs.
+        // We use First-In / Last-Out logic: earliest event = clock-in, latest event = clock-out.
+        const grouped = new Map<string, { events: Date[]; excelDept: string; empNo: string }>();
         const CHUNK = 2000;
 
         for (let i = 0; i < jsonData.length; i += CHUNK) {
@@ -754,7 +758,6 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           for (const row of chunk) {
             const name = String(row[nameCol!] || '').trim();
             const dtVal = row[dateTimeCol!];
-            const statusVal = String(row[statusCol!] || '').trim().toLowerCase();
             if (!name || !dtVal) continue;
 
             const dateTime = parseDate(dtVal);
@@ -763,12 +766,10 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             const excelDept = deptCol ? String(row[deptCol] || '').trim() : '';
             const empNo = noCol ? String(row[noCol] || '').trim() : '';
 
-            const isCheckIn = /c\/in|c.in|check.?in|clock.?in|in$/i.test(statusVal);
             const dateKey = `${name}|||${format(dateTime, 'yyyy-MM-dd')}`;
-            if (!grouped.has(dateKey)) grouped.set(dateKey, { checkIns: [], checkOuts: [], excelDept, empNo });
+            if (!grouped.has(dateKey)) grouped.set(dateKey, { events: [], excelDept, empNo });
             const group = grouped.get(dateKey)!;
-            if (isCheckIn) group.checkIns.push(dateTime);
-            else group.checkOuts.push(dateTime);
+            group.events.push(dateTime);
             if (!group.excelDept && excelDept) group.excelDept = excelDept;
             if (!group.empNo && empNo) group.empNo = empNo;
           }
@@ -777,45 +778,55 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           await yieldToUI();
         }
 
+        // ── Cross-midnight consolidation (when enabled) ──
+        // Night shifts: person checks in on day X (afternoon/evening) and checks out on day X+1 (morning).
+        // The device records all as separate events. We detect this pattern:
+        //   Day X: has event(s) with latest time >= 16:00 (afternoon/evening)
+        //   Day X+1: has event(s) with earliest time <= 12:00 (morning) AND only 1 event
+        // When detected, merge day X+1's events into day X to form one complete shift record.
+        if (crossMidnightEnabled) {
           setParseProgress('Consolidating cross-midnight shifts...');
-        await yieldToUI();
+          await yieldToUI();
 
-        // ── Cross-midnight consolidation ──
-        // Night shifts: check-in on day X (no check-out), check-out on day X+1 (no check-in)
-        // Merge them into one record on the check-in date.
-        const personNames = new Set<string>();
-        grouped.forEach((_, key) => personNames.add(key.split('|||')[0]));
+          const personNames = new Set<string>();
+          grouped.forEach((_, key) => personNames.add(key.split('|||')[0]));
 
-        for (const personName of personNames) {
-          // Get all date keys for this person, sorted by date
-          const personKeys = Array.from(grouped.keys())
-            .filter(k => k.startsWith(`${personName}|||`))
-            .sort((a, b) => a.localeCompare(b));
+          for (const personName of personNames) {
+            const personKeys = Array.from(grouped.keys())
+              .filter(k => k.startsWith(`${personName}|||`))
+              .sort((a, b) => a.localeCompare(b));
 
-          for (let ki = 0; ki < personKeys.length - 1; ki++) {
-            const currentKey = personKeys[ki];
-            const nextKey = personKeys[ki + 1];
-            const currentGroup = grouped.get(currentKey)!;
-            const nextGroup = grouped.get(nextKey)!;
+            for (let ki = 0; ki < personKeys.length - 1; ki++) {
+              const currentKey = personKeys[ki];
+              const nextKey = personKeys[ki + 1];
+              const currentGroup = grouped.get(currentKey)!;
+              const nextGroup = grouped.get(nextKey)!;
 
-            // Pattern: current day has check-in(s) but NO check-out, next day has check-out(s) but NO check-in
-            const currentHasInOnly = currentGroup.checkIns.length > 0 && currentGroup.checkOuts.length === 0;
-            const nextHasOutOnly = nextGroup.checkOuts.length > 0 && nextGroup.checkIns.length === 0;
-
-            if (currentHasInOnly && nextHasOutOnly) {
-              // Also verify the dates are consecutive (1 day apart)
+              // Verify consecutive dates
               const currentDateStr = currentKey.split('|||')[1];
               const nextDateStr = nextKey.split('|||')[1];
               const dayDiff = (new Date(nextDateStr).getTime() - new Date(currentDateStr).getTime()) / (1000 * 60 * 60 * 24);
-              
-              if (dayDiff === 1) {
-                // Merge: move next day's check-outs into current day's record
-                currentGroup.checkOuts.push(...nextGroup.checkOuts);
-                // Remove the orphan next-day entry
+              if (dayDiff !== 1) continue;
+
+              // Sort events for analysis
+              const currentSorted = [...currentGroup.events].sort((a, b) => a.getTime() - b.getTime());
+              const nextSorted = [...nextGroup.events].sort((a, b) => a.getTime() - b.getTime());
+
+              // Pattern detection:
+              // Current day's latest event is in afternoon/evening (>= 14:00)
+              // Next day's earliest event is in the morning (<= 12:00) and next day has only 1 event
+              const lastCurrentHour = currentSorted[currentSorted.length - 1].getHours();
+              const firstNextHour = nextSorted[0].getHours();
+
+              const currentLooksLikeNightStart = lastCurrentHour >= 14;
+              const nextLooksLikeMorningEnd = firstNextHour <= 12 && nextSorted.length === 1;
+
+              if (currentLooksLikeNightStart && nextLooksLikeMorningEnd) {
+                // Merge next day's events into current day
+                currentGroup.events.push(...nextGroup.events);
                 grouped.delete(nextKey);
-                // Adjust the keys list since we removed one
                 personKeys.splice(ki + 1, 1);
-                ki--; // Re-check current in case of chained entries
+                ki--; // Re-check
               }
             }
           }
@@ -829,8 +840,10 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const [name, dateStr] = key.split('|||');
           // If user specified an upload target date, use it for context (but actual date comes from Excel)
           const parsedDate = new Date(dateStr);
-          const earliestIn = group.checkIns.length > 0 ? group.checkIns.sort((a, b) => a.getTime() - b.getTime())[0] : null;
-          const latestOut = group.checkOuts.length > 0 ? group.checkOuts.sort((a, b) => b.getTime() - a.getTime())[0] : null;
+          // First-In / Last-Out: sort all events chronologically, use first as clock-in, last as clock-out
+          const sortedEvents = [...group.events].sort((a, b) => a.getTime() - b.getTime());
+          const earliestIn = sortedEvents.length > 0 ? sortedEvents[0] : null;
+          const latestOut = sortedEvents.length > 1 ? sortedEvents[sortedEvents.length - 1] : null;
 
           const matchedUser = matchUser(name, group.empNo, group.excelDept);
           const classification = classifyDept(group.excelDept);
@@ -960,7 +973,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     }
     setIsParsing(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  }, [users, employees, departmentId, toast, companies, departments, classifier, policyValues, selectedCompanyId]);
+  }, [users, employees, departmentId, toast, companies, departments, classifier, policyValues, selectedCompanyId, crossMidnightEnabled]);
 
   // State for unmatched employees review
   const [showUnmatchedReview, setShowUnmatchedReview] = useState(false);
@@ -1307,7 +1320,21 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                 className="h-9 text-xs"
                 placeholder="Select date..."
               />
-              <p className="text-[9px] text-muted-foreground mt-0.5">Cross-midnight night shifts auto-consolidated</p>
+              <p className="text-[9px] text-muted-foreground mt-0.5">
+                Uses First-In / Last-Out (ignores C/In vs C/Out labels)
+              </p>
+            </div>
+            <div className="mb-2 flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={crossMidnightEnabled}
+                  onChange={e => setCrossMidnightEnabled(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span className="text-[10px] font-medium">Cross-midnight shift merge</span>
+              </label>
+              <Moon className="h-3.5 w-3.5 text-indigo-500" />
             </div>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing} />
             {isParsing ? (
