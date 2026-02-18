@@ -128,9 +128,9 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
     <div className="min-h-screen w-full bg-background">
       {/* ── Hero Header ── */}
       <div className="gradient-hero text-primary-foreground">
-        <div className="max-w-[1400px] mx-auto px-4 md:px-8">
+        <div className="max-w-[1400px] mx-auto px-3 md:px-8">
           {/* Breadcrumb */}
-          <div className="flex items-center justify-between pt-4 pb-2">
+          <div className="flex items-center justify-between pt-3 pb-2">
             <div className="flex items-center gap-1.5 text-sm text-primary-foreground/60">
               <button onClick={() => navigate('/')} className="hover:text-primary-foreground transition-colors">
                 <Home className="h-4 w-4" />
@@ -211,11 +211,11 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
           </div>
 
           {/* Title */}
-          <div className="pt-4 pb-8">
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+          <div className="pt-3 pb-5">
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight">
               Human Resources
             </h1>
-            <p className="text-primary-foreground/60 text-sm mt-1.5">
+            <p className="text-primary-foreground/60 text-xs md:text-sm mt-1">
               Manage your workforce across {companies.length || 1} {companies.length > 1 ? 'companies' : 'company'}
             </p>
           </div>
@@ -224,8 +224,8 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
 
       {/* ── Navigation Tabs ── */}
       <div className="sticky top-0 z-40 bg-card border-b shadow-corporate">
-        <div className="max-w-[1400px] mx-auto px-4 md:px-8">
-          <nav className="flex items-center gap-0.5 overflow-x-auto mobile-scroll-x py-1">
+        <div className="max-w-[1400px] mx-auto px-2 md:px-8">
+          <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide py-1" style={{ WebkitOverflowScrolling: 'touch' }}>
             {NAVIGATION_ITEMS.map((item) => {
               const isActive = activeTab === item.id;
               return (
@@ -233,13 +233,13 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
                   className={cn(
-                    "relative flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap rounded-lg transition-all my-1",
+                    "relative flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium whitespace-nowrap rounded-lg transition-all my-1 shrink-0",
                     isActive
                       ? "bg-primary text-primary-foreground shadow-premium"
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                 >
-                  <item.icon className="h-4 w-4" />
+                  <item.icon className="h-3.5 w-3.5 md:h-4 md:w-4" />
                   {item.label}
                   
                   {item.id === 'leave' && metrics.pendingLeaveRequests > 0 && (
@@ -260,7 +260,7 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
       </div>
 
       {/* ── Content ── */}
-      <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-6 md:py-8">
+      <div className="max-w-[1400px] mx-auto px-3 md:px-8 py-4 md:py-8 pb-24 md:pb-8">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

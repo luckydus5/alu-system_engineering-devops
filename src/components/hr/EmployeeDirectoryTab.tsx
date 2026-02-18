@@ -14,7 +14,7 @@ import {
 import { useUsers, UserWithRole } from '@/hooks/useUsers';
 import { useDepartments } from '@/hooks/useDepartments';
 import { usePositions } from '@/hooks/usePositions';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -166,7 +166,7 @@ export function EmployeeDirectoryTab() {
           </div>
 
           {/* Employee Grid */}
-          <ScrollArea className="h-[550px]">
+          <div className="max-h-[60vh] md:max-h-[550px] overflow-y-auto overscroll-contain">
             <div className="grid gap-3">
               {filteredUsers.length === 0 ? (
                 <div className="text-center py-16">
@@ -237,7 +237,7 @@ export function EmployeeDirectoryTab() {
                 ))
               )}
             </div>
-          </ScrollArea>
+          </div>
         </CardContent>
       </Card>
 

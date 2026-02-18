@@ -105,22 +105,22 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
       </div>
 
       {/* Colorful Stat Cards */}
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {STAT_CARDS.map(stat => (
           <button 
             key={stat.label}
             onClick={stat.onClick}
             className={cn(
-              "flex items-center gap-4 p-6 rounded-xl text-white text-left transition-transform hover:-translate-y-0.5 shadow-lg",
+              "flex items-center gap-2 sm:gap-4 p-3 sm:p-6 rounded-xl text-white text-left transition-transform hover:-translate-y-0.5 shadow-lg active:scale-95",
               stat.gradient
             )}
           >
-            <div className="h-12 w-12 flex items-center justify-center opacity-90">
-              <stat.icon className="h-7 w-7" />
+            <div className="h-8 w-8 sm:h-12 sm:w-12 flex items-center justify-center opacity-90 shrink-0">
+              <stat.icon className="h-5 w-5 sm:h-7 sm:w-7" />
             </div>
-            <div>
-              <p className="text-xs font-medium opacity-90 uppercase tracking-wider">{stat.label}</p>
-              <p className="text-3xl font-bold mt-0.5">{stat.value}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] sm:text-xs font-medium opacity-90 uppercase tracking-wider">{stat.label}</p>
+              <p className="text-xl sm:text-3xl font-bold mt-0.5 truncate">{stat.value}</p>
             </div>
           </button>
         ))}
@@ -129,22 +129,22 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
       {/* Workbench */}
       <div>
         <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">Workbench</h3>
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
           {WORKBENCH_ITEMS.map(item => (
             <button
               key={item.label}
               onClick={() => onNavigate(item.tab)}
-              className="relative flex flex-col items-center gap-3 p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group text-center"
+              className="relative flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all group text-center"
             >
               {item.badge && (
                 <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
                   {item.badge}
                 </Badge>
               )}
-              <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", item.bg)}>
-                <item.icon className={cn("h-5 w-5", item.color)} />
+              <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl flex items-center justify-center", item.bg)}>
+                <item.icon className={cn("h-4 w-4 sm:h-5 sm:w-5", item.color)} />
               </div>
-              <span className="text-sm font-medium">{item.label}</span>
+              <span className="text-xs sm:text-sm font-medium leading-tight">{item.label}</span>
             </button>
           ))}
         </div>
@@ -153,17 +153,17 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
       {/* General */}
       <div>
         <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">General</h3>
-        <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
           {GENERAL_ITEMS.map(item => (
             <button
               key={item.label}
               onClick={() => onNavigate(item.tab)}
-              className="flex flex-col items-center gap-3 p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all group text-center"
+              className="flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all group text-center"
             >
-              <div className={cn("h-12 w-12 rounded-xl flex items-center justify-center", item.bg)}>
-                <item.icon className={cn("h-5 w-5", item.color)} />
+              <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl flex items-center justify-center", item.bg)}>
+                <item.icon className={cn("h-4 w-4 sm:h-5 sm:w-5", item.color)} />
               </div>
-              <span className="text-sm font-medium">{item.label}</span>
+              <span className="text-xs sm:text-sm font-medium leading-tight">{item.label}</span>
             </button>
           ))}
         </div>
