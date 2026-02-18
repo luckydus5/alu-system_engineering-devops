@@ -14,7 +14,7 @@ import { CreateLeaveRequestDialog } from './CreateLeaveRequestDialog';
 import { LeaveApplicationForm } from './LeaveApplicationForm';
 import { LeaveRequestDetailDialog } from './LeaveRequestDetailDialog';
 import { LeaveRequestCard } from './LeaveRequestCard';
-import { ScrollArea } from '@/components/ui/scroll-area';
+
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -173,8 +173,7 @@ export function LeaveRequestsTab({ departmentId, isHR = false }: LeaveRequestsTa
         </Card>
 
         {/* Requests List */}
-        <ScrollArea className="h-[600px]">
-          <div className="space-y-3 pr-4">
+        <div className="space-y-3 max-h-[60vh] md:max-h-[600px] overflow-y-auto overscroll-contain pr-1">
             {filteredRequests.length === 0 ? (
               <div className="text-center py-16">
                 <Calendar className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
@@ -198,7 +197,7 @@ export function LeaveRequestsTab({ departmentId, isHR = false }: LeaveRequestsTa
               ))
             )}
           </div>
-        </ScrollArea>
+
       </div>
 
       <CreateLeaveRequestDialog
