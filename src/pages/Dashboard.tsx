@@ -1,19 +1,22 @@
 import { useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { DepartmentAccessCards } from '@/components/dashboard/DepartmentAccessCards';
-
 import { PullToRefreshIndicator } from '@/components/shared/PullToRefreshIndicator';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useQueryClient } from '@tanstack/react-query';
-import { Sparkles } from 'lucide-react';
+import { useEmployees } from '@/hooks/useEmployees';
+import { Sparkles, Users, UserCheck, UserX } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import heroBackground from '@/assets/hero-background.jpg';
 
 export default function Dashboard() {
   const { profile, refetch } = useUserRole();
   const isMobile = useIsMobile();
   const queryClient = useQueryClient();
+  const { employees, loading: employeesLoading } = useEmployees();
 
   const handleRefresh = useCallback(async () => {
     // Invalidate all queries to refresh data
@@ -90,6 +93,38 @@ export default function Dashboard() {
               )}
             </div>
           )}
+
+          {/* Employee KPI Strip */}
+          {(() => {
+            const active = employees.filter(e => e.employment_status === 'active').length;
+            const inactive = employees.filter(e => e.employment_status !== 'active').length;
+            const kpis = [
+              { label: 'Total Employees', value: employees.length, icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
+              { label: 'Active', value: active, icon: UserCheck, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-500/10' },
+              { label: 'Inactive / On Leave', value: inactive, icon: UserX, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-500/10' },
+            ];
+            return (
+              <div className="grid grid-cols-3 gap-3">
+                {kpis.map(({ label, value, icon: Icon, color, bg }) => (
+                  <Card key={label} className="border shadow-sm">
+                    <CardContent className="p-4 flex items-center gap-3">
+                      <div className={`p-2.5 rounded-xl ${bg} shrink-0`}>
+                        <Icon className={`h-5 w-5 ${color}`} />
+                      </div>
+                      <div className="min-w-0">
+                        {employeesLoading ? (
+                          <Skeleton className="h-7 w-12 mb-1" />
+                        ) : (
+                          <p className="text-2xl font-bold text-foreground leading-none">{value}</p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1 truncate">{label}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Department Access Cards */}
           <DepartmentAccessCards />
