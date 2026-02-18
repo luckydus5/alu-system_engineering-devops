@@ -95,32 +95,32 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
       <div>
-        <p className="text-sm text-muted-foreground">Home</p>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 mt-1">
-          <span className="text-lg">🚀</span> Dashboard
+        <p className="text-xs text-muted-foreground">Home</p>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight flex items-center gap-2 mt-0.5">
+          <span>🚀</span> Dashboard
         </h1>
       </div>
 
-      {/* Colorful Stat Cards */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {/* Stat Cards — 2-col on mobile, 4-col on lg */}
+      <div className="grid gap-2.5 grid-cols-2 lg:grid-cols-4">
         {STAT_CARDS.map(stat => (
           <button 
             key={stat.label}
             onClick={stat.onClick}
             className={cn(
-              "flex items-center gap-2 sm:gap-4 p-3 sm:p-6 rounded-xl text-white text-left transition-transform hover:-translate-y-0.5 shadow-lg active:scale-95",
+              "flex items-center gap-2.5 p-3.5 md:p-5 rounded-xl text-white text-left transition-transform shadow-md active:scale-95 touch-manipulation",
               stat.gradient
             )}
           >
-            <div className="h-8 w-8 sm:h-12 sm:w-12 flex items-center justify-center opacity-90 shrink-0">
-              <stat.icon className="h-5 w-5 sm:h-7 sm:w-7" />
+            <div className="h-9 w-9 md:h-11 md:w-11 flex items-center justify-center opacity-90 shrink-0 bg-white/10 rounded-lg">
+              <stat.icon className="h-5 w-5 md:h-6 md:w-6" />
             </div>
-            <div className="min-w-0">
-              <p className="text-[10px] sm:text-xs font-medium opacity-90 uppercase tracking-wider">{stat.label}</p>
-              <p className="text-xl sm:text-3xl font-bold mt-0.5 truncate">{stat.value}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-[9px] md:text-[11px] font-semibold opacity-80 uppercase tracking-wider leading-tight">{stat.label}</p>
+              <p className="text-lg md:text-2xl font-bold mt-0.5 truncate leading-tight">{stat.value}</p>
             </div>
           </button>
         ))}
@@ -128,23 +128,23 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
 
       {/* Workbench */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">Workbench</h3>
-        <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 px-0.5">Workbench</h3>
+        <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
           {WORKBENCH_ITEMS.map(item => (
             <button
               key={item.label}
               onClick={() => onNavigate(item.tab)}
-              className="relative flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all group text-center"
+              className="relative flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl bg-card border shadow-sm hover:shadow-md active:scale-95 transition-all text-center touch-manipulation"
             >
               {item.badge && (
-                <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-[10px] font-bold px-1.5 py-0.5">
+                <Badge className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-[9px] font-bold px-1.5 py-0.5 min-w-[18px]">
                   {item.badge}
                 </Badge>
               )}
-              <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl flex items-center justify-center", item.bg)}>
-                <item.icon className={cn("h-4 w-4 sm:h-5 sm:w-5", item.color)} />
+              <div className={cn("h-11 w-11 md:h-12 md:w-12 rounded-xl flex items-center justify-center shrink-0", item.bg)}>
+                <item.icon className={cn("h-5 w-5 md:h-6 md:w-6", item.color)} />
               </div>
-              <span className="text-xs sm:text-sm font-medium leading-tight">{item.label}</span>
+              <span className="text-[11px] md:text-sm font-medium leading-snug">{item.label}</span>
             </button>
           ))}
         </div>
@@ -152,18 +152,18 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
 
       {/* General */}
       <div>
-        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3 px-1">General</h3>
-        <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
+        <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 px-0.5">General</h3>
+        <div className="grid gap-2 grid-cols-2 lg:grid-cols-4">
           {GENERAL_ITEMS.map(item => (
             <button
               key={item.label}
               onClick={() => onNavigate(item.tab)}
-              className="flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-6 rounded-xl bg-card border shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all group text-center"
+              className="flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl bg-card border shadow-sm hover:shadow-md active:scale-95 transition-all text-center touch-manipulation"
             >
-              <div className={cn("h-10 w-10 sm:h-12 sm:w-12 rounded-xl flex items-center justify-center", item.bg)}>
-                <item.icon className={cn("h-4 w-4 sm:h-5 sm:w-5", item.color)} />
+              <div className={cn("h-11 w-11 md:h-12 md:w-12 rounded-xl flex items-center justify-center shrink-0", item.bg)}>
+                <item.icon className={cn("h-5 w-5 md:h-6 md:w-6", item.color)} />
               </div>
-              <span className="text-xs sm:text-sm font-medium leading-tight">{item.label}</span>
+              <span className="text-[11px] md:text-sm font-medium leading-snug">{item.label}</span>
             </button>
           ))}
         </div>
@@ -172,15 +172,15 @@ export function HROverviewTab({ departmentId, metrics, urgentItems, onNavigate }
       {/* Company Overview */}
       {companies.length > 1 && (
         <div>
-          <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">Companies</h3>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <h3 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5 px-0.5">Companies</h3>
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {companies.map(company => (
-              <div key={company.id} className="flex items-center gap-3 p-4 rounded-xl bg-card border shadow-sm">
+              <div key={company.id} className="flex items-center gap-3 p-3.5 rounded-xl bg-card border shadow-sm">
                 <div className={cn(
-                  "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                  "h-9 w-9 rounded-lg flex items-center justify-center shrink-0",
                   company.parent_id ? 'bg-muted' : 'gradient-primary'
                 )}>
-                  <Building2 className={cn("h-5 w-5", company.parent_id ? 'text-muted-foreground' : 'text-primary-foreground')} />
+                  <Building2 className={cn("h-4 w-4", company.parent_id ? 'text-muted-foreground' : 'text-primary-foreground')} />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold truncate">{company.name}</p>

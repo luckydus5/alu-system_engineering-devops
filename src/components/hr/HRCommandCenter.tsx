@@ -224,8 +224,11 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
 
       {/* ── Navigation Tabs ── */}
       <div className="sticky top-0 z-40 bg-card border-b shadow-corporate">
-        <div className="max-w-[1400px] mx-auto px-2 md:px-8">
-          <nav className="flex items-center gap-0.5 overflow-x-auto scrollbar-hide py-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="max-w-[1400px] mx-auto">
+          <nav
+            className="flex items-center gap-1 px-2 md:px-8 overflow-x-auto py-1.5"
+            style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
             {NAVIGATION_ITEMS.map((item) => {
               const isActive = activeTab === item.id;
               return (
@@ -233,18 +236,18 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
                   className={cn(
-                    "relative flex items-center gap-1.5 px-3 py-2 text-xs md:text-sm font-medium whitespace-nowrap rounded-lg transition-all my-1 shrink-0",
+                    "relative flex items-center gap-1.5 px-3 py-2.5 text-xs md:text-sm font-medium whitespace-nowrap rounded-lg transition-all shrink-0 touch-manipulation",
                     isActive
-                      ? "bg-primary text-primary-foreground shadow-premium"
-                      : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted/60 active:bg-muted"
                   )}
                 >
-                  <item.icon className="h-3.5 w-3.5 md:h-4 md:w-4" />
-                  {item.label}
+                  <item.icon className="h-3.5 w-3.5 md:h-4 md:w-4 shrink-0" />
+                  <span>{item.label}</span>
                   
                   {item.id === 'leave' && metrics.pendingLeaveRequests > 0 && (
                     <span className={cn(
-                      "h-5 min-w-5 px-1.5 rounded-full text-[10px] font-semibold flex items-center justify-center",
+                      "h-4 min-w-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center leading-none",
                       isActive 
                         ? "bg-primary-foreground text-primary" 
                         : "bg-destructive text-destructive-foreground"
