@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useUsers, UserWithRole } from '@/hooks/useUsers';
 import { useDepartments } from '@/hooks/useDepartments';
 import { usePositions } from '@/hooks/usePositions';
@@ -40,7 +40,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2, KeyRound, Briefcase } from 'lucide-react';
+import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2, KeyRound, Briefcase, Plus, Check } from 'lucide-react';
 import { DepartmentAccessDialog } from './DepartmentAccessDialog';
 import { SetPasswordDialog } from './SetPasswordDialog';
 
@@ -70,7 +70,7 @@ interface UserListProps {
 export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListProps) {
   const { users, loading, refetch, updateUser, deleteUser } = useUsers();
   const { departments } = useDepartments();
-  const { positions, activePositions } = usePositions();
+  const { positions, activePositions, createPosition } = usePositions();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const { approvers } = useLeaveApprovers();
@@ -104,9 +104,25 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
   });
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [newPositionName, setNewPositionName] = useState('');
+  const [isCreatingPosition, setIsCreatingPosition] = useState(false);
+  const [showNewPositionInput, setShowNewPositionInput] = useState(false);
+  const newPositionInputRef = useRef<HTMLInputElement>(null);
 
   // Map of userId -> position name for display in table
   const positionNameMap = new Map(positions.map(p => [p.id, p.name]));
+
+  const handleCreatePosition = async () => {
+    if (!newPositionName.trim()) return;
+    setIsCreatingPosition(true);
+    const result = await createPosition.mutateAsync({ name: newPositionName.trim(), level: 1 });
+    if (result?.id) {
+      setEditForm(prev => ({ ...prev, positionId: result.id }));
+    }
+    setNewPositionName('');
+    setShowNewPositionInput(false);
+    setIsCreatingPosition(false);
+  };
 
   const handleEditClick = async (user: UserWithRole) => {
     // Fetch current position_id from profiles
@@ -319,7 +335,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
       </Card>
 
       {/* Edit User Dialog */}
-      <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
+      <Dialog open={!!editingUser} onOpenChange={(open) => { if (!open) { setEditingUser(null); setShowNewPositionInput(false); setNewPositionName(''); } }}>
         <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
@@ -387,33 +403,84 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
               )}
             </div>
 
-            {/* Job Position — assign from positions table */}
+            {/* Job Position — assign from positions table with inline create */}
             <div className="space-y-2">
-              <Label htmlFor="edit-position" className="flex items-center gap-1.5">
+              <Label className="flex items-center gap-1.5">
                 <Briefcase className="h-3.5 w-3.5" />
                 Job Position
               </Label>
               <Select
                 value={editForm.positionId || 'none'}
-                onValueChange={(value) => setEditForm((prev) => ({ ...prev, positionId: value === 'none' ? '' : value }))}
+                onValueChange={(value) => {
+                  if (value === '__create__') {
+                    setShowNewPositionInput(true);
+                    setTimeout(() => newPositionInputRef.current?.focus(), 50);
+                  } else {
+                    setEditForm((prev) => ({ ...prev, positionId: value === 'none' ? '' : value }));
+                    setShowNewPositionInput(false);
+                  }
+                }}
               >
-                <SelectTrigger>
+                <SelectTrigger className="bg-background">
                   <SelectValue placeholder="No position assigned" />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No position assigned</SelectItem>
+                <SelectContent className="bg-background border shadow-lg z-50">
+                  <SelectItem value="none">— No position assigned —</SelectItem>
                   {activePositions.map((pos) => (
                     <SelectItem key={pos.id} value={pos.id}>
-                      {pos.name}
-                      {pos.department?.name ? ` · ${pos.department.name}` : ''}
+                      <span className="flex items-center gap-2">
+                        {editForm.positionId === pos.id && <Check className="h-3 w-3 text-primary" />}
+                        {pos.name}
+                        {pos.department?.name ? (
+                          <span className="text-muted-foreground text-xs">· {pos.department.name}</span>
+                        ) : null}
+                      </span>
                     </SelectItem>
                   ))}
+                  {/* Inline create option */}
+                  <div className="border-t mt-1 pt-1 px-2 pb-1">
+                    {!showNewPositionInput ? (
+                      <button
+                        type="button"
+                        className="flex items-center gap-2 w-full text-sm text-primary hover:text-primary/80 py-1.5 px-1 rounded hover:bg-primary/5 transition-colors"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setShowNewPositionInput(true);
+                          setTimeout(() => newPositionInputRef.current?.focus(), 50);
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Create new position
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5 pt-1" onMouseDown={(e) => e.stopPropagation()}>
+                        <Input
+                          ref={newPositionInputRef}
+                          value={newPositionName}
+                          onChange={(e) => setNewPositionName(e.target.value)}
+                          placeholder="Position name..."
+                          className="h-7 text-sm"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') { e.preventDefault(); handleCreatePosition(); }
+                            if (e.key === 'Escape') { setShowNewPositionInput(false); setNewPositionName(''); }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 px-2 shrink-0"
+                          disabled={!newPositionName.trim() || isCreatingPosition}
+                          onMouseDown={(e) => { e.preventDefault(); handleCreatePosition(); }}
+                        >
+                          {isCreatingPosition ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Job title/position from the Positions list. Manage positions in HR → Positions tab.
-              </p>
             </div>
+
 
             {/* System Position — only for super admins (leave workflow roles) */}
             {isSuperAdmin && (
