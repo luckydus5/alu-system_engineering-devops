@@ -113,7 +113,8 @@ export function DepartmentAccessDialog({
     }
   };
 
-  // Filter out the user's primary department from additional access options
+  // Show ALL departments for additional access (including hr_only ones like Warehouse)
+  // Only exclude the user's primary department since it's already assigned
   const availableDepartments = departments.filter(
     (dept) => dept.id !== user?.department_id
   );
