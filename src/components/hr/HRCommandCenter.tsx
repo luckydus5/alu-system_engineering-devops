@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
   LayoutDashboard, Users, Calendar, Clock,
-  BarChart3, CalendarDays,
+  BarChart3, CalendarDays, Settings2,
   Home, ChevronRight, Globe, ChevronDown
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
@@ -24,6 +24,7 @@ import { LeaveManagementTab } from './tabs/LeaveManagementTab';
 import { AttendanceTrackingTab } from './tabs/AttendanceTrackingTab';
 import { HRAnalyticsTab } from './tabs/HRAnalyticsTab';
 import { WeekendRotationTab } from './tabs/WeekendRotationTab';
+import { LeaveEntitlementConfig } from './LeaveEntitlementConfig';
 
 interface HRCommandCenterProps {
   departmentId: string;
@@ -32,12 +33,13 @@ interface HRCommandCenterProps {
 }
 
 const NAVIGATION_ITEMS = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'employees', label: 'Employee Hub', icon: Users },
-  { id: 'leave', label: 'Leave Management', icon: Calendar },
-  { id: 'attendance', label: 'Attendance', icon: Clock },
-  { id: 'weekend', label: 'Weekend & Rotation', icon: CalendarDays },
-  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { id: 'overview',      label: 'Overview',       icon: LayoutDashboard },
+  { id: 'employees',     label: 'Employee Hub',   icon: Users },
+  { id: 'leave',         label: 'Leave Management', icon: Calendar },
+  { id: 'entitlements',  label: 'Entitlements',   icon: Settings2 },
+  { id: 'attendance',    label: 'Attendance',     icon: Clock },
+  { id: 'weekend',       label: 'Weekend & Rotation', icon: CalendarDays },
+  { id: 'analytics',     label: 'Analytics',      icon: BarChart3 },
 ];
 
 const COMPANY_COLORS: Record<string, string> = {
@@ -282,6 +284,7 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
             )}
             {activeTab === 'employees' && <EmployeeHubTab departmentId={departmentId} />}
             {activeTab === 'leave' && <LeaveManagementTab departmentId={departmentId} />}
+            {activeTab === 'entitlements' && <LeaveEntitlementConfig departmentId={departmentId} />}
             {activeTab === 'attendance' && <AttendanceTrackingTab departmentId={departmentId} />}
             {activeTab === 'weekend' && <WeekendRotationTab departmentId={departmentId} />}
             {activeTab === 'analytics' && <HRAnalyticsTab departmentId={departmentId} />}
