@@ -34,23 +34,17 @@ export function PasswordResetEnforcer() {
           email_to_check: user.email,
         });
 
-        const hasReset = !error && data?.[0]?.has_pending_reset;
-        const token = data?.[0]?.reset_token ?? null;
+        const hasReset = !error && data === true;
 
-        if (hasReset && token) {
+        if (hasReset) {
           toast({
             title: "Password reset required",
             description:
-              "An administrator reset your password. Please set a new password to continue.",
+              "An administrator reset your password. Please use the reset link provided by your admin.",
           });
 
           // Revoke local session immediately
           await signOut();
-
-          navigate(
-            `/admin-password-reset?token=${token}&email=${encodeURIComponent(user.email)}`,
-            { replace: true }
-          );
         }
       } finally {
         isHandlingRef.current = false;
