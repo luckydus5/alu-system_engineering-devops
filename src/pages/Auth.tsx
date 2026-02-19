@@ -22,7 +22,7 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmailSent, setResetEmailSent] = useState(false);
   const [checkingPendingReset, setCheckingPendingReset] = useState(false);
-  const [pendingResetInfo, setPendingResetInfo] = useState<{ hasReset: boolean; token: string | null }>({ hasReset: false, token: null });
+  const [hasPendingResetState, setHasPendingResetState] = useState(false);
   
   const { signIn, user, loading } = useAuth();
   const { toast } = useToast();
@@ -57,10 +57,10 @@ export default function Auth() {
     }
   };
 
-  // Check for pending admin password reset when email changes
+  // Check for pending admin password reset when email changes (boolean only - no token exposed)
   const checkPendingReset = async (emailToCheck: string) => {
     if (!emailToCheck || !emailSchema.safeParse(emailToCheck).success) {
-      setPendingResetInfo({ hasReset: false, token: null });
+      setHasPendingResetState(false);
       return false;
     }
 
@@ -69,15 +69,11 @@ export default function Auth() {
       const { data, error } = await supabase
         .rpc('check_pending_password_reset', { email_to_check: emailToCheck });
 
-      if (!error && data && data.length > 0 && data[0].has_pending_reset) {
-        setPendingResetInfo({ hasReset: true, token: data[0].reset_token });
-        return true;
-      } else {
-        setPendingResetInfo({ hasReset: false, token: null });
-        return false;
-      }
+      const hasPending = !error && data === true;
+      setHasPendingResetState(hasPending);
+      return hasPending;
     } catch (err) {
-      setPendingResetInfo({ hasReset: false, token: null });
+      setHasPendingResetState(false);
       return false;
     } finally {
       setCheckingPendingReset(false);
@@ -96,9 +92,12 @@ export default function Auth() {
 
     // First check if there's a pending admin reset for this email
     const hasPendingReset = await checkPendingReset(email);
-    if (hasPendingReset && pendingResetInfo.token) {
+    if (hasPendingReset) {
       setIsLoading(false);
-      navigate(`/admin-password-reset?token=${pendingResetInfo.token}&email=${encodeURIComponent(email)}`);
+      toast({
+        title: "Password Reset Required",
+        description: "Your administrator has reset your password. Please use the reset link provided by your admin.",
+      });
       return;
     }
 
@@ -109,12 +108,11 @@ export default function Auth() {
       
       // Check if the error might be due to a pending reset (invalid credentials after reset)
       const checkAgain = await checkPendingReset(email);
-      if (checkAgain && pendingResetInfo.token) {
+      if (checkAgain) {
         toast({
           title: "Password Reset Required",
-          description: "Your password has been reset by an administrator. Please set a new password.",
+          description: "Your password has been reset by an administrator. Please use the reset link provided by your admin.",
         });
-        navigate(`/admin-password-reset?token=${pendingResetInfo.token}&email=${encodeURIComponent(email)}`);
         return;
       }
       
@@ -375,7 +373,7 @@ export default function Auth() {
                   value={email}
                   onChange={(e) => {
                     setEmail(e.target.value);
-                    setPendingResetInfo({ hasReset: false, token: null });
+                    setHasPendingResetState(false);
                   }}
                   onBlur={() => email && checkPendingReset(email)}
                   disabled={isLoading}
@@ -388,12 +386,12 @@ export default function Auth() {
                     Checking account status...
                   </p>
                 )}
-                {pendingResetInfo.hasReset && (
-                  <div className="flex items-start gap-2 p-3 bg-orange-500/10 rounded-lg border border-orange-500/20">
-                    <AlertCircle className="h-4 w-4 text-orange-600 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm text-orange-700 dark:text-orange-400">
+                {hasPendingResetState && (
+                  <div className="flex items-start gap-2 p-3 bg-warning/10 rounded-lg border border-warning/20">
+                    <AlertCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-warning">
                       <p className="font-medium">Password Reset Required</p>
-                      <p className="text-xs mt-0.5 opacity-80">Your administrator has reset your password. Click "Sign In" to set a new password.</p>
+                      <p className="text-xs mt-0.5 opacity-80">Your administrator has reset your password. Please use the reset link sent by your admin.</p>
                     </div>
                   </div>
                 )}

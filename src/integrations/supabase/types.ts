@@ -2014,10 +2014,7 @@ export type Database = {
       accrue_monthly_annual_leave: { Args: never; Returns: undefined }
       check_pending_password_reset: {
         Args: { email_to_check: string }
-        Returns: {
-          has_pending_reset: boolean
-          reset_token: string
-        }[]
+        Returns: boolean
       }
       cleanup_inactive_sessions: { Args: never; Returns: undefined }
       deduct_active_leave_balances: { Args: never; Returns: undefined }
