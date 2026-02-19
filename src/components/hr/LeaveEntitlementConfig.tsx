@@ -13,7 +13,7 @@ import {
   Edit, Trash2, Plus, ChevronRight, Info, Loader2,
   RefreshCw, CheckCircle2, AlertCircle
 } from 'lucide-react';
-import { useUsers } from '@/hooks/useUsers';
+import { useEmployees } from '@/hooks/useEmployees';
 import { useEmployeeLeaveEntitlements, EntitlementUpsert } from '@/hooks/useEmployeeLeaveEntitlements';
 import { useCompanyPolicies } from '@/hooks/useCompanyPolicies';
 import { cn } from '@/lib/utils';
@@ -56,7 +56,7 @@ const DEFAULT_DAYS = {
 };
 
 export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigProps) {
-  const { users, loading: usersLoading } = useUsers();
+  const { employees, loading: employeesLoading } = useEmployees();
   const { entitlements, isLoading, upsertEntitlement, deleteEntitlement, getEntitlementForUser } = useEmployeeLeaveEntitlements();
   const { policies } = useCompanyPolicies();
   const { toast } = useToast();
@@ -75,15 +75,19 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
   const globalAnnual = policies?.find(p => p.policy_key === 'default_annual_days')?.policy_value || '18';
   const globalAccrual = policies?.find(p => p.policy_key === 'monthly_accrual_days')?.policy_value || '1.5';
 
-  const filteredUsers = useMemo(() => {
-    return users
-      .filter(u => {
+  // Only show employees that have a linked_user_id (needed for leave entitlements)
+  const linkedEmployees = useMemo(() => employees.filter(e => !!e.linked_user_id), [employees]);
+
+  const filteredEmployees = useMemo(() => {
+    return linkedEmployees
+      .filter(emp => {
         const q = search.toLowerCase();
         const matchSearch = !q ||
-          u.full_name?.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q) ||
-          u.department_name?.toLowerCase().includes(q);
-        const hasCustom = !!getEntitlementForUser(u.id);
+          emp.full_name?.toLowerCase().includes(q) ||
+          emp.email?.toLowerCase().includes(q) ||
+          emp.department_name?.toLowerCase().includes(q) ||
+          emp.employee_number?.toLowerCase().includes(q);
+        const hasCustom = !!getEntitlementForUser(emp.linked_user_id!);
         const matchFilter =
           filter === 'all' ||
           (filter === 'custom' && hasCustom) ||
@@ -91,10 +95,10 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
         return matchSearch && matchFilter;
       })
       .sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
-  }, [users, search, filter, entitlements]);
+  }, [linkedEmployees, search, filter, entitlements]);
 
-  const openEdit = (userId: string) => {
-    const existing = getEntitlementForUser(userId);
+  const openEdit = (linkedUserId: string) => {
+    const existing = getEntitlementForUser(linkedUserId);
     setForm({
       annual_days:      String(existing?.annual_days      ?? globalAnnual),
       sick_days:        String(existing?.sick_days        ?? 10),
@@ -105,7 +109,7 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
       unpaid_days:      String(existing?.unpaid_days      ?? 30),
       notes:            existing?.notes ?? '',
     });
-    setEditingUserId(userId);
+    setEditingUserId(linkedUserId);
   };
 
   const handleSave = async () => {
@@ -142,7 +146,7 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
     }
   };
 
-  const editingUser = editingUserId ? users.find(u => u.id === editingUserId) : null;
+  const editingEmployee = editingUserId ? linkedEmployees.find(e => e.linked_user_id === editingUserId) : null;
   const editingEntitlement = editingUserId ? getEntitlementForUser(editingUserId) : null;
   const previewAccrual = editingUserId ? (parseFloat(form.annual_days) / 12).toFixed(3) : '0';
 
@@ -177,7 +181,7 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">Total Employees</p>
-          <p className="text-2xl font-bold mt-1">{users.length}</p>
+          <p className="text-2xl font-bold mt-1">{linkedEmployees.length}</p>
         </Card>
         <Card className="p-4">
           <p className="text-xs text-muted-foreground">Custom Entitlements</p>
@@ -224,7 +228,7 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
                 filter === f ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {f === 'custom' ? `Custom (${customCount})` : f === 'default' ? `Using Global (${users.length - customCount})` : 'All'}
+              {f === 'custom' ? `Custom (${customCount})` : f === 'default' ? `Using Global (${linkedEmployees.length - customCount})` : 'All'}
             </button>
           ))}
         </div>
@@ -234,44 +238,46 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
       <Card>
         <CardContent className="p-0">
           <ScrollArea className="max-h-[600px]">
-            {usersLoading || isLoading ? (
+            {employeesLoading || isLoading ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredUsers.length === 0 ? (
+            ) : filteredEmployees.length === 0 ? (
               <div className="text-center py-16 text-muted-foreground">
                 <Users className="h-10 w-10 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">No employees found</p>
+                <p className="text-sm">No linked employees found</p>
+                <p className="text-xs mt-1">Employees must be linked to a user account in the Employee Hub</p>
               </div>
             ) : (
               <div className="divide-y">
-                {filteredUsers.map(user => {
-                  const entitlement = getEntitlementForUser(user.id);
+                {filteredEmployees.map(emp => {
+                  const entitlement = getEntitlementForUser(emp.linked_user_id!);
                   const hasCustom = !!entitlement;
                   const annualDays = entitlement?.annual_days ?? parseFloat(globalAnnual);
                   const monthlyAccrual = entitlement?.monthly_accrual ?? parseFloat(globalAccrual);
 
                   return (
                     <div
-                      key={user.id}
+                      key={emp.id}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors"
                     >
                       <Avatar className="h-9 w-9 shrink-0">
                         <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
-                          {(user.full_name || user.email).slice(0, 2).toUpperCase()}
+                          {(emp.full_name || emp.email || '').slice(0, 2).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium truncate">{user.full_name || user.email}</span>
+                          <span className="text-sm font-medium truncate">{emp.full_name}</span>
+                          <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">{emp.employee_number}</Badge>
                           {hasCustom ? (
                             <Badge className="text-[10px] px-1.5 bg-primary/10 text-primary border-primary/20">Custom</Badge>
                           ) : (
                             <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">Global Default</Badge>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground truncate">{user.department_name || user.email}</p>
+                        <p className="text-xs text-muted-foreground truncate">{emp.department_name || emp.email}</p>
                       </div>
 
                       {/* Leave summary chips */}
@@ -301,7 +307,7 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
                           size="sm"
                           variant="ghost"
                           className="h-8 w-8 p-0"
-                          onClick={() => openEdit(user.id)}
+                          onClick={() => openEdit(emp.linked_user_id!)}
                         >
                           <Edit className="h-3.5 w-3.5" />
                         </Button>
@@ -310,7 +316,7 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
                             size="sm"
                             variant="ghost"
                             className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
-                            onClick={() => deleteEntitlement.mutate(user.id)}
+                            onClick={() => deleteEntitlement.mutate(emp.linked_user_id!)}
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
@@ -335,16 +341,16 @@ export function LeaveEntitlementConfig({ departmentId }: LeaveEntitlementConfigP
             </DialogTitle>
           </DialogHeader>
 
-          {editingUser && (
+          {editingEmployee && (
             <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/40 mb-2">
               <Avatar className="h-9 w-9">
                 <AvatarFallback className="text-xs bg-primary/10 text-primary font-semibold">
-                  {(editingUser.full_name || editingUser.email).slice(0, 2).toUpperCase()}
+                  {(editingEmployee.full_name || editingEmployee.email || '').slice(0, 2).toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div>
-                <p className="text-sm font-medium">{editingUser.full_name || editingUser.email}</p>
-                <p className="text-xs text-muted-foreground">{editingUser.department_name || editingUser.email}</p>
+                <p className="text-sm font-medium">{editingEmployee.full_name} <span className="text-muted-foreground font-normal">({editingEmployee.employee_number})</span></p>
+                <p className="text-xs text-muted-foreground">{editingEmployee.department_name || editingEmployee.email}</p>
               </div>
             </div>
           )}
