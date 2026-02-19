@@ -1,0 +1,1 @@
+UPDATE public.departments SET is_hr_only = true WHERE code = 'WH';
