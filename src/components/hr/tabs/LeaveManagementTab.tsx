@@ -14,7 +14,7 @@ import {
   CheckCircle2, XCircle, AlertCircle, Filter, RefreshCw,
   ChevronLeft, ChevronRight, Plus, Eye, MoreHorizontal,
   CalendarDays, LayoutGrid, List, Download, ArrowUpRight,
-  Wallet, Timer, Calculator, Table2, Edit, Loader2
+  Wallet, Timer, Calculator, Table2, Edit, Loader2, Settings2
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveType, LeaveStatus } from '@/hooks/useLeaveRequests';
 import { useAllLeaveBalances } from '@/hooks/useAllLeaveBalances';
@@ -24,6 +24,7 @@ import { LeaveRequestDetailDialog } from '../LeaveRequestDetailDialog';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCompanyPolicies } from '@/hooks/useCompanyPolicies';
+import { LeaveEntitlementConfig } from '../LeaveEntitlementConfig';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -682,7 +683,7 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
 }
 
 export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
-  const [activeView, setActiveView] = useState<'requests' | 'calendar' | 'balances' | 'calculator'>('requests');
+  const [activeView, setActiveView] = useState<'requests' | 'calendar' | 'balances' | 'calculator' | 'entitlements'>('requests');
   const [statusFilter, setStatusFilter] = useState<string>('pending');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -884,6 +885,14 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
                   <Calculator className="h-4 w-4 mr-2" />
                   Calculator
                 </Button>
+                <Button
+                  variant={activeView === 'entitlements' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setActiveView('entitlements')}
+                >
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Entitlements
+                </Button>
               </div>
               
               <Button variant="outline" size="sm" onClick={() => refetch()}>
@@ -924,6 +933,8 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
           canEditBalances={canEditBalances}
           policyValues={policyValues}
         />
+      ) : activeView === 'entitlements' ? (
+        <LeaveEntitlementConfig departmentId={departmentId} />
       ) : (
         <LeaveDateCalculator />
       )}
