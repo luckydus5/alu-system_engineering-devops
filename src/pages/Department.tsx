@@ -73,9 +73,9 @@ export default function Department() {
             <ShieldAlert className="h-12 w-12 mx-auto text-destructive mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">Access Denied</h3>
             <p className="text-muted-foreground mb-6">
-              You don't have permission to access the {department.name} department.
+              You are not assigned to the <strong>{department.name}</strong> department.
               <br />
-              Contact your super admin if you need access.
+              Please contact your System Admin or IT to request access.
             </p>
             <Button variant="outline" onClick={() => navigate('/')}>Return to Dashboard</Button>
           </CardContent>
