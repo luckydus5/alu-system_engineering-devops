@@ -388,18 +388,31 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
                                   <TableCell className="text-xs text-muted-foreground font-mono">
                                     {emp.employee_number}
                                   </TableCell>
-                                  <TableCell className="text-center w-24">
-                                    <Badge
-                                      variant="outline"
-                                      className={cn(
-                                        "text-[10px] px-2",
-                                        isOff
-                                          ? "border-chart-4/30 text-chart-4 bg-chart-4/10"
-                                          : "border-primary/30 text-primary bg-primary/10"
-                                      )}
+                                  <TableCell className="text-center w-28" onClick={(e) => e.stopPropagation()}>
+                                    <Select
+                                      value={isOff ? 'off' : 'on'}
+                                      onValueChange={(val) => {
+                                        const shouldBeOff = val === 'off';
+                                        if (shouldBeOff !== isOff) handleToggle(emp.id);
+                                      }}
                                     >
-                                      {isOff ? 'Off Duty' : 'On Duty'}
-                                    </Badge>
+                                      <SelectTrigger className={cn(
+                                        "h-7 text-[11px] font-semibold border px-2 rounded-full w-[90px]",
+                                        isOff
+                                          ? "border-chart-4/40 text-chart-4 bg-chart-4/10 hover:bg-chart-4/20"
+                                          : "border-primary/40 text-primary bg-primary/10 hover:bg-primary/20"
+                                      )}>
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent className="z-50 bg-popover border shadow-lg">
+                                        <SelectItem value="on" className="text-xs">
+                                          <span className="text-primary font-medium">On Duty</span>
+                                        </SelectItem>
+                                        <SelectItem value="off" className="text-xs">
+                                          <span className="text-chart-4 font-medium">Off Duty</span>
+                                        </SelectItem>
+                                      </SelectContent>
+                                    </Select>
                                   </TableCell>
                                 </TableRow>
                               );
