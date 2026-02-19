@@ -53,7 +53,7 @@ function getExcelNotation(dayDate: Date, record?: any): { label: string; color: 
   }
   if (isSaturday(dayDate)) {
     if (record && (record.status === 'present' || record.status === 'late' || record.status === 'remote')) {
-      return { label: 'OT', color: 'text-orange-700', bg: 'bg-orange-100 dark:bg-orange-900/30' };
+      return { label: '½', color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-900/20' };
     }
     return { label: '½', color: 'text-blue-700', bg: 'bg-blue-50 dark:bg-blue-900/20' };
   }
@@ -303,8 +303,11 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
     let present = 0, absent = 0, ot = 0;
     days.forEach(day => {
       const rec = getRecordForDay(userId, day);
-      if (isSunday(day) || isSaturday(day)) {
+      if (isSunday(day)) {
         if (rec && (rec.status === 'present' || rec.status === 'late' || rec.status === 'remote')) ot++;
+      } else if (isSaturday(day)) {
+        // Saturday always counts as ½ — never OT
+        if (rec && (rec.status === 'present' || rec.status === 'late' || rec.status === 'remote')) present += 0.5;
       } else {
         if (rec && rec.status !== 'absent' && rec.status !== 'on_leave') present++;
         else absent++;
