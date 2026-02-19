@@ -869,9 +869,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           // Apply business rules from policy engine
           const processed = processAttendanceRecord(earliestIn, latestOut, policyValues);
 
-          // Determine department: matched user's department > classification > fallback
-          let resolvedDeptId = matchedUser?.department_id || classification.departmentId;
-          if (!resolvedDeptId) resolvedDeptId = departmentId;
+          // Determine department: matched user's department > classification > leave unresolved (do NOT default to HR)
+          let resolvedDeptId = matchedUser?.department_id || classification.departmentId || null;
 
           parsed.push({
             name, date: dateStr, dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
@@ -952,8 +951,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const clockOutDate = clockOutISO ? new Date(clockOutISO) : null;
           const processed = processAttendanceRecord(clockInDate, clockOutDate, policyValues);
 
-          let resolvedDeptId = matchedUser?.department_id || classification.departmentId;
-          if (!resolvedDeptId) resolvedDeptId = departmentId;
+          // Determine department: matched user's department > classification > leave unresolved (do NOT default to HR)
+          let resolvedDeptId = matchedUser?.department_id || classification.departmentId || null;
 
           parsed.push({
             name, date: format(parsedDate, 'yyyy-MM-dd'), dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
@@ -1046,7 +1045,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       for (const emp of toAdd) {
         // Find a department for this employee from their classified data
         const previewRow = uploadPreview?.find(r => r.name === emp.name);
-        const deptId = previewRow?.departmentId || departmentId;
+        // Use classified department — do NOT default to HR even if unresolved
+        const deptId = previewRow?.departmentId || null;
         
         const { error } = await supabase.from('employees').insert({
           full_name: emp.name,
