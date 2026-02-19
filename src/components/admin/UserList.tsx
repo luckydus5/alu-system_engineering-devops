@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useUsers, UserWithRole } from '@/hooks/useUsers';
 import { useDepartments } from '@/hooks/useDepartments';
+import { usePositions } from '@/hooks/usePositions';
 import { AppRole } from '@/hooks/useUserRole';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useLeaveApprovers } from '@/hooks/useLeaveApprovers';
+import { supabase } from '@/integrations/supabase/client';
 import { SYSTEM_POSITIONS, POSITION_LABELS, POSITION_COLORS } from '@/lib/systemPositions';
 import {
   Table,
@@ -38,7 +40,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Label } from '@/components/ui/label';
-import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2, KeyRound } from 'lucide-react';
+import { Pencil, Trash2, Users, Loader2, RefreshCw, Building2, KeyRound, Briefcase } from 'lucide-react';
 import { DepartmentAccessDialog } from './DepartmentAccessDialog';
 import { SetPasswordDialog } from './SetPasswordDialog';
 
@@ -68,6 +70,7 @@ interface UserListProps {
 export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListProps) {
   const { users, loading, refetch, updateUser, deleteUser } = useUsers();
   const { departments } = useDepartments();
+  const { positions, activePositions } = usePositions();
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const { approvers } = useLeaveApprovers();
@@ -76,17 +79,14 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
   const approverMap = new Map(approvers.map(a => [a.user_id, a.approver_role]));
 
   // Filter users based on admin's department access
-  // Admins can only see users in their department, and cannot see super_admins
-  const filteredUsers = adminDepartmentId 
+  const filteredUsers = adminDepartmentId
     ? users.filter((u) => u.department_id === adminDepartmentId && u.role !== 'super_admin')
     : users;
 
   // Helper to check if current user (admin) can manage the target user
   const canManageUser = (user: UserWithRole): boolean => {
     if (isSuperAdmin) return true;
-    // Admins cannot manage super_admins or other admins
     if (user.role === 'super_admin' || user.role === 'admin') return false;
-    // Admins can only manage users in their department
     if (adminDepartmentId && user.department_id !== adminDepartmentId) return false;
     return true;
   };
@@ -100,17 +100,29 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
     role: 'staff' as AppRole,
     departmentId: '',
     systemPosition: '',
+    positionId: '',
   });
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleEditClick = (user: UserWithRole) => {
+  // Map of userId -> position name for display in table
+  const positionNameMap = new Map(positions.map(p => [p.id, p.name]));
+
+  const handleEditClick = async (user: UserWithRole) => {
+    // Fetch current position_id from profiles
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('position_id')
+      .eq('id', user.id)
+      .single();
+
     setEditingUser(user);
     setEditForm({
       fullName: user.full_name || '',
       role: user.role,
       departmentId: user.department_id || '',
       systemPosition: approverMap.get(user.id) || '',
+      positionId: profile?.position_id || '',
     });
   };
 
@@ -118,6 +130,13 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
     if (!editingUser) return;
 
     setIsUpdating(true);
+
+    // Update position_id on profile directly (not through edge function)
+    await supabase
+      .from('profiles')
+      .update({ position_id: editForm.positionId || null })
+      .eq('id', editingUser.id);
+
     const { error } = await updateUser(editingUser.id, {
       fullName: editForm.fullName,
       role: editForm.role,
@@ -185,7 +204,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
               {adminDepartmentId ? 'Department Users' : 'All Users'} ({filteredUsers.length})
             </CardTitle>
             <CardDescription>
-              Manage user accounts, roles, and department assignments
+              Manage user accounts, roles, department assignments and job positions
             </CardDescription>
           </div>
           <Button variant="outline" size="sm" onClick={refetch}>
@@ -201,7 +220,8 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Position</TableHead>
+                  <TableHead>Job Position</TableHead>
+                  <TableHead>System Position</TableHead>
                   <TableHead>Department</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -209,7 +229,7 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
               <TableBody>
                 {filteredUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                       No users found in {adminDepartmentId ? 'your department' : 'the system'}
                     </TableCell>
                   </TableRow>
@@ -224,6 +244,10 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                         <Badge className={roleColors[user.role]}>
                           {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {/* Job position from positions table — shown as job title */}
+                        <span className="text-xs text-muted-foreground">—</span>
                       </TableCell>
                       <TableCell>
                         {approverMap.has(user.id) ? (
@@ -296,11 +320,11 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
 
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={() => setEditingUser(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-[520px]">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>
-              Update user information, role, and department assignment.
+              Update user information, role, department assignment, and job position.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -332,6 +356,8 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Department — super admins can assign any department */}
             <div className="space-y-2">
               <Label htmlFor="edit-department">Department</Label>
               <Select
@@ -343,23 +369,56 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {isSuperAdmin && <SelectItem value="none">No department</SelectItem>}
-                  {(isSuperAdmin ? departments : departments.filter(d => d.id === adminDepartmentId)).map((dept) => (
+                  <SelectItem value="none">No department</SelectItem>
+                  {(isSuperAdmin
+                    ? departments
+                    : departments.filter(d => d.id === adminDepartmentId)
+                  ).map((dept) => (
                     <SelectItem key={dept.id} value={dept.id}>
                       {dept.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {!isSuperAdmin && (
+              {!isSuperAdmin && adminDepartmentId && (
                 <p className="text-xs text-muted-foreground">
                   You can only manage users in your assigned department.
                 </p>
               )}
             </div>
+
+            {/* Job Position — assign from positions table */}
+            <div className="space-y-2">
+              <Label htmlFor="edit-position" className="flex items-center gap-1.5">
+                <Briefcase className="h-3.5 w-3.5" />
+                Job Position
+              </Label>
+              <Select
+                value={editForm.positionId || 'none'}
+                onValueChange={(value) => setEditForm((prev) => ({ ...prev, positionId: value === 'none' ? '' : value }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="No position assigned" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No position assigned</SelectItem>
+                  {activePositions.map((pos) => (
+                    <SelectItem key={pos.id} value={pos.id}>
+                      {pos.name}
+                      {pos.department?.name ? ` · ${pos.department.name}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Job title/position from the Positions list. Manage positions in HR → Positions tab.
+              </p>
+            </div>
+
+            {/* System Position — only for super admins (leave workflow roles) */}
             {isSuperAdmin && (
               <div className="space-y-2">
-                <Label htmlFor="edit-position">System Position</Label>
+                <Label htmlFor="edit-syspos">System Position</Label>
                 <Select
                   value={editForm.systemPosition || 'none'}
                   onValueChange={(value) => setEditForm((prev) => ({ ...prev, systemPosition: value === 'none' ? '' : value }))}
@@ -387,7 +446,12 @@ export function UserList({ adminDepartmentId, isSuperAdmin = false }: UserListPr
               Cancel
             </Button>
             <Button onClick={handleUpdateUser} disabled={isUpdating}>
-              {isUpdating ? 'Saving...' : 'Save Changes'}
+              {isUpdating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : 'Save Changes'}
             </Button>
           </DialogFooter>
         </DialogContent>
