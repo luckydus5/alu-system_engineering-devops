@@ -344,6 +344,57 @@ export type Database = {
           },
         ]
       }
+      employee_leave_entitlements: {
+        Row: {
+          annual_days: number
+          bereavement_days: number
+          created_at: string
+          created_by: string | null
+          id: string
+          maternity_days: number
+          monthly_accrual: number | null
+          notes: string | null
+          paternity_days: number
+          personal_days: number
+          sick_days: number
+          unpaid_days: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          annual_days?: number
+          bereavement_days?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          maternity_days?: number
+          monthly_accrual?: number | null
+          notes?: string | null
+          paternity_days?: number
+          personal_days?: number
+          sick_days?: number
+          unpaid_days?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          annual_days?: number
+          bereavement_days?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          maternity_days?: number
+          monthly_accrual?: number | null
+          notes?: string | null
+          paternity_days?: number
+          personal_days?: number
+          sick_days?: number
+          unpaid_days?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       employees: {
         Row: {
           address: string | null
