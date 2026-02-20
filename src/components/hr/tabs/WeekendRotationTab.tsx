@@ -13,7 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   CalendarDays, Users, ChevronLeft, ChevronRight, 
   Shield, UserCheck, AlertCircle, CheckSquare, XSquare,
-  Download, Globe, Building2, Eye, FileSpreadsheet
+  Download, Globe, Building2, Eye, FileSpreadsheet, History
 } from 'lucide-react';
 import { useEmployees } from '@/hooks/useEmployees';
 import { usePositions } from '@/hooks/usePositions';
@@ -21,8 +21,10 @@ import { useDepartments } from '@/hooks/useDepartments';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useWeekendSchedules } from '@/hooks/useWeekendSchedules';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getWeek } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addWeeks, subWeeks, getWeek, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 import { exportWeekendSchedule } from '@/lib/weekendExcelExport';
 
@@ -39,7 +41,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
   const [currentWeek, setCurrentWeek] = useState(new Date());
   const [filterCompany, setFilterCompany] = useState<string>('all');
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
-  const [view, setView] = useState<'assign' | 'on-duty' | 'off-duty'>('assign');
+  const [view, setView] = useState<'assign' | 'on-duty' | 'off-duty' | 'history'>('assign');
   const [showExportPreview, setShowExportPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -293,7 +295,7 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
 
       {/* Tabbed Views */}
       <Tabs value={view} onValueChange={(v) => setView(v as any)}>
-        <TabsList className="grid w-full grid-cols-3 max-w-md">
+        <TabsList className="grid w-full grid-cols-4 max-w-lg">
           <TabsTrigger value="assign" className="text-xs gap-1.5">
             <CheckSquare className="h-3.5 w-3.5" />
             Assign
@@ -305,6 +307,10 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
           <TabsTrigger value="off-duty" className="text-xs gap-1.5">
             <XSquare className="h-3.5 w-3.5" />
             Off Duty ({offDutyEmployees.length})
+          </TabsTrigger>
+          <TabsTrigger value="history" className="text-xs gap-1.5">
+            <History className="h-3.5 w-3.5" />
+            History
           </TabsTrigger>
         </TabsList>
 
@@ -446,6 +452,16 @@ export function WeekendRotationTab({ departmentId }: WeekendRotationTabProps) {
             status="off-duty"
             getDeptName={getDeptName}
             getCompanyName={getCompanyName}
+            getInitials={getInitials}
+          />
+        </TabsContent>
+
+        {/* History Tab */}
+        <TabsContent value="history">
+          <WeekendHistoryView
+            employees={employees}
+            departments={departments}
+            companies={companies}
             getInitials={getInitials}
           />
         </TabsContent>
@@ -659,5 +675,154 @@ function EmployeeStatusList({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function WeekendHistoryView({
+  employees,
+  departments,
+  companies,
+  getInitials,
+}: {
+  employees: any[];
+  departments: any[];
+  companies: any[];
+  getInitials: (name: string) => string;
+}) {
+  const { data: historyWeeks = [], isLoading } = useQuery({
+    queryKey: ['weekend-schedule-history'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('weekend_schedules')
+        .select('*')
+        .order('week_start_date', { ascending: false })
+        .limit(500);
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const groupedByWeek = useMemo(() => {
+    const groups: Record<string, typeof historyWeeks> = {};
+    historyWeeks.forEach(s => {
+      if (!groups[s.week_start_date]) groups[s.week_start_date] = [];
+      groups[s.week_start_date].push(s);
+    });
+    return Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  }, [historyWeeks]);
+
+  const getEmpName = (id: string) => employees.find(e => e.id === id)?.full_name || 'Unknown';
+  const getEmpNumber = (id: string) => employees.find(e => e.id === id)?.employee_number || '—';
+  const getDeptName = (id: string) => {
+    const emp = employees.find(e => e.id === id);
+    return departments.find(d => d.id === emp?.department_id)?.name || 'Unassigned';
+  };
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center text-muted-foreground text-sm">
+          Loading history...
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (groupedByWeek.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <AlertCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+          <p className="text-sm text-muted-foreground">No weekend schedule history found</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {groupedByWeek.map(([weekDate, records]) => {
+        const ws = parseISO(weekDate);
+        const we = endOfWeek(ws, { weekStartsOn: 1 });
+        const weekNum = getWeek(ws, { weekStartsOn: 1 });
+        const offDuty = records.filter(r => r.is_off_duty);
+        const onDuty = records.filter(r => !r.is_off_duty);
+
+        return (
+          <Card key={weekDate}>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  Week {weekNum} — {format(ws, 'MMM d')} – {format(we, 'MMM d, yyyy')}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-[10px] border-primary/30 text-primary bg-primary/10">
+                    {onDuty.length} On Duty
+                  </Badge>
+                  <Badge variant="outline" className="text-[10px] border-chart-4/30 text-chart-4 bg-chart-4/10">
+                    {offDuty.length} Off Duty
+                  </Badge>
+                </div>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs w-10">#</TableHead>
+                    <TableHead className="text-xs">Employee</TableHead>
+                    <TableHead className="text-xs">Emp No.</TableHead>
+                    <TableHead className="text-xs">Department</TableHead>
+                    <TableHead className="text-xs text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {records
+                    .sort((a, b) => {
+                      if (a.is_off_duty !== b.is_off_duty) return a.is_off_duty ? 1 : -1;
+                      return getEmpName(a.employee_id).localeCompare(getEmpName(b.employee_id));
+                    })
+                    .map((rec, idx) => (
+                      <TableRow key={rec.id}>
+                        <TableCell className="text-xs text-muted-foreground font-mono">{idx + 1}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className={cn(
+                                "text-[9px] font-semibold",
+                                rec.is_off_duty ? "bg-chart-4/20 text-chart-4" : "bg-primary/15 text-primary"
+                              )}>
+                                {getInitials(getEmpName(rec.employee_id))}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm">{getEmpName(rec.employee_id)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">
+                          {getEmpNumber(rec.employee_id)}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {getDeptName(rec.employee_id)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge variant="outline" className={cn(
+                            "text-[10px]",
+                            rec.is_off_duty
+                              ? "border-chart-4/30 text-chart-4 bg-chart-4/10"
+                              : "border-primary/30 text-primary bg-primary/10"
+                          )}>
+                            {rec.is_off_duty ? 'Off Duty' : 'On Duty'}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
   );
 }
