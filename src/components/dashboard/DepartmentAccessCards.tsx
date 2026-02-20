@@ -85,7 +85,7 @@ export function DepartmentAccessCards() {
   const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
   
   // Only show these specific departments on the dashboard
-  const visibleDeptCodes = ['HR', 'WAREHOUSE', 'WH', 'PEAT', 'IT'];
+  const visibleDeptCodes = ['HR', 'WH', 'WAREHOUSE', 'FLEET', 'IT'];
   
   // All accessible departments for the user, filtered to visible ones only
   const allUserDepts = hasFullAccess
