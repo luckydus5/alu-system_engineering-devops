@@ -2,6 +2,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useDepartments } from '@/hooks/useDepartments';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Link } from 'react-router-dom';
 import { 
   Building2, 
@@ -52,42 +53,24 @@ const departmentBgColors: Record<string, string> = {
   'WH': 'bg-indigo-500/10 border-indigo-500/20',
 };
 
-const departmentIconColors: Record<string, string> = {
-  'FIN': 'text-emerald-600 dark:text-emerald-400',
-  'SAF': 'text-amber-600 dark:text-amber-400',
-  'PEAT': 'text-blue-600 dark:text-blue-400',
-  'FLEET': 'text-violet-600 dark:text-violet-400',
-  'LOG': 'text-violet-600 dark:text-violet-400',
-  'HR': 'text-pink-600 dark:text-pink-400',
-  'OPS': 'text-cyan-600 dark:text-cyan-400',
-  'IT': 'text-blue-600 dark:text-blue-400',
-  'WAREHOUSE': 'text-indigo-600 dark:text-indigo-400',
-  'WH': 'text-indigo-600 dark:text-indigo-400',
-};
-
 export function DepartmentAccessCards() {
   const { departments, loading: deptLoading } = useDepartments();
   const { roles, grantedDepartmentIds, loading: roleLoading, highestRole } = useUserRole();
+  const isMobile = useIsMobile();
 
   const loading = deptLoading || roleLoading;
 
-  // Get primary department from user roles
   const primaryDeptId = roles[0]?.department_id;
   const primaryDept = departments.find(d => d.id === primaryDeptId);
 
-  // Get granted departments (excluding primary)
-  // Note: we still show granted depts even if is_hr_only, since they were explicitly granted
   const grantedDepts = departments.filter(
     d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId
   );
 
-  // Full access only for super_admin + director
   const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
   
-  // Only show these specific departments on the dashboard
   const visibleDeptCodes = ['HR', 'WH', 'WAREHOUSE', 'FLEET', 'IT'];
   
-  // All accessible departments for the user, filtered to visible ones only
   const allUserDepts = hasFullAccess
     ? departments
     : [primaryDept, ...grantedDepts].filter(Boolean) as typeof departments;
@@ -96,14 +79,14 @@ export function DepartmentAccessCards() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-3 md:space-y-4">
         <div className="flex items-center justify-between">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-6 w-24" />
+          <Skeleton className="h-7 md:h-8 w-40 md:w-48" />
+          <Skeleton className="h-5 md:h-6 w-20 md:w-24" />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
           {[1, 2, 3, 4].map((i) => (
-            <Skeleton key={i} className="h-44 w-full rounded-xl" />
+            <Skeleton key={i} className="h-36 md:h-44 w-full rounded-xl" />
           ))}
         </div>
       </div>
@@ -113,12 +96,12 @@ export function DepartmentAccessCards() {
   if (accessibleDepts.length === 0) {
     return (
       <Card className="shadow-corporate border-dashed">
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Building2 className="h-8 w-8 text-muted-foreground" />
+        <CardContent className="flex flex-col items-center justify-center py-10 md:py-12 px-4">
+          <div className="w-14 h-14 md:w-16 md:h-16 rounded-full bg-muted flex items-center justify-center mb-3 md:mb-4">
+            <Building2 className="h-7 w-7 md:h-8 md:w-8 text-muted-foreground" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">No Departments Assigned</h3>
-          <p className="text-muted-foreground text-center max-w-sm">
+          <h3 className="text-base md:text-lg font-semibold text-foreground mb-1.5 md:mb-2">No Departments Assigned</h3>
+          <p className="text-sm text-muted-foreground text-center max-w-sm">
             You don't have access to any departments yet. Contact your administrator to get access.
           </p>
         </CardContent>
@@ -127,28 +110,31 @@ export function DepartmentAccessCards() {
   }
 
   return (
-    <div className="space-y-6 rounded-2xl p-6 md:p-8 bg-card border border-border shadow-sm">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-premium">
-            <Building2 className="h-5 w-5 text-primary-foreground" />
+    <div className="space-y-4 md:space-y-6 rounded-2xl p-4 md:p-8 bg-card border border-border shadow-sm">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 md:gap-3 min-w-0">
+          <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-primary to-primary/80 flex items-center justify-center shadow-premium shrink-0">
+            <Building2 className="h-4 w-4 md:h-5 md:w-5 text-primary-foreground" />
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Your Departments</h2>
-            <p className="text-sm text-muted-foreground">
+          <div className="min-w-0">
+            <h2 className="text-lg md:text-xl font-bold text-foreground truncate">Your Departments</h2>
+            <p className="text-xs md:text-sm text-muted-foreground">
               {accessibleDepts.length} department{accessibleDepts.length !== 1 ? 's' : ''} available
             </p>
           </div>
         </div>
         {hasFullAccess && (
-          <Badge variant="secondary" className="bg-secondary/20 text-secondary-foreground border border-secondary/30">
+          <Badge variant="secondary" className="bg-secondary/20 text-secondary-foreground border border-secondary/30 shrink-0 text-[10px] md:text-xs">
             <Crown className="h-3 w-3 mr-1" />
-            Full Access
+            <span className="hidden sm:inline">Full Access</span>
+            <span className="sm:hidden">Full</span>
           </Badge>
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {/* Department Grid - 2 cols on mobile, scales up on larger screens */}
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
         {accessibleDepts.map((dept) => {
           const isPrimary = dept.id === primaryDeptId;
           const gradient = departmentGradients[dept.code] || 'from-primary to-primary/80';
@@ -159,7 +145,7 @@ export function DepartmentAccessCards() {
             <Link 
               key={dept.id} 
               to={`/department/${dept.code.toLowerCase()}`}
-              className="group"
+              className="group active:scale-[0.97] transition-transform"
             >
               <Card className={`
                 relative overflow-hidden transition-all duration-300 
@@ -172,51 +158,52 @@ export function DepartmentAccessCards() {
                 
                 {/* Primary badge */}
                 {isPrimary && (
-                  <div className="absolute top-3 right-3">
-                    <Badge className="bg-secondary text-secondary-foreground border-0 shadow-md">
-                      <Star className="h-3 w-3 mr-1 fill-current" />
-                      Primary
+                  <div className="absolute top-2 right-2 md:top-3 md:right-3">
+                    <Badge className="bg-secondary text-secondary-foreground border-0 shadow-md text-[9px] md:text-xs px-1.5 md:px-2 py-0.5">
+                      <Star className="h-2.5 w-2.5 md:h-3 md:w-3 mr-0.5 md:mr-1 fill-current" />
+                      {isMobile ? '★' : 'Primary'}
                     </Badge>
                   </div>
                 )}
 
-                <CardContent className="pt-6 pb-5">
+                <CardContent className="pt-4 pb-3 px-3 md:pt-6 md:pb-5 md:px-6">
                   <div className="flex flex-col h-full">
                     {/* Icon */}
                     <div className={`
-                      w-14 h-14 rounded-xl bg-gradient-to-br ${gradient} 
-                      flex items-center justify-center mb-4 shadow-lg
+                      w-11 h-11 md:w-14 md:h-14 rounded-lg md:rounded-xl bg-gradient-to-br ${gradient} 
+                      flex items-center justify-center mb-2.5 md:mb-4 shadow-lg
                       group-hover:scale-110 transition-transform duration-300
                     `}>
                       {iconUrl ? (
                         <img 
                           src={iconUrl} 
                           alt={dept.name} 
-                          className="w-10 h-10 object-contain"
+                          className="w-7 h-7 md:w-10 md:h-10 object-contain"
+                          loading="lazy"
                         />
                       ) : (
-                        <Building2 className="h-8 w-8 text-white" />
+                        <Building2 className="h-6 w-6 md:h-8 md:w-8 text-white" />
                       )}
                     </div>
 
                     {/* Department info */}
-                    <div className="flex-1">
-                      <h3 className="font-bold text-lg text-foreground mb-1 group-hover:text-primary transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-sm md:text-lg text-foreground mb-0.5 md:mb-1 group-hover:text-primary transition-colors truncate">
                         {dept.name}
                       </h3>
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {dept.description || `Access ${dept.name} department resources and reports`}
+                      <p className="text-[11px] md:text-sm text-muted-foreground line-clamp-2 leading-snug">
+                        {dept.description || `Access ${dept.name} resources`}
                       </p>
                     </div>
 
                     {/* Action hint */}
-                    <div className="flex items-center justify-between mt-4 pt-3 border-t border-border/50">
-                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    <div className="flex items-center justify-between mt-2.5 md:mt-4 pt-2 md:pt-3 border-t border-border/50">
+                      <span className="text-[10px] md:text-xs font-medium text-muted-foreground uppercase tracking-wide">
                         {dept.code}
                       </span>
-                      <div className="flex items-center gap-1 text-sm font-medium text-primary opacity-0 group-hover:opacity-100 transition-opacity">
-                        View
-                        <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                      <div className="flex items-center gap-0.5 text-xs md:text-sm font-medium text-primary md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <span className="hidden md:inline">View</span>
+                        <ChevronRight className="h-3.5 w-3.5 md:h-4 md:w-4 md:group-hover:translate-x-1 transition-transform" />
                       </div>
                     </div>
                   </div>
