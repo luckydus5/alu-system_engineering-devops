@@ -85,13 +85,10 @@ export function DepartmentAccessCards() {
   const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
   
   // All accessible departments for the user
-  // For full-access users, filter out HR-only classification departments (pure labels, not real depts)
-  const operationalDepts = departments.filter(d => !d.is_hr_only);
-  
+  // For full-access users (super_admin, director), show ALL departments including HR-only ones
   // For regular users, always show their primary dept + granted depts regardless of is_hr_only
-  // (a user assigned to Warehouse must see Warehouse even if it's flagged is_hr_only)
   const accessibleDepts = hasFullAccess
-    ? operationalDepts
+    ? departments
     : [primaryDept, ...grantedDepts].filter(Boolean) as typeof departments;
 
   if (loading) {
