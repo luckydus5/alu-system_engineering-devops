@@ -84,12 +84,15 @@ export function DepartmentAccessCards() {
   // Full access only for super_admin + director
   const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
   
-  // All accessible departments for the user
-  // For full-access users (super_admin, director), show ALL departments including HR-only ones
-  // For regular users, always show their primary dept + granted depts regardless of is_hr_only
-  const accessibleDepts = hasFullAccess
+  // Only show these specific departments on the dashboard
+  const visibleDeptCodes = ['HR', 'WAREHOUSE', 'WH', 'PEAT', 'IT'];
+  
+  // All accessible departments for the user, filtered to visible ones only
+  const allUserDepts = hasFullAccess
     ? departments
     : [primaryDept, ...grantedDepts].filter(Boolean) as typeof departments;
+  
+  const accessibleDepts = allUserDepts.filter(d => visibleDeptCodes.includes(d.code));
 
   if (loading) {
     return (
