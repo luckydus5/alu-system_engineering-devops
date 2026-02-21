@@ -12,6 +12,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Loader2, Upload, X, Image as ImageIcon, AlertTriangle, Camera } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +29,11 @@ interface DuplicateItem {
   item_name: string;
   quantity: number;
   location: string | null;
+}
+
+interface AvailableLocation {
+  id: string;
+  name: string;
 }
 
 interface AddItemDialogProps {
@@ -36,11 +48,16 @@ interface AddItemDialogProps {
     description?: string;
     unit?: string;
     image_url?: string | null;
+    selected_location_id?: string;
   }) => Promise<boolean>;
   departmentId: string;
+  /** If user is already inside a folder, this will be set */
+  currentLocationId?: string;
+  /** Available folders in the current classification for the user to pick */
+  availableLocations?: AvailableLocation[];
 }
 
-export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: AddItemDialogProps) {
+export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId, currentLocationId, availableLocations }: AddItemDialogProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -54,6 +71,7 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
     unit: 'pcs',
   });
   
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -61,6 +79,9 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
   const [duplicates, setDuplicates] = useState<DuplicateItem[]>([]);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
+
+  // Whether user needs to pick a location (at classification root with folders available)
+  const needsLocationPicker = !currentLocationId && availableLocations && availableLocations.length > 0;
 
   // Check for duplicates when item_name changes
   useEffect(() => {
@@ -97,7 +118,6 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Check file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         toast({
           title: 'File too large',
@@ -161,6 +181,16 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.item_name.trim()) return;
+
+    // Validate location selection if needed
+    if (needsLocationPicker && !selectedLocationId) {
+      toast({
+        title: 'Select a Folder',
+        description: 'Please select which folder to add this item to',
+        variant: 'destructive',
+      });
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -173,40 +203,36 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
 
     const success = await onSubmit({
       ...formData,
-      item_number: formData.item_number.trim() || '', // Empty string will trigger auto-generation
+      item_number: formData.item_number.trim() || '',
       image_url: imageUrl,
+      selected_location_id: selectedLocationId || undefined,
     });
 
     if (success) {
-      // Reset form
-      setFormData({
-        item_number: '',
-        item_name: '',
-        quantity: 0,
-        min_quantity: 0,
-        location: '',
-        description: '',
-        unit: 'pcs',
-      });
-      removeImage();
+      resetForm();
       onOpenChange(false);
     }
     
     setIsSubmitting(false);
   };
 
+  const resetForm = () => {
+    setFormData({
+      item_number: '',
+      item_name: '',
+      quantity: 0,
+      min_quantity: 0,
+      location: '',
+      description: '',
+      unit: 'pcs',
+    });
+    setSelectedLocationId('');
+    removeImage();
+  };
+
   const handleClose = () => {
     if (!isSubmitting) {
-      setFormData({
-        item_number: '',
-        item_name: '',
-        quantity: 0,
-        min_quantity: 0,
-        location: '',
-        description: '',
-        unit: 'pcs',
-      });
-      removeImage();
+      resetForm();
       onOpenChange(false);
     }
   };
@@ -223,6 +249,28 @@ export function AddItemDialog({ open, onOpenChange, onSubmit, departmentId }: Ad
         
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
+            {/* Location Picker - shown when at classification root with folders */}
+            {needsLocationPicker && (
+              <div className="space-y-2">
+                <Label htmlFor="location_select">Folder / Location *</Label>
+                <Select value={selectedLocationId} onValueChange={setSelectedLocationId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a folder for this item" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableLocations!.map((loc) => (
+                      <SelectItem key={loc.id} value={loc.id}>
+                        {loc.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Choose which folder this item belongs to
+                </p>
+              </div>
+            )}
+
             {/* Image Upload */}
             <div className="space-y-2">
               <Label>Item Photo</Label>
