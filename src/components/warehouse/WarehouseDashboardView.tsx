@@ -547,11 +547,17 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
   const handleAddItem = async (data: any) => {
     if (!navState.classification) return false;
     
+    // Use the selected_location_id from the dialog if provided (when user picks from dropdown)
+    // Otherwise use the current folder context
+    const locationId = data.selected_location_id || navState.currentLocation?.id || null;
+    
+    const { selected_location_id, ...itemData } = data;
+    
     return await createItem({
-      ...data,
+      ...itemData,
       department_id: department.id,
       classification_id: navState.classification.id,
-      location_id: navState.currentLocation?.id || null,
+      location_id: locationId,
     });
   };
 
@@ -1350,6 +1356,8 @@ export function WarehouseDashboardView({ department, canManage }: WarehouseDashb
         onOpenChange={setItemDialogOpen}
         onSubmit={handleAddItem}
         departmentId={department.id}
+        currentLocationId={navState.currentLocation?.id}
+        availableLocations={locations.map(l => ({ id: l.id, name: l.name }))}
       />
 
       {/* Edit Item Dialog */}
