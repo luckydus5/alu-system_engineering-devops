@@ -54,9 +54,13 @@ export function TopNavbar() {
   const accessibleDeptIds = new Set(
     [primaryDeptId, ...grantedDepartmentIds].filter(Boolean) as string[]
   );
+  // Admins see their assigned departments + always see whitelisted operational departments
+  const whitelistedCodes = ['HR', 'WH', 'WAREHOUSE', 'FLEET', 'IT', 'OPS'];
   const navDepartments = isSuperAdmin || isDirector
     ? departments
-    : departments.filter((d) => accessibleDeptIds.has(d.id));
+    : isAdmin
+      ? departments.filter((d) => accessibleDeptIds.has(d.id) || whitelistedCodes.includes(d.code))
+      : departments.filter((d) => accessibleDeptIds.has(d.id));
 
   const mainNavItems = [
     { title: 'Dashboard', url: '/', icon: LayoutDashboard },
