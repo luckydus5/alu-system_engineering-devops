@@ -67,7 +67,7 @@ export function DepartmentAccessCards() {
     d => grantedDepartmentIds.includes(d.id) && d.id !== primaryDeptId
   );
 
-  const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
+  const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director' || highestRole === 'admin';
   
   const visibleDeptCodes = ['HR', 'WH', 'FLEET', 'IT', 'OPS'];
   
