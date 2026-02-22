@@ -69,7 +69,7 @@ export function DepartmentAccessCards() {
 
   const hasFullAccess = highestRole === 'super_admin' || highestRole === 'director';
   
-  const visibleDeptCodes = ['HR', 'WH', 'FLEET', 'IT', 'OPS'];
+  const visibleDeptCodes = ['HR', 'WH', 'WAREHOUSE', 'FLEET', 'IT', 'OPS'];
   
   const allUserDepts = hasFullAccess
     ? departments
