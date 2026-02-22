@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   LayoutDashboard, Users, Calendar, Clock,
   BarChart3, CalendarDays,
-  Home, ChevronRight, Globe, ChevronDown
+  Home, ChevronRight, Globe, ChevronDown, Warehouse
 } from 'lucide-react';
 import { useLeaveRequests } from '@/hooks/useLeaveRequests';
 import { useUsers } from '@/hooks/useUsers';
@@ -212,13 +212,24 @@ export function HRCommandCenter({ departmentId, departmentName, canManage }: HRC
           </div>
 
           {/* Title */}
-          <div className="pt-3 pb-5">
-            <h1 className="text-2xl md:text-4xl font-bold tracking-tight">
-              Human Resources
-            </h1>
-            <p className="text-primary-foreground/60 text-xs md:text-sm mt-1">
-              Manage your workforce across {companies.length || 1} {companies.length > 1 ? 'companies' : 'company'}
-            </p>
+          <div className="pt-3 pb-5 flex items-end justify-between">
+            <div>
+              <h1 className="text-2xl md:text-4xl font-bold tracking-tight">
+                Human Resources
+              </h1>
+              <p className="text-primary-foreground/60 text-xs md:text-sm mt-1">
+                Manage your workforce across {companies.length || 1} {companies.length > 1 ? 'companies' : 'company'}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-primary-foreground/20 text-primary-foreground bg-primary-foreground/10 hover:bg-primary-foreground/20 gap-2"
+              onClick={() => navigate('/department/wh')}
+            >
+              <Warehouse className="h-4 w-4" />
+              <span className="hidden sm:inline">Warehouse</span>
+            </Button>
           </div>
         </div>
       </div>
