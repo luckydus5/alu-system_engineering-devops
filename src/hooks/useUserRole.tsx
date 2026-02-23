@@ -49,7 +49,7 @@ export const clearUserRoleCache = () => {
 };
 
 export function useUserRole() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [roles, setRoles] = useState<UserRole[]>(() => 
     isCacheValid(user?.id) ? globalUserRoleCache!.roles : []
   );
@@ -75,7 +75,11 @@ export function useUserRole() {
       setProfile(null);
       setHighestRole('staff');
       setGrantedDepartmentIds([]);
-      setLoading(false);
+      // Only set loading false if auth has finished loading - prevents
+      // brief empty state while auth is still resolving the session
+      if (!authLoading) {
+        setLoading(false);
+      }
       return;
     }
 
@@ -158,7 +162,7 @@ export function useUserRole() {
       setLoading(false);
       fetchInProgress.current = false;
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     // Only fetch if user changed or no cached data
