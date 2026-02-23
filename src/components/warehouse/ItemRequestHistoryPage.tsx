@@ -82,7 +82,24 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { highestRole } = useUserRole();
-  const { requests, loading, refetch, deleteRequest } = useItemRequests(department.id);
+  
+  // Year/Month filter - default to current month (declared early for server-side filtering)
+  const currentYear = getYear(new Date());
+  const currentMonthIndex = getMonth(new Date());
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(currentMonthIndex);
+  
+  // Get the selected month as a Date object
+  const selectedMonth = setMonth(setYear(new Date(), selectedYear), selectedMonthIndex);
+  
+  // Compute date range for server-side filtering
+  const dateRange = useMemo(() => ({
+    start: startOfMonth(selectedMonth).toISOString(),
+    end: endOfMonth(selectedMonth).toISOString(),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [selectedYear, selectedMonthIndex]);
+  
+  const { requests, loading, refetch, deleteRequest } = useItemRequests(department.id, dateRange);
   const { items, refetch: refetchInventory } = useInventory(department.id);
   const { classifications } = useWarehouseClassifications(department.id);
   const { departments } = useDepartments();
@@ -99,13 +116,6 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   const [requestToDelete, setRequestToDelete] = useState<ItemRequest | null>(null);
   const [deleting, setDeleting] = useState(false);
   
-  // Year/Month filter - default to current month
-  const currentYear = getYear(new Date());
-  const currentMonthIndex = getMonth(new Date());
-  
-  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
-  const [selectedMonthIndex, setSelectedMonthIndex] = useState<number>(currentMonthIndex);
-  
   // Export dialog state
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   
@@ -121,9 +131,6 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
   
   // Get maximum selectable month for the selected year
   const maxSelectableMonth = selectedYear === currentYear ? currentMonthIndex : 11;
-  
-  // Get the selected month as a Date object
-  const selectedMonth = setMonth(setYear(new Date(), selectedYear), selectedMonthIndex);
   
   // Get month label
   const monthLabel = format(selectedMonth, 'MMMM yyyy');
@@ -193,17 +200,9 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
 
   const hasActiveFilters = dateFrom || dateTo || requesterFilter || approverFilter;
 
-  // Filter requests based on selected month, search and filters
+  // Filter requests - month filtering is now done server-side
   const filteredRequests = useMemo(() => {
     let filtered = requests;
-    
-    // FIRST: Filter by selected month (primary filter)
-    const monthStart = startOfMonth(selectedMonth);
-    const monthEnd = endOfMonth(selectedMonth);
-    filtered = filtered.filter(r => {
-      const requestDate = new Date(r.created_at);
-      return isWithinInterval(requestDate, { start: monthStart, end: monthEnd });
-    });
 
     // Search filter
     if (searchQuery.trim()) {
@@ -246,7 +245,7 @@ export function ItemRequestHistoryPage({ department, canManage, onBack }: ItemRe
     }
 
     return filtered;
-  }, [requests, selectedMonth, searchQuery, dateFrom, dateTo, requesterFilter, approverFilter]);
+  }, [requests, searchQuery, dateFrom, dateTo, requesterFilter, approverFilter]);
 
   // Calculate stats based on selected month's filtered data
   const stats = useMemo(() => {
