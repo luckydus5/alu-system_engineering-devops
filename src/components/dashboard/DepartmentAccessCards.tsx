@@ -11,6 +11,7 @@ import {
   Crown,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/useAuth';
 
 // Icons8 Fluency style icon URLs
 const departmentIconUrls: Record<string, string> = {
@@ -58,7 +59,9 @@ export function DepartmentAccessCards() {
   const { roles, grantedDepartmentIds, loading: roleLoading, highestRole } = useUserRole();
   const isMobile = useIsMobile();
 
-  const loading = deptLoading || roleLoading;
+  // Also guard against auth still initializing - prevents empty flash
+  const { loading: authLoading } = useAuth();
+  const loading = deptLoading || roleLoading || authLoading;
 
   const primaryDeptId = roles[0]?.department_id;
   const primaryDept = departments.find(d => d.id === primaryDeptId);
