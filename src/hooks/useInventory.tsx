@@ -150,28 +150,45 @@ export function useInventory(departmentId: string | undefined) {
         setLoading(true);
       }
 
-      // Fetch all items - with pagination to handle large datasets
-      let allData: InventoryItem[] = [];
-      let page = 0;
-      const pageSize = 1000;
-      let hasMore = true;
+      // Fetch all items in parallel batches for speed
+      // First get the count to know how many pages we need
+      const { count, error: countError } = await supabase
+        .from('inventory_items')
+        .select('*', { count: 'exact', head: true })
+        .eq('department_id', departmentId);
 
-      while (hasMore) {
+      if (countError) throw countError;
+
+      const totalCount = count || 0;
+      const pageSize = 1000;
+      let allData: InventoryItem[] = [];
+
+      if (totalCount <= pageSize) {
+        // Single query for small datasets
         const { data, error } = await supabase
           .from('inventory_items')
           .select('*')
           .eq('department_id', departmentId)
           .order('updated_at', { ascending: false })
-          .range(page * pageSize, (page + 1) * pageSize - 1);
-
+          .limit(pageSize);
         if (error) throw error;
+        allData = (data || []) as InventoryItem[];
+      } else {
+        // Parallel fetch all pages at once
+        const totalPages = Math.ceil(totalCount / pageSize);
+        const pagePromises = Array.from({ length: totalPages }, (_, page) =>
+          supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('department_id', departmentId)
+            .order('updated_at', { ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1)
+        );
 
-        if (data && data.length > 0) {
-          allData = [...allData, ...data];
-          page++;
-          hasMore = data.length === pageSize;
-        } else {
-          hasMore = false;
+        const results = await Promise.all(pagePromises);
+        for (const result of results) {
+          if (result.error) throw result.error;
+          if (result.data) allData.push(...(result.data as InventoryItem[]));
         }
       }
 
