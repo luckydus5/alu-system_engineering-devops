@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { 
   Clock, Users, CalendarIcon, RefreshCw,
   TrendingUp, AlertCircle, CheckCircle2,
-  ChevronLeft, ChevronRight, BarChart3,
+  ChevronLeft, ChevronRight, BarChart3, Search,
   Table2, Upload, FileSpreadsheet, X, Loader2,
   UserCheck, UserX, Timer, Award, Sun, Moon
 } from 'lucide-react';
@@ -30,7 +30,7 @@ import { isPublicHoliday, getMonthExpectedHours, getRwandanHolidays, countWorkin
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
-
+import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 
 interface AttendanceTrackingTabProps {
   departmentId: string;
@@ -46,95 +46,193 @@ const STATUS_CONFIG: Record<AttendanceStatus, { color: string; bgColor: string; 
 };
 
 function getExcelNotation(dayDate: Date, record?: any): { label: string; color: string; bg: string } {
-  // Bold Excel-style colors: green=ON, red=OFF, yellow=½, blue=OT, gray=—
   if (isSunday(dayDate)) {
     if (record && (record.status === 'present' || record.status === 'late' || record.status === 'remote')) {
-      return { label: 'OT', color: 'text-white font-bold', bg: 'bg-blue-500 dark:bg-blue-600' };
+      return { label: 'OT', color: 'text-orange-700', bg: 'bg-orange-100 dark:bg-orange-900/30' };
     }
-    return { label: '—', color: 'text-gray-700 dark:text-gray-300', bg: 'bg-gray-300 dark:bg-gray-600' };
+    return { label: '—', color: 'text-muted-foreground', bg: 'bg-slate-100 dark:bg-slate-800' };
   }
   if (isSaturday(dayDate)) {
-    // Saturday always shows ½ in yellow (matching Excel)
-    return { label: '½', color: 'text-gray-800 dark:text-gray-900 font-bold', bg: 'bg-yellow-300 dark:bg-yellow-500' };
+    if (record && (record.status === 'present' || record.status === 'late' || record.status === 'remote')) {
+      return { label: '½', color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-900/20' };
+    }
+    return { label: '½', color: 'text-blue-700', bg: 'bg-blue-50 dark:bg-blue-900/20' };
   }
   if (!record || record.status === 'absent') {
-    return { label: 'OFF', color: 'text-white font-bold', bg: 'bg-red-600 dark:bg-red-600' };
+    return { label: 'OFF', color: 'text-red-600', bg: 'bg-red-50 dark:bg-red-900/20' };
   }
   if (record.status === 'on_leave') {
-    return { label: 'OFF', color: 'text-white font-bold', bg: 'bg-red-600 dark:bg-red-600' };
+    return { label: 'OFF', color: 'text-violet-600', bg: 'bg-violet-50 dark:bg-violet-900/20' };
   }
   if (record.status === 'half_day') {
-    return { label: '½', color: 'text-gray-800 dark:text-gray-900 font-bold', bg: 'bg-yellow-300 dark:bg-yellow-500' };
+    return { label: '½', color: 'text-blue-700', bg: 'bg-blue-50 dark:bg-blue-900/20' };
   }
-  return { label: 'ON', color: 'text-white font-bold', bg: 'bg-green-500 dark:bg-green-600' };
+  return { label: 'ON', color: 'text-emerald-700', bg: 'bg-emerald-50 dark:bg-emerald-900/20' };
 }
 
 const DAY_ABBREV = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/* ─── KPI Summary Cards (view‑aware) ─── */
-function AttendanceKPICards({ records, users, employees, selectedMonth, selectedYear, activeView }: {
-  records: any[]; users: any[]; employees: any[]; selectedMonth: Date; selectedYear: number; activeView: string;
-}) {
+/* ─── KPI Summary Cards ─── */
+function AttendanceKPICards({ records, users, employees, selectedMonth }: { records: any[]; users: any[]; employees: any[]; selectedMonth: Date }) {
   const stats = useMemo(() => {
-    let filtered: any[];
-    if (activeView === 'annual') {
-      filtered = records.filter(r => {
-        const d = new Date(r.date || r.attendance_date);
-        return d.getFullYear() === selectedYear;
-      });
-    } else {
-      // monthly / calculator
-      const monthStart = startOfMonth(selectedMonth);
-      const monthEnd = endOfMonth(selectedMonth);
-      filtered = records.filter(r => {
-        const d = new Date(r.date || r.attendance_date);
-        return d >= monthStart && d <= monthEnd;
-      });
-    }
+    const monthStart = startOfMonth(selectedMonth);
+    const monthEnd = endOfMonth(selectedMonth);
+    const monthRecords = records.filter(r => {
+      const d = new Date(r.date || r.attendance_date);
+      return d >= monthStart && d <= monthEnd;
+    });
 
-    const present = filtered.filter(r => r.status === 'present' || r.status === 'remote').length;
-    const late = filtered.filter(r => r.status === 'late').length;
-    const absent = filtered.filter(r => r.status === 'absent').length;
-    const onLeave = filtered.filter(r => r.status === 'on_leave').length;
-    const total = filtered.length || 1;
+    const present = monthRecords.filter(r => r.status === 'present' || r.status === 'remote').length;
+    const late = monthRecords.filter(r => r.status === 'late').length;
+    const absent = monthRecords.filter(r => r.status === 'absent').length;
+    const onLeave = monthRecords.filter(r => r.status === 'on_leave').length;
+    const total = monthRecords.length || 1;
     const attendanceRate = Math.round(((present + late) / total) * 100);
+
+    // Use employees count as primary, fall back to auth users if no employees
     const totalEmployees = employees.length > 0 ? employees.length : users.length;
 
-    return { present, late, absent, onLeave, attendanceRate, totalEmployees, totalRecords: filtered.length };
-  }, [records, users, employees, selectedMonth, selectedYear, activeView]);
-
-  const periodLabel = activeView === 'annual' ? `Year ${selectedYear}` : format(selectedMonth, 'MMM yyyy');
+    return { present, late, absent, onLeave, attendanceRate, totalEmployees, totalRecords: monthRecords.length };
+  }, [records, users, employees, selectedMonth]);
 
   const cards = [
-    { title: 'Employees', value: stats.totalEmployees, icon: Users, color: 'bg-primary', iconColor: 'text-primary-foreground' },
-    { title: 'Present', value: stats.present, icon: UserCheck, color: 'bg-emerald-500', iconColor: 'text-white' },
-    { title: 'Late', value: stats.late, icon: Timer, color: 'bg-amber-500', iconColor: 'text-white' },
-    { title: 'Absent', value: stats.absent, icon: UserX, color: 'bg-red-500', iconColor: 'text-white' },
-    { title: 'On Leave', value: stats.onLeave, icon: CalendarIcon, color: 'bg-blue-500', iconColor: 'text-white' },
-    { title: 'Rate', value: `${stats.attendanceRate}%`, icon: Award, color: 'bg-violet-500', iconColor: 'text-white' },
+    { title: 'Total Employees', value: stats.totalEmployees, icon: Users, color: 'bg-primary', iconColor: 'text-primary-foreground' },
+    { title: 'Present', value: stats.present, icon: UserCheck, color: 'bg-success', iconColor: 'text-success-foreground' },
+    { title: 'Late Arrivals', value: stats.late, icon: Timer, color: 'bg-warning', iconColor: 'text-warning-foreground' },
+    { title: 'Absent', value: stats.absent, icon: UserX, color: 'bg-destructive', iconColor: 'text-destructive-foreground' },
+    { title: 'On Leave', value: stats.onLeave, icon: CalendarIcon, color: 'bg-info', iconColor: 'text-info-foreground' },
+    { title: 'Attendance Rate', value: `${stats.attendanceRate}%`, icon: Award, color: 'bg-chart-5', iconColor: 'text-white' },
   ];
 
   return (
-    <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
       {cards.map((card) => (
-        <div key={card.title} className="flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm">
-          <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", card.color)}>
-            <card.icon className={cn("h-4 w-4", card.iconColor)} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[10px] text-muted-foreground truncate">{card.title}</p>
-            <p className="text-sm font-bold leading-tight">{card.value}</p>
-          </div>
-        </div>
+        <Card key={card.title} className="shadow-corporate hover:shadow-corporate-lg transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">{card.title}</p>
+                <p className="text-2xl font-bold mt-1">{card.value}</p>
+              </div>
+              <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center", card.color)}>
+                <card.icon className={cn("h-5 w-5", card.iconColor)} />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       ))}
     </div>
   );
 }
 
+/* ─── Attendance Charts Row ─── */
+function AttendanceCharts({ records, selectedMonth }: { records: any[]; selectedMonth: Date }) {
+  const { pieData, barData } = useMemo(() => {
+    const monthStart = startOfMonth(selectedMonth);
+    const monthEnd = endOfMonth(selectedMonth);
+    const monthRecords = records.filter(r => {
+      const d = new Date(r.date || r.attendance_date);
+      return d >= monthStart && d <= monthEnd;
+    });
+
+    const present = monthRecords.filter(r => r.status === 'present' || r.status === 'remote').length;
+    const late = monthRecords.filter(r => r.status === 'late').length;
+    const absent = monthRecords.filter(r => r.status === 'absent').length;
+    const onLeave = monthRecords.filter(r => r.status === 'on_leave').length;
+
+    const pie = [
+      { name: 'Present', value: present, color: 'hsl(160, 70%, 40%)' },
+      { name: 'Late', value: late, color: 'hsl(40, 85%, 55%)' },
+      { name: 'Absent', value: absent, color: 'hsl(0, 72%, 51%)' },
+      { name: 'On Leave', value: onLeave, color: 'hsl(280, 65%, 55%)' },
+    ].filter(d => d.value > 0);
+
+    // Weekly breakdown
+    const weeks: Record<string, { present: number; late: number; absent: number }> = {};
+    monthRecords.forEach(r => {
+      const d = new Date(r.date || r.attendance_date);
+      const weekNum = `Week ${Math.ceil(d.getDate() / 7)}`;
+      if (!weeks[weekNum]) weeks[weekNum] = { present: 0, late: 0, absent: 0 };
+      if (r.status === 'present' || r.status === 'remote') weeks[weekNum].present++;
+      else if (r.status === 'late') weeks[weekNum].late++;
+      else if (r.status === 'absent') weeks[weekNum].absent++;
+    });
+
+    const bar = Object.entries(weeks).map(([week, data]) => ({ week, ...data }));
+
+    return { pieData: pie, barData: bar };
+  }, [records, selectedMonth]);
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {/* Pie Chart */}
+      <Card className="shadow-corporate">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-primary" />
+            Attendance Distribution
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center gap-6">
+            <div className="h-[160px] w-[160px] flex-shrink-0">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} dataKey="value" strokeWidth={2} stroke="hsl(var(--card))">
+                    {pieData.map((entry, i) => (
+                      <Cell key={i} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2.5 flex-1">
+              {pieData.map((item) => (
+                <div key={item.name} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: item.color }} />
+                    <span className="text-muted-foreground">{item.name}</span>
+                  </div>
+                  <span className="font-bold">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bar Chart */}
+      <Card className="shadow-corporate">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-info" />
+            Weekly Breakdown
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-[180px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={barData} barSize={16}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="week" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} axisLine={false} tickLine={false} />
+                <Tooltip contentStyle={{ borderRadius: '8px', border: '1px solid hsl(var(--border))', fontSize: '12px' }} />
+                <Bar dataKey="present" fill="hsl(160, 70%, 40%)" radius={[4, 4, 0, 0]} name="Present" />
+                <Bar dataKey="late" fill="hsl(40, 85%, 55%)" radius={[4, 4, 0, 0]} name="Late" />
+                <Bar dataKey="absent" fill="hsl(0, 72%, 51%)" radius={[4, 4, 0, 0]} name="Absent" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 /* ─── Monthly Grid ─── */
-function MonthlyGrid({ records, selectedMonth, users, employees, departments, searchTerm, filterDepartment, filterEmployee }: {
-  records: any[]; selectedMonth: Date; users: any[]; employees: any[]; departments: any[]; searchTerm: string; filterDepartment: string; filterEmployee: string;
+function MonthlyGrid({ records, selectedMonth, users, employees, departments, searchTerm, filterDepartment }: {
+  records: any[]; selectedMonth: Date; users: any[]; employees: any[]; departments: any[]; searchTerm: string; filterDepartment: string;
 }) {
   const daysInMonth = getDaysInMonth(selectedMonth);
   const year = getYear(selectedMonth);
@@ -181,8 +279,7 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
     let filtered = mergedUsers.filter(u => {
       const matchesSearch = !searchTerm || u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDept = filterDepartment === 'all' || u.department_id === filterDepartment;
-      const matchesEmployee = !filterEmployee || filterEmployee === 'all' || u.attendanceKey === filterEmployee || u.id === filterEmployee;
-      return matchesSearch && matchesDept && matchesEmployee;
+      return matchesSearch && matchesDept;
     });
     const grouped = new Map<string, typeof filtered>();
     filtered.forEach(u => {
@@ -192,7 +289,7 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
       grouped.set(deptName, list);
     });
     return grouped;
-  }, [mergedUsers, searchTerm, filterDepartment, filterEmployee, departments]);
+  }, [mergedUsers, searchTerm, filterDepartment, departments]);
 
   const getRecordForDay = (userId: string, day: Date) => {
     // Try both the employee id and attendanceKey
@@ -238,10 +335,7 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
     const total = present + (satDays * 0.5) + ot;
     // Expected hours: weekdays * 8 (from calendar)
     const { expectedHours: expHrs, weekdays } = getMonthExpectedHours(year, month);
-    // Deductions: Weekend Friday hours (4hrs per Fri) → converted to days (÷8)
-    const deductHrs = wkndFri * 4;
-    const netDays = total - (deductHrs / 8);
-    return { present, absent, ot, satDays, total, expHrs, wkndFri, deductHrs, netDays, holidaysWorked, weekdays };
+    return { present, absent, ot, satDays, total, expHrs, wkndFri, holidaysWorked, weekdays };
   };
 
   return (
@@ -253,83 +347,75 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
             {format(selectedMonth, 'MMMM yyyy')} — Staff Attendance
           </CardTitle>
           <div className="flex items-center gap-3 text-[10px] font-medium text-muted-foreground">
-            <span className="flex items-center gap-1"><span className="h-2.5 w-5 rounded-sm bg-green-500 inline-flex items-center justify-center text-[8px] text-white font-bold">ON</span> Present</span>
-            <span className="flex items-center gap-1"><span className="h-2.5 w-5 rounded-sm bg-red-600 inline-flex items-center justify-center text-[8px] text-white font-bold">OFF</span> Absent</span>
-            <span className="flex items-center gap-1"><span className="h-2.5 w-5 rounded-sm bg-yellow-300 inline-flex items-center justify-center text-[8px] text-gray-800 font-bold">½</span> Saturday</span>
-            <span className="flex items-center gap-1"><span className="h-2.5 w-5 rounded-sm bg-blue-500 inline-flex items-center justify-center text-[8px] text-white font-bold">OT</span> Sunday Work</span>
-            <span className="flex items-center gap-1"><span className="h-2.5 w-5 rounded-sm bg-gray-300 inline-flex items-center justify-center text-[8px] text-gray-700 font-bold">—</span> Rest Day</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-500 inline-block" /> ON</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-red-500 inline-block" /> OFF</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-blue-500 inline-block" /> ½ Day</span>
+            <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-orange-500 inline-block" /> OT</span>
           </div>
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto overflow-y-auto max-h-[75vh]">
-            <table className="text-[11px] border-collapse border border-slate-300 dark:border-slate-600" style={{ tableLayout: 'fixed' }}>
-              <thead className="sticky top-0 z-30">
-                <tr className="bg-blue-700 dark:bg-blue-800 text-white">
-                  <th className="sticky left-0 z-40 bg-blue-700 dark:bg-blue-800 px-1 py-1.5 text-center font-semibold border border-blue-600 dark:border-blue-900" style={{ width: 40, minWidth: 40 }}>#</th>
-                  <th className="sticky left-[40px] z-40 bg-blue-700 dark:bg-blue-800 px-2 py-1.5 text-left font-semibold border border-blue-600 dark:border-blue-900" style={{ width: 180, minWidth: 180 }}>Name</th>
-                  <th className="sticky left-[220px] z-40 bg-blue-700 dark:bg-blue-800 px-1 py-1.5 text-center font-semibold border border-blue-600 dark:border-blue-900" style={{ width: 100, minWidth: 100 }}>Dept</th>
+        <ScrollArea className="w-full">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs border-collapse min-w-[900px]">
+              <thead>
+                <tr className="bg-muted/40">
+                  <th className="sticky left-0 z-10 bg-muted/90 px-3 py-2.5 text-left font-semibold w-8 border-b border-r">#</th>
+                  <th className="sticky left-8 z-10 bg-muted/90 px-3 py-2.5 text-left font-semibold min-w-[160px] border-b border-r">Employee</th>
+                  <th className="px-2 py-2.5 text-center font-semibold w-16 border-b border-r">Dept</th>
                   {days.map((day, i) => {
                     const holiday = isPublicHoliday(day);
                     return (
                     <th key={i} className={cn(
-                      "text-center font-medium border border-blue-600 dark:border-blue-900",
-                      isSunday(day) && "bg-gray-500 text-white",
-                      isSaturday(day) && "bg-yellow-400 text-gray-900",
-                      !isSunday(day) && !isSaturday(day) && "bg-blue-700 dark:bg-blue-800 text-white",
-                      holiday && "bg-rose-600 text-white",
-                    )} style={{ width: 38, minWidth: 38, padding: '2px 0' }}>
-                      <div className="text-[8px] leading-none mb-0.5 opacity-80">{DAY_ABBREV[getDay(day)]}</div>
-                      <div className={cn("text-[11px] font-bold")}>{i + 1}</div>
-                      {holiday && <div className="text-[7px] leading-none mt-0.5" title={holiday.name}>🏛</div>}
+                      "px-0.5 py-1.5 text-center font-medium w-8 min-w-[28px] border-b",
+                      isSunday(day) && "bg-slate-200/60 dark:bg-slate-700/40",
+                      isSaturday(day) && "bg-blue-50/60 dark:bg-blue-900/20",
+                      holiday && "bg-rose-100/60 dark:bg-rose-900/30",
+                    )}>
+                      <div className="text-[9px] text-muted-foreground leading-none mb-0.5">{DAY_ABBREV[getDay(day)]}</div>
+                      <div className={cn("text-[11px]", holiday && "text-rose-600 font-bold")}>{i + 1}</div>
+                      {holiday && <div className="text-[7px] text-rose-500 leading-none mt-0.5" title={holiday.name}>🏛</div>}
                     </th>
                     );
                   })}
-                  <th className="text-center font-bold bg-green-600 text-white border border-green-700 text-[8px]" style={{ width: 50, minWidth: 50, padding: '2px 0' }}>Present</th>
-                  <th className="text-center font-bold bg-rose-500 text-white border border-rose-600 text-[8px]" style={{ width: 50, minWidth: 50, padding: '2px 0' }}>Absent</th>
-                  <th className="text-center font-bold bg-blue-500 text-white border border-blue-600 text-[9px]" style={{ width: 38, minWidth: 38, padding: '2px 0' }}>Sun</th>
-                  <th className="text-center font-bold bg-yellow-400 text-gray-900 border border-yellow-500" style={{ width: 38, minWidth: 38, padding: '2px 0' }}>Sat</th>
-                  <th className="text-center font-bold bg-violet-600 text-white border border-violet-700 text-[9px]" style={{ width: 42, minWidth: 42, padding: '2px 0' }}>Total</th>
-                  <th className="text-center font-bold bg-slate-500 text-white border border-slate-600 text-[9px]" style={{ width: 42, minWidth: 42, padding: '2px 0' }}>Exp<br/>Hrs</th>
-                  <th className="text-center font-bold bg-amber-500 text-white border border-amber-600 text-[9px]" style={{ width: 38, minWidth: 38, padding: '2px 0' }}>Wk<br/>Fri</th>
-                  <th className="text-center font-bold bg-pink-500 text-white border border-pink-600 text-[9px]" style={{ width: 42, minWidth: 42, padding: '2px 0' }}>Ded<br/>Hrs</th>
-                  <th className="text-center font-bold bg-cyan-600 text-white border border-cyan-700 text-[9px]" style={{ width: 42, minWidth: 42, padding: '2px 0' }}>Net<br/>Days</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-emerald-100/60 dark:bg-emerald-900/20 border-b border-l w-8">P</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-red-100/60 dark:bg-red-900/20 border-b w-8">A</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-orange-100/60 dark:bg-orange-900/20 border-b w-8">OT</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-blue-100/60 dark:bg-blue-900/20 border-b w-8">Sat</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-violet-100/60 dark:bg-violet-900/20 border-b w-10">Total</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-slate-100/60 dark:bg-slate-800/40 border-b w-12 text-[10px]">Exp<br/>Hrs</th>
                 </tr>
               </thead>
               <tbody>
                 {Array.from(employeeList.entries()).map(([deptName, deptUsers]) => (
                   <>
-                    <tr key={`dept-${deptName}`} className="bg-blue-50 dark:bg-blue-950">
-                      <td colSpan={daysInMonth + 12} className="sticky left-0 z-10 px-3 py-1.5 font-bold text-xs text-blue-800 dark:text-blue-200 border border-slate-300 dark:border-slate-600 bg-blue-50 dark:bg-blue-950">
-                        ► {deptName.toUpperCase()} ({deptUsers.length})
+                    <tr key={`dept-${deptName}`} className="bg-primary/5">
+                      <td colSpan={daysInMonth + 9} className="px-3 py-2 font-bold text-xs text-primary border-b">
+                        ► {deptName.toUpperCase()}
                       </td>
                     </tr>
                     {deptUsers.map((user, idx) => {
                       const stats = calculateMonthStats(user.attendanceKey);
-                      const rowBg = idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-800/50';
                       return (
-                        <tr key={user.id} className={cn(rowBg, "hover:bg-blue-50/50 dark:hover:bg-blue-950/30")}>
-                          <td className={cn("sticky left-0 z-10 px-1 py-1 text-center text-[10px] border border-slate-300 dark:border-slate-600 font-medium", rowBg)}>{idx + 1}</td>
-                          <td className={cn("sticky left-[40px] z-10 px-2 py-1 font-medium text-[11px] border border-slate-300 dark:border-slate-600 whitespace-nowrap overflow-hidden text-ellipsis", rowBg)} style={{ maxWidth: 180 }} title={user.full_name}>{user.full_name}</td>
-                          <td className={cn("sticky left-[220px] z-10 px-1 py-1 text-center text-[9px] border border-slate-300 dark:border-slate-600 text-muted-foreground", rowBg)}>{deptName.length > 10 ? deptName.substring(0, 10) + '…' : deptName}</td>
+                        <tr key={user.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
+                          <td className="sticky left-0 z-10 bg-card px-3 py-2 text-muted-foreground border-r text-center">{idx + 1}</td>
+                          <td className="sticky left-8 z-10 bg-card px-3 py-2 font-medium truncate max-w-[160px] border-r">{user.full_name}</td>
+                          <td className="px-2 py-2 text-center text-muted-foreground border-r text-[10px]">{deptName.substring(0, 8)}</td>
                           {days.map((day, i) => {
                             const record = getRecordForDay(user.attendanceKey, day);
                             const notation = getExcelNotation(day, record);
                             return (
-                              <td key={i} className={cn("text-center border border-slate-200 dark:border-slate-700", notation.bg)} style={{ padding: '2px 0' }}>
-                                <span className={cn("text-[10px]", notation.color)}>{notation.label}</span>
+                              <td key={i} className={cn("px-0 py-1.5 text-center", notation.bg)}>
+                                <span className={cn("text-[10px] font-bold", notation.color)}>{notation.label}</span>
                               </td>
                             );
                           })}
-                          <td className="px-1 py-1 text-center font-bold text-emerald-700 bg-green-50 dark:bg-green-900/20 border border-slate-300 dark:border-slate-600">{stats.present}</td>
-                          <td className="px-1 py-1 text-center font-bold text-red-700 bg-red-50 dark:bg-red-900/20 border border-slate-300 dark:border-slate-600">{stats.absent}</td>
-                          <td className="px-1 py-1 text-center font-bold text-blue-700 bg-blue-50 dark:bg-blue-900/20 border border-slate-300 dark:border-slate-600">{stats.ot}</td>
-                          <td className="px-1 py-1 text-center font-bold text-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 border border-slate-300 dark:border-slate-600">{stats.satDays}</td>
-                          <td className="px-1 py-1 text-center font-extrabold text-violet-700 bg-violet-50 dark:bg-violet-900/20 border border-slate-300 dark:border-slate-600">{stats.total % 1 === 0 ? stats.total : stats.total.toFixed(1)}</td>
-                          <td className="px-1 py-1 text-center font-medium text-slate-700 bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-[10px]">{stats.expHrs}</td>
-                          <td className="px-1 py-1 text-center font-medium text-amber-700 bg-amber-50 dark:bg-amber-900/20 border border-slate-300 dark:border-slate-600 text-[10px]">{stats.wkndFri}</td>
-                          <td className="px-1 py-1 text-center font-medium text-pink-700 bg-pink-50 dark:bg-pink-900/20 border border-slate-300 dark:border-slate-600 text-[10px]">{stats.deductHrs}</td>
-                          <td className="px-1 py-1 text-center font-extrabold text-cyan-700 bg-cyan-50 dark:bg-cyan-900/20 border border-slate-300 dark:border-slate-600">{stats.netDays % 1 === 0 ? stats.netDays : stats.netDays.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-center font-bold text-emerald-600 bg-emerald-50/50 dark:bg-emerald-900/20 border-l">{stats.present}</td>
+                          <td className="px-2 py-2 text-center font-bold text-red-600 bg-red-50/50 dark:bg-red-900/20">{stats.absent}</td>
+                          <td className="px-2 py-2 text-center font-bold text-orange-600 bg-orange-50/50 dark:bg-orange-900/20">{stats.ot}</td>
+                          <td className="px-2 py-2 text-center font-bold text-blue-600 bg-blue-50/50 dark:bg-blue-900/20">{stats.satDays}</td>
+                          <td className="px-2 py-2 text-center font-extrabold text-violet-700 bg-violet-50/50 dark:bg-violet-900/20">{stats.total % 1 === 0 ? stats.total : stats.total.toFixed(1)}</td>
+                          <td className="px-2 py-2 text-center font-medium text-slate-600 bg-slate-50/50 dark:bg-slate-800/30 text-[10px]">{stats.expHrs}</td>
                         </tr>
                       );
                     })}
@@ -337,18 +423,19 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
                 ))}
               </tbody>
             </table>
-        </div>
+          </div>
+        </ScrollArea>
       </CardContent>
     </Card>
   );
 }
 
 /* ─── Annual Summary ─── */
-function AnnualSummary({ records, users, employees, departments, searchTerm, filterDepartment, filterEmployee, selectedYear }: {
-  records: any[]; users: any[]; employees: any[]; departments: any[]; searchTerm: string; filterDepartment: string; filterEmployee: string; selectedYear: number;
+function AnnualSummary({ records, users, employees, departments, searchTerm, filterDepartment, selectedYear }: {
+  records: any[]; users: any[]; employees: any[]; departments: any[]; searchTerm: string; filterDepartment: string; selectedYear: number;
 }) {
   const userMonthData = useMemo(() => {
-    const map = new Map<string, Record<number, { present: number; absent: number; satDays: number; sunOT: number; total: number; wkndFri: number; holidaysWorked: number }>>();
+    const map = new Map<string, Record<number, { present: number; absent: number; satDays: number; sunOT: number; total: number }>>();
     records.forEach(r => {
       const date = new Date(r.date || r.attendance_date);
       if (date.getFullYear() !== selectedYear) return;
@@ -356,19 +443,15 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
       const userId = r.user_id;
       if (!map.has(userId)) map.set(userId, {});
       const userMap = map.get(userId)!;
-      if (!userMap[month]) userMap[month] = { present: 0, absent: 0, satDays: 0, sunOT: 0, total: 0, wkndFri: 0, holidaysWorked: 0 };
+      if (!userMap[month]) userMap[month] = { present: 0, absent: 0, satDays: 0, sunOT: 0, total: 0 };
       const mdata = userMap[month];
-      const holiday = isPublicHoliday(date);
       
       if (isSunday(date)) {
         if (r.status === 'present' || r.status === 'late' || r.status === 'remote') mdata.sunOT++;
       } else if (isSaturday(date)) {
         if (r.status === 'present' || r.status === 'late' || r.status === 'remote') mdata.satDays++;
       } else {
-        if (r.status !== 'absent' && r.status !== 'on_leave') {
-          mdata.present++;
-          if (holiday) mdata.holidaysWorked++;
-        }
+        if (r.status !== 'absent' && r.status !== 'on_leave') mdata.present++;
         else mdata.absent++;
       }
       // Recalculate total
@@ -395,8 +478,7 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
     const filtered = mergedUsers.filter(u => {
       const matchesSearch = !searchTerm || u.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDept = filterDepartment === 'all' || u.department_id === filterDepartment;
-      const matchesEmployee = !filterEmployee || filterEmployee === 'all' || u.attendanceKey === filterEmployee || u.id === filterEmployee;
-      return matchesSearch && matchesDept && matchesEmployee;
+      return matchesSearch && matchesDept;
     });
     const map = new Map<string, typeof filtered>();
     filtered.forEach(u => {
@@ -406,7 +488,7 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
       map.set(deptName, list);
     });
     return map;
-  }, [mergedUsers, searchTerm, filterDepartment, filterEmployee, departments]);
+  }, [mergedUsers, searchTerm, filterDepartment, departments]);
 
   return (
     <Card className="shadow-corporate overflow-hidden">
@@ -418,7 +500,7 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
               Staff Attendance Summary {selectedYear}
             </CardTitle>
             <CardDescription className="text-[10px] mt-1">
-              P=Present days (Mon-Fri) | A=Absent | Sundays=Sunday OT | Sat=Saturday half-days | Rate=P÷(P+A) | OT=Sat+Sun+Holidays
+              Legend: ON=Present | OFF=Absent | ½=Saturday | —=Sunday | OT=Sunday Work
             </CardDescription>
           </div>
           <CardDescription className="text-[10px]">Prepared: {format(new Date(), 'dd MMMM yyyy')}</CardDescription>
@@ -427,7 +509,7 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
       <CardContent className="p-0">
         <ScrollArea className="w-full">
           <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse min-w-[1800px]">
+            <table className="w-full text-xs border-collapse min-w-[1400px]">
               <thead>
                 <tr className="bg-muted/40">
                   <th className="sticky left-0 z-10 bg-muted/90 px-3 py-2.5 text-left font-semibold w-8 border-b border-r">#</th>
@@ -438,50 +520,34 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
                   ))}
                   <th className="px-2 py-2.5 text-center font-bold bg-emerald-100/60 dark:bg-emerald-900/20 border-b border-l text-[10px]">Present</th>
                   <th className="px-2 py-2.5 text-center font-bold bg-red-100/60 dark:bg-red-900/20 border-b text-[10px]">Absent</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-orange-100/60 dark:bg-orange-900/20 border-b text-[10px]">Sun<br/>days</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-slate-100/60 dark:bg-slate-800/20 border-b text-[10px]">Rate</th>
-                  <th className="px-1 py-2.5 border-b w-2"></th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-orange-100/60 dark:bg-orange-900/20 border-b text-[10px]">Sun<br/>OT</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-blue-100/60 dark:bg-blue-900/20 border-b text-[10px]">Sat<br/>Days</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-violet-100/60 dark:bg-violet-900/20 border-b text-[10px]">Total<br/>OT</th>
                   <th className="px-2 py-2.5 text-center font-bold bg-cyan-100/60 dark:bg-cyan-900/20 border-b text-[10px]">Yr Days<br/>Worked</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-red-50/60 dark:bg-red-900/10 border-b text-[10px]">Yr Days<br/>OFF</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-amber-100/60 dark:bg-amber-900/20 border-b text-[10px]">Yr Wknd<br/>Fri</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-pink-100/60 dark:bg-pink-900/20 border-b text-[10px]">Yr Deduct<br/>Days</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-blue-100/60 dark:bg-blue-900/20 border-b text-[10px]">Sat OT<br/>Days</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-orange-100/60 dark:bg-orange-900/20 border-b text-[10px]">Sun OT<br/>Days</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-violet-100/60 dark:bg-violet-900/20 border-b text-[10px]">Total OT<br/>Days</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-rose-100/60 dark:bg-rose-900/20 border-b text-[10px]">Holidays<br/>Worked</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-emerald-200/60 dark:bg-emerald-800/30 border-b text-[10px]">Grand<br/>Total OT</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-teal-100/60 dark:bg-teal-900/20 border-b text-[10px]">OT<br/>Taken</th>
-                  <th className="px-2 py-2.5 text-center font-bold bg-indigo-100/60 dark:bg-indigo-900/20 border-b text-[10px]">OT<br/>Balance</th>
+                  <th className="px-2 py-2.5 text-center font-bold bg-slate-100/60 dark:bg-slate-800/20 border-b text-[10px]">Rate</th>
                 </tr>
               </thead>
               <tbody>
                 {Array.from(grouped.entries()).map(([deptName, deptUsers]) => (
                   <>
                     <tr key={`dept-${deptName}`} className="bg-primary/5">
-                      <td colSpan={30} className="px-3 py-2 font-bold text-xs text-primary border-b">► {deptName.toUpperCase()}</td>
+                      <td colSpan={22} className="px-3 py-2 font-bold text-xs text-primary border-b">► {deptName.toUpperCase()}</td>
                     </tr>
                     {deptUsers.map((user, idx) => {
                       const monthData = userMonthData.get(user.attendanceKey) || {};
-                      let totalPresent = 0, totalAbsent = 0, totalSunOT = 0, totalSatDays = 0, totalWkndFri = 0, totalHolidaysWorked = 0;
+                      let totalPresent = 0, totalAbsent = 0, totalSunOT = 0, totalSatDays = 0;
                       const monthValues = MONTH_NAMES.map((_, i) => {
-                        const data = monthData[i] || { present: 0, absent: 0, satDays: 0, sunOT: 0, total: 0, wkndFri: 0, holidaysWorked: 0 };
+                        const data = monthData[i] || { present: 0, absent: 0, satDays: 0, sunOT: 0, total: 0 };
                         totalPresent += data.present;
                         totalAbsent += data.absent;
                         totalSunOT += data.sunOT;
                         totalSatDays += data.satDays;
-                        totalWkndFri += data.wkndFri;
-                        totalHolidaysWorked += data.holidaysWorked;
                         return data.total;
                       });
+                      const totalOT = totalSunOT + totalSatDays;
                       const yrDaysWorked = totalPresent + (totalSatDays * 0.5) + totalSunOT;
-                      const yrDaysOff = totalAbsent;
-                      const yrDeductDays = totalWkndFri * 0.5; // Wknd Fri × 4hrs ÷ 8hrs/day
-                      const totalOTDays = totalSatDays + totalSunOT;
-                      const grandTotalOT = totalOTDays + totalHolidaysWorked;
-                      const otTaken = 0; // Manually tracked
-                      const otBalance = grandTotalOT - otTaken;
                       const rate = (totalPresent + totalAbsent) > 0 
-                        ? (totalPresent / (totalPresent + totalAbsent)) 
+                        ? Math.round((totalPresent / (totalPresent + totalAbsent)) * 100) 
                         : 0;
                       return (
                         <tr key={user.id} className="border-b border-border/40 hover:bg-muted/20 transition-colors">
@@ -500,25 +566,13 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
                           <td className="px-2 py-2 text-center font-bold text-emerald-600 bg-emerald-50/50 dark:bg-emerald-900/20 border-l">{totalPresent}</td>
                           <td className="px-2 py-2 text-center font-bold text-red-600 bg-red-50/50 dark:bg-red-900/20">{totalAbsent}</td>
                           <td className="px-2 py-2 text-center font-bold text-orange-600 bg-orange-50/50 dark:bg-orange-900/20">{totalSunOT}</td>
+                          <td className="px-2 py-2 text-center font-bold text-blue-600 bg-blue-50/50 dark:bg-blue-900/20">{totalSatDays}</td>
+                          <td className="px-2 py-2 text-center font-bold text-violet-600 bg-violet-50/50 dark:bg-violet-900/20">{totalOT}</td>
+                          <td className="px-2 py-2 text-center font-extrabold text-cyan-700 bg-cyan-50/50 dark:bg-cyan-900/20">{yrDaysWorked % 1 === 0 ? yrDaysWorked : yrDaysWorked.toFixed(1)}</td>
                           <td className={cn(
                             "px-2 py-2 text-center font-bold bg-slate-50/50 dark:bg-slate-800/20",
-                            rate >= 0.85 ? "text-emerald-600" : rate >= 0.60 ? "text-amber-600" : "text-red-600"
-                          )}>{(rate * 100).toFixed(1)}%</td>
-                          <td className="px-1 py-2 border-b w-2"></td>
-                          <td className="px-2 py-2 text-center font-extrabold text-cyan-700 bg-cyan-50/50 dark:bg-cyan-900/20">{yrDaysWorked % 1 === 0 ? yrDaysWorked : yrDaysWorked.toFixed(1)}</td>
-                          <td className="px-2 py-2 text-center font-bold text-red-500 bg-red-50/30 dark:bg-red-900/10">{yrDaysOff}</td>
-                          <td className="px-2 py-2 text-center font-medium text-amber-600 bg-amber-50/50 dark:bg-amber-900/20">{totalWkndFri}</td>
-                          <td className="px-2 py-2 text-center font-medium text-pink-600 bg-pink-50/50 dark:bg-pink-900/20">{yrDeductDays % 1 === 0 ? yrDeductDays : yrDeductDays.toFixed(1)}</td>
-                          <td className="px-2 py-2 text-center font-bold text-blue-600 bg-blue-50/50 dark:bg-blue-900/20">{totalSatDays}</td>
-                          <td className="px-2 py-2 text-center font-bold text-orange-600 bg-orange-50/50 dark:bg-orange-900/20">{totalSunOT}</td>
-                          <td className="px-2 py-2 text-center font-bold text-violet-600 bg-violet-50/50 dark:bg-violet-900/20">{totalOTDays}</td>
-                          <td className="px-2 py-2 text-center font-bold text-rose-600 bg-rose-50/50 dark:bg-rose-900/20">{totalHolidaysWorked}</td>
-                          <td className="px-2 py-2 text-center font-extrabold text-emerald-700 bg-emerald-100/50 dark:bg-emerald-800/30">{grandTotalOT % 1 === 0 ? grandTotalOT : grandTotalOT.toFixed(1)}</td>
-                          <td className="px-2 py-2 text-center font-medium text-teal-600 bg-teal-50/50 dark:bg-teal-900/20">{otTaken}</td>
-                          <td className={cn(
-                            "px-2 py-2 text-center font-extrabold bg-indigo-50/50 dark:bg-indigo-900/20",
-                            otBalance > 0 ? "text-indigo-700" : otBalance < 0 ? "text-red-600" : "text-muted-foreground"
-                          )}>{otBalance % 1 === 0 ? otBalance : otBalance.toFixed(1)}</td>
+                            rate >= 85 ? "text-emerald-600" : rate >= 60 ? "text-amber-600" : "text-red-600"
+                          )}>{rate}%</td>
                         </tr>
                       );
                     })}
@@ -663,11 +717,9 @@ function QuickCalculator({ selectedYear }: { selectedYear: number }) {
 /* ─── Main Component ─── */
 export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabProps) {
   const [activeView, setActiveView] = useState<'monthly' | 'annual' | 'calculator'>('monthly');
-  const [showUpload, setShowUpload] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedYear] = useState(new Date().getFullYear());
   const [filterDepartment, setFilterDepartment] = useState<string>('all');
-  const [filterEmployee, setFilterEmployee] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadPreview, setUploadPreview] = useState<any[] | null>(null);
   const [classificationSummary, setClassificationSummary] = useState<ClassificationSummary | null>(null);
@@ -687,24 +739,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const { companies } = useCompanies();
   const { getPolicyValue } = useCompanyPolicies(null);
   const policyValues = useMemo(() => buildPolicyValues(getPolicyValue), [getPolicyValue]);
-
-  // Compute date range for the query based on active view
-  const dateRange = useMemo(() => {
-    if (activeView === 'annual') {
-      return { from: `${selectedYear}-01-01`, to: `${selectedYear}-12-31` };
-    }
-    // Monthly: use the selected month
-    const y = selectedMonth.getFullYear();
-    const m = selectedMonth.getMonth();
-    const firstDay = format(new Date(y, m, 1), 'yyyy-MM-dd');
-    const lastDay = format(new Date(y, m + 1, 0), 'yyyy-MM-dd');
-    return { from: firstDay, to: lastDay };
-  }, [activeView, selectedYear, selectedMonth]);
-
   const { records, isLoading, refetch, bulkImportAttendance } = useAttendance(
-    filterDepartment === 'all' ? undefined : filterDepartment,
-    undefined,
-    dateRange
+    filterDepartment === 'all' ? undefined : filterDepartment
   );
 
   // Build the multi-company classifier
@@ -818,169 +854,31 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const fallbackCo = selectedCompanyId && selectedCompanyId !== 'none' ? selectedCompanyId : undefined;
       const classifyDept = (excelDept: string) => classifier.classify(excelDept, fallbackCo);
 
-      // ═══════════════════════════════════════════════════════════════════════
-      // ADVANCED NAME MATCHING ENGINE (ported from import_attendance_v2.cjs)
-      // Handles: reversed names, concatenated names, spelling variations,
-      // truncated names, single-word names, and prevents false positives
-      // from common given names like Jean, Pierre, Emmanuel, Claude etc.
-      // ═══════════════════════════════════════════════════════════════════════
-
-      const normalizeName = (n: string) =>
-        n.toLowerCase().replace(/[._\-\/\\,;:()]+/g, ' ').replace(/\s+/g, ' ')
-         .replace(/\b(xxx|mr|mrs|ms|dr)\b/gi, '').trim();
-
-      // Levenshtein distance for fuzzy matching
-      const levenshtein = (a: string, b: string): number => {
-        const m = a.length, n = b.length;
-        if (m === 0) return n;
-        if (n === 0) return m;
-        const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-        for (let i = 0; i <= m; i++) dp[i][0] = i;
-        for (let j = 0; j <= n; j++) dp[0][j] = j;
-        for (let i = 1; i <= m; i++)
-          for (let j = 1; j <= n; j++)
-            dp[i][j] = a[i - 1] === b[j - 1] ? dp[i - 1][j - 1] : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
-        return dp[m][n];
-      };
-
-      // Common given names — should NOT match alone without a rare surname
-      const COMMON_GIVEN_NAMES = new Set([
-        'jean', 'pierre', 'emmanuel', 'claude', 'baptiste', 'marie', 'bosco',
-        'damascene', 'joseph', 'eric', 'vincent', 'francois', 'alphonse',
-        'alexandre', 'augustin', 'gaspard', 'alexis', 'janvier', 'celestin',
-        'innocent', 'dieudonne', 'andre', 'david', 'daniel', 'paul', 'john',
-        'peter', 'james', 'kumar', 'charles', 'aime', 'andrew', 'samuel',
-        'de', 'dieu', 'nepomuscene', 'nepo', 'jmv', 'francoise', 'venuste',
-        'simeon', 'anastase', 'marco',
-      ]);
-
-      const wordRarity = (w: string) => {
-        if (COMMON_GIVEN_NAMES.has(w)) return 0.3;
-        if (w.length <= 2) return 0.1;
-        if (w.length <= 3) return 0.5;
-        return 1.0;
-      };
-
-      const wordMatchScore = (a: string, b: string): number => {
-        if (a === b) return 100;
-        // Prefix match (truncation: "FABRI" ↔ "FABRICE")
-        if (a.length >= 3 && b.length >= 3) {
-          const minLen = Math.min(a.length, b.length);
-          if (a.startsWith(b.substring(0, minLen)) || b.startsWith(a.substring(0, minLen))) {
-            return Math.round((minLen / Math.max(a.length, b.length)) * 90);
-          }
-        }
-        // Levenshtein fuzzy
-        if (a.length >= 4 && b.length >= 4) {
-          const maxLen = Math.max(a.length, b.length);
-          const dist = levenshtein(a, b);
-          const threshold = maxLen <= 5 ? 1 : maxLen <= 8 ? 2 : 3;
-          if (dist <= threshold) return Math.round(((maxLen - dist) / maxLen) * 85);
-        }
-        return 0;
-      };
-
-      // Build known tokens from all employee names for concatenated-name splitting
-      const allTokens = new Set<string>();
-      employeeLookup.forEach(e => {
-        normalizeName(e.full_name || '').split(' ').filter((t: string) => t.length >= 3).forEach((t: string) => allTokens.add(t));
-      });
-      userLookup.forEach(u => {
-        normalizeName(u.full_name || '').split(' ').filter((t: string) => t.length >= 3).forEach((t: string) => allTokens.add(t));
-      });
-      const knownTokens = [...allTokens];
-
-      // Try to split concatenated tokens like "ishimwejpierre" → ["ishimwe", "pierre"]
-      const trySplitConcatenated = (token: string): string[] => {
-        if (token.length < 6) return [token];
-        for (const known of knownTokens) {
-          if (known.length < 3) continue;
-          if (token.startsWith(known) && token.length > known.length) {
-            const remainder = token.substring(known.length);
-            if (remainder.length >= 2) {
-              const rMatch = knownTokens.find(k => k === remainder || (k.length >= 4 && remainder.length >= 4 && levenshtein(k, remainder) <= 1));
-              if (rMatch) return [known, rMatch];
-              if (known.length >= 5 && remainder.length >= 4) return [known, remainder];
-            }
-          }
-          if (token.endsWith(known) && token.length > known.length) {
-            const prefix = token.substring(0, token.length - known.length);
-            if (prefix.length >= 3) {
-              const pMatch = knownTokens.find(k => k === prefix || (k.length >= 4 && prefix.length >= 4 && levenshtein(k, prefix) <= 1));
-              if (pMatch) return [pMatch, known];
-              if (known.length >= 5 && prefix.length >= 4) return [prefix, known];
-            }
-          }
-        }
-        return [token];
-      };
-
-      const tokenize = (name: string): string[] => {
-        const tokens = normalizeName(name).split(' ').filter(t => t.length > 0);
-        const expanded: string[] = [];
-        for (const token of tokens) expanded.push(...trySplitConcatenated(token));
-        return expanded;
-      };
-
-      // Score two token sets — handles reversed names, fuzzy, common-name penalty
-      const matchScoreFn = (tokA: string[], tokB: string[]): number => {
-        if (tokA.length === 0 || tokB.length === 0) return 0;
-        const shorter = tokA.length <= tokB.length ? tokA : tokB;
-        const longer = tokA.length <= tokB.length ? tokB : tokA;
-        let totalWeightedScore = 0, totalWeight = 0;
-        let rareWordMatched = false, unmatchedRealWords = 0;
-        const usedIdx = new Set<number>();
-
+      // Normalize name: remove dots/punctuation, collapse spaces, lowercase
+      const normalizeName = (n: string) => n.toLowerCase().replace(/[._-]/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // Check if two names refer to the same person using word-level matching
+      // Stricter: requires at least 2 matching words (or all words if shorter has only 1)
+      const namesMatch = (a: string, b: string): boolean => {
+        const aParts = normalizeName(a).split(' ').filter(p => p.length > 2);
+        const bParts = normalizeName(b).split(' ').filter(p => p.length > 2);
+        if (aParts.length === 0 || bParts.length === 0) return false;
+        // Count how many words from the shorter name appear in the longer name
+        const shorter = aParts.length <= bParts.length ? aParts : bParts;
+        const longer = aParts.length <= bParts.length ? bParts : aParts;
+        let matched = 0;
         for (const word of shorter) {
-          const rarity = wordRarity(word);
-          let bestScore = 0, bestIdx = -1;
-          for (let i = 0; i < longer.length; i++) {
-            if (usedIdx.has(i)) continue;
-            const s = wordMatchScore(word, longer[i]);
-            if (s > bestScore) { bestScore = s; bestIdx = i; }
-          }
-          if (bestIdx >= 0 && bestScore >= 50) {
-            usedIdx.add(bestIdx);
-            totalWeightedScore += bestScore * rarity;
-            totalWeight += rarity;
-            if (rarity >= 0.8 && bestScore >= 70) rareWordMatched = true;
-          } else {
-            totalWeight += rarity;
-            if (word.length >= 4) unmatchedRealWords++;
+          if (longer.some(w => w === word || (word.length >= 5 && w.startsWith(word)) || (w.length >= 5 && word.startsWith(w)))) {
+            matched++;
           }
         }
-
-        if (totalWeight === 0) return 0;
-        let avg = totalWeightedScore / totalWeight;
-
-        // Prevent false positives from only common given names matching
-        if (!rareWordMatched && shorter.length > 1) avg = Math.min(avg, 40);
-
-        // Different-person-same-surname detection
-        if (shorter.length >= 2 && unmatchedRealWords > 0) {
-          const unusedFromLonger = longer.filter((_, i) => !usedIdx.has(i));
-          if (unusedFromLonger.filter(w => w.length >= 4).length > 0) avg = Math.min(avg, 50);
-        }
-
-        const countPenalty = shorter.length === 1 && longer.length > 2 ? 10 : 0;
-        const coverageBonus = usedIdx.size === shorter.length && usedIdx.size === longer.length ? 5 : 0;
-        return Math.max(0, Math.min(100, avg - countPenalty + coverageBonus));
+        // Require at least 2 matched words, or if single-word name require exact match in other
+        if (shorter.length === 1) return matched === 1 && longer.length === 1;
+        return matched >= 2;
       };
 
-      // Pre-tokenize employees and users
-      const empTokenized = employeeLookup.map(e => ({ ...e, tokens: tokenize(e.full_name || ''), normalized: normalizeName(e.full_name || '') }));
-      const userTokenized = userLookup.map(u => ({ ...u, tokens: tokenize(u.full_name || ''), normalized: normalizeName(u.full_name || '') }));
-
-      // Returns { match, matchScore, nearestName, nearestScore } for rich match info
-      const matchUser = (name: string, empNo?: string, excelDept?: string): {
-        match: (typeof empTokenized[0] & { type: 'employee' | 'user' }) | null;
-        matchScore: number;
-        nearestName: string | null;
-        nearestScore: number;
-      } => {
-        const noMatch = (nearestName: string | null, nearestScore: number) => ({ match: null, matchScore: 0, nearestName, nearestScore });
-        const found = (m: any, type: 'employee' | 'user', score: number) => ({ match: { type, ...m }, matchScore: score, nearestName: null, nearestScore: 0 });
-
+      const matchUser = (name: string, empNo?: string, excelDept?: string) => {
+        // Determine the company from the Excel department for scoped fingerprint matching
         let classifiedCompanyId: string | undefined;
         if (excelDept) {
           const cls = classifyDept(excelDept);
@@ -988,88 +886,55 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         }
 
         const searchNorm = normalizeName(name);
-        const bioTokens = tokenize(name);
 
-        // 1. Fingerprint + name cross-validation
+        // 1. Try fingerprint + name dual validation (most accurate)
+        //    Fingerprint alone is NOT enough — same IDs exist across different biometric devices.
+        //    We accept a fingerprint match ONLY if the name also matches.
         if (empNo) {
           const fp = empNo.trim();
           const candidatesFromFp: (typeof employeeLookup[0])[] = [];
+
+          // Gather fingerprint candidates (company-scoped first, then global)
           if (classifiedCompanyId) {
             const byCompanyFp = fingerprintByCompanyMap.get(`${classifiedCompanyId}:${fp}`);
             if (byCompanyFp) candidatesFromFp.push(byCompanyFp);
           }
           const byGlobalFp = fingerprintGlobalMap.get(fp);
-          if (byGlobalFp && !candidatesFromFp.includes(byGlobalFp)) candidatesFromFp.push(byGlobalFp);
+          if (byGlobalFp && !candidatesFromFp.includes(byGlobalFp)) {
+            candidatesFromFp.push(byGlobalFp);
+          }
 
+          // Accept fingerprint match ONLY if name also validates
           for (const candidate of candidatesFromFp) {
-            const cNorm = normalizeName(candidate.full_name || '');
-            const cTokens = tokenize(candidate.full_name || '');
-            const fpScore = cNorm === searchNorm ? 100 : matchScoreFn(bioTokens, cTokens);
-            if (fpScore >= 55) return found(candidate, 'employee', fpScore);
-          }
-        }
-
-        // 2. Exact normalized match (company-scoped first)
-        const exactInScope = classifiedCompanyId
-          ? empTokenized.find(e => e.company_id === classifiedCompanyId && e.normalized === searchNorm)
-          : undefined;
-        if (exactInScope) return found(exactInScope, 'employee', 100);
-
-        const exactGlobal = empTokenized.find(e => e.normalized === searchNorm);
-        if (exactGlobal) return found(exactGlobal, 'employee', 100);
-
-        // 3. Score-based fuzzy matching
-        let bestMatch: (typeof empTokenized[0]) | null = null;
-        let bestScore = 0;
-        const pool = classifiedCompanyId
-          ? empTokenized.filter(e => e.company_id === classifiedCompanyId)
-          : empTokenized;
-
-        for (const emp of pool) {
-          const s = matchScoreFn(bioTokens, emp.tokens);
-          if (s > bestScore) { bestScore = s; bestMatch = emp; }
-        }
-
-        // If company-scoped didn't find a good match, try all employees
-        if (bestScore < 60 && classifiedCompanyId) {
-          for (const emp of empTokenized) {
-            const s = matchScoreFn(bioTokens, emp.tokens);
-            if (s > bestScore) { bestScore = s; bestMatch = emp; }
-          }
-        }
-
-        // Single-word name matching (e.g., "KWIZERA" or "Rajbali")
-        if (bioTokens.length === 1) {
-          for (const emp of empTokenized) {
-            if (emp.tokens.some(t => t === bioTokens[0] || (bioTokens[0].length >= 4 && levenshtein(t, bioTokens[0]) <= 1))) {
-              const s = emp.tokens.length === 1 ? 95 : 75;
-              if (s > bestScore) { bestScore = s; bestMatch = emp; }
+            if (normalizeName(candidate.full_name || '') === searchNorm || namesMatch(name, candidate.full_name || '')) {
+              return { type: 'employee' as const, ...candidate };
             }
           }
+          // If fingerprint matched but name didn't — DON'T trust it, fall through to name matching
         }
 
-        if (bestScore >= 60 && bestMatch) return found(bestMatch, 'employee', bestScore);
+        // 2. Try name-based matching against employees (scoped by company if available)
+        //    Prefer employees in the same company as the Excel department
+        if (classifiedCompanyId) {
+          const companyEmployees = employeeLookup.filter(e => e.company_id === classifiedCompanyId);
+          let match = companyEmployees.find(e => normalizeName(e.full_name || '') === searchNorm);
+          if (match) return { type: 'employee' as const, ...match };
+          match = companyEmployees.find(e => namesMatch(name, e.full_name || ''));
+          if (match) return { type: 'employee' as const, ...match };
+        }
 
-        // Track the best near-miss for display (employee)
-        const nearName = bestMatch?.full_name || null;
-        const nearScore = bestScore;
+        // 3. Try all employees (any company)
+        let match = employeeLookup.find(e => normalizeName(e.full_name || '') === searchNorm);
+        if (match) return { type: 'employee' as const, ...match };
+        match = employeeLookup.find(e => namesMatch(name, e.full_name || ''));
+        if (match) return { type: 'employee' as const, ...match };
 
         // 4. Try profiles/users
-        const uExact = userTokenized.find(u => u.normalized === searchNorm);
-        if (uExact) return found(uExact, 'user', 100);
-
-        let bestUserMatch: (typeof userTokenized[0]) | null = null;
-        let bestUserScore = 0;
-        for (const u of userTokenized) {
-          const s = matchScoreFn(bioTokens, u.tokens);
-          if (s > bestUserScore) { bestUserScore = s; bestUserMatch = u; }
-        }
-        if (bestUserScore >= 60 && bestUserMatch) return found(bestUserMatch, 'user', bestUserScore);
-
-        // Return near-miss info so the UI can show "Nearest: XXX (Score: 45)"
-        const finalNearName = bestUserScore > nearScore ? (bestUserMatch?.full_name || null) : nearName;
-        const finalNearScore = Math.max(nearScore, bestUserScore);
-        return noMatch(finalNearName, finalNearScore);
+        let uMatch = userLookup.find(u => normalizeName(u.full_name || '') === searchNorm);
+        if (uMatch) return { type: 'user' as const, ...uMatch };
+        uMatch = userLookup.find(u => namesMatch(name, u.full_name || ''));
+        if (uMatch) return { type: 'user' as const, ...uMatch };
+        return null;
       };
 
       if (isMachineFormat) {
@@ -1184,7 +1049,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const earliestIn = sortedEvents.length > 0 ? sortedEvents[0] : null;
           const latestOut = sortedEvents.length > 1 ? sortedEvents[sortedEvents.length - 1] : null;
 
-          const { match: matchedUser, matchScore, nearestName, nearestScore } = matchUser(name, group.empNo, group.excelDept);
+          const matchedUser = matchUser(name, group.empNo, group.excelDept);
           const classification = classifyDept(group.excelDept);
 
           // Apply business rules from policy engine
@@ -1207,9 +1072,6 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             matched: !!matchedUser, matchedUser,
             userId: matchedUser?.id,
             matchedUserName: matchedUser?.full_name || null,
-            matchScore,
-            nearestName,
-            nearestScore,
             departmentId: resolvedDeptId,
             excelDept: group.excelDept,
             classifiedCompany: classification.company?.companyName || null,
@@ -1248,7 +1110,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const parsedDate = parseDate(dateVal);
           if (!parsedDate) continue;
 
-          const { match: matchedUser, matchScore, nearestName, nearestScore } = matchUser(name, undefined, excelDept);
+          const matchedUser = matchUser(name, undefined, excelDept);
           const classification = classifyDept(excelDept);
 
           const parseTime = (timeStr: string, dateBase: Date): string | null => {
@@ -1289,9 +1151,6 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             regularHours: processed.regularHours,
             overtimeHours: processed.overtimeHours,
             matched: !!matchedUser, matchedUser, userId: matchedUser?.id,
-            matchScore,
-            nearestName,
-            nearestScore,
             departmentId: resolvedDeptId,
             excelDept,
             classifiedCompany: classification.company?.companyName || null,
@@ -1321,6 +1180,8 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
   // State for unmatched employees review
   const [showUnmatchedReview, setShowUnmatchedReview] = useState(false);
+  const [unmatchedToAdd, setUnmatchedToAdd] = useState<Set<string>>(new Set());
+  const [isAddingEmployees, setIsAddingEmployees] = useState(false);
   const [unmatchedReviewed, setUnmatchedReviewed] = useState(false);
 
   const unmatchedEmployees = useMemo(() => {
@@ -1343,6 +1204,63 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       }));
   }, [uploadPreview]);
 
+  const toggleUnmatchedEmployee = (name: string) => {
+    setUnmatchedToAdd(prev => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const selectAllUnmatched = () => {
+    if (unmatchedToAdd.size === unmatchedEmployees.length) {
+      setUnmatchedToAdd(new Set());
+    } else {
+      setUnmatchedToAdd(new Set(unmatchedEmployees.map(e => e.name)));
+    }
+  };
+
+  const handleAddUnmatchedToHub = async () => {
+    if (unmatchedToAdd.size === 0) return;
+    setIsAddingEmployees(true);
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      const toAdd = unmatchedEmployees.filter(e => unmatchedToAdd.has(e.name));
+      
+      for (const emp of toAdd) {
+        // Find a department for this employee from their classified data
+        const previewRow = uploadPreview?.find(r => r.name === emp.name);
+        // Use classified department — do NOT default to HR even if unresolved
+        const deptId = previewRow?.departmentId || null;
+        
+        const { error } = await supabase.from('employees').insert({
+          full_name: emp.name,
+          employee_number: '', // auto-generated by trigger
+          fingerprint_number: emp.empNo || null, // Store fingerprint number from Excel
+          department_id: deptId,
+          created_by: currentUser?.id || null,
+          employment_status: 'active',
+          employment_type: 'full_time',
+        });
+        if (error) console.error('Failed to add employee:', emp.name, error);
+      }
+
+      toast({ 
+        title: `${unmatchedToAdd.size} employees added to Employee Hub`, 
+        description: 'Please re-upload the file to match them with attendance records.' 
+      });
+      setUnmatchedToAdd(new Set());
+      setShowUnmatchedReview(false);
+      setUploadPreview(null);
+      setClassificationSummary(null);
+    } catch (err) {
+      toast({ title: 'Failed to add employees', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsAddingEmployees(false);
+    }
+  };
+
   const handleImport = async () => {
     if (!uploadPreview) return;
     const validRecords = uploadPreview.filter(r => r.matched && r.userId);
@@ -1351,10 +1269,10 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       return;
     }
 
-    // Check for unmatched employees (just inform, don't block import)
+    // Check for unmatched employees first (only show review once)
     if (unmatchedEmployees.length > 0 && !showUnmatchedReview && !unmatchedReviewed) {
       setShowUnmatchedReview(true);
-      // Don't return — proceed with import immediately
+      return;
     }
 
     setIsImporting(true);
@@ -1545,21 +1463,11 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         {row.matched ? (
           <span className="inline-flex items-center gap-1 text-emerald-600 text-[10px] font-medium">
             <CheckCircle2 className="h-3 w-3" /> {row.matchedUserName || row.matchedUser?.full_name}
-            {row.matchScore > 0 && row.matchScore < 100 && (
-              <span className="text-emerald-400 ml-0.5">({row.matchScore}%)</span>
-            )}
           </span>
         ) : (
-          <div className="flex flex-col">
-            <span className="inline-flex items-center gap-1 text-red-500 text-[10px] font-medium">
-              <AlertCircle className="h-3 w-3" /> Not in System
-            </span>
-            {row.nearestName && row.nearestScore > 0 && (
-              <span className="text-muted-foreground text-[9px] ml-4 truncate max-w-[200px]" title={`Nearest: ${row.nearestName} (${row.nearestScore}% match)`}>
-                Nearest: {row.nearestName} ({row.nearestScore}%)
-              </span>
-            )}
-          </div>
+          <span className="inline-flex items-center gap-1 text-red-500 text-[10px] font-medium">
+            <AlertCircle className="h-3 w-3" /> Not Found
+          </span>
         )}
       </td>
       <td className="px-3 py-2.5">
@@ -1603,93 +1511,32 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   );
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-5">
       {/* KPI Cards */}
-      <AttendanceKPICards records={records} users={users} employees={employees} selectedMonth={selectedMonth} selectedYear={selectedYear} activeView={activeView} />
+      <AttendanceKPICards records={records} users={users} employees={employees} selectedMonth={selectedMonth} />
 
-      {/* Compact Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 px-1">
-        {/* View Tabs */}
-        <div className="flex items-center rounded-lg border p-0.5 shrink-0">
-          <Button variant={activeView === 'monthly' ? 'default' : 'ghost'} size="sm" className="h-7 text-[11px] px-2.5" onClick={() => setActiveView('monthly')}>
-            <Table2 className="h-3 w-3 mr-1" /> Monthly
-          </Button>
-          <Button variant={activeView === 'annual' ? 'default' : 'ghost'} size="sm" className="h-7 text-[11px] px-2.5" onClick={() => setActiveView('annual')}>
-            <BarChart3 className="h-3 w-3 mr-1" /> Annual
-          </Button>
-          <Button variant={activeView === 'calculator' ? 'default' : 'ghost'} size="sm" className="h-7 text-[11px] px-2.5" onClick={() => setActiveView('calculator')}>
-            <CalendarIcon className="h-3 w-3 mr-1" /> Calculator
-          </Button>
-        </div>
+      {/* Charts Row */}
+      <AttendanceCharts records={records} selectedMonth={selectedMonth} />
 
-        <div className="h-5 w-px bg-border shrink-0" />
-
-        {/* Date Navigation */}
-        {activeView === 'monthly' && (
-          <div className="flex items-center gap-0.5 shrink-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <span className="text-xs font-semibold min-w-[80px] text-center">{format(selectedMonth, 'MMM yyyy')}</span>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-        {(activeView === 'annual' || activeView === 'calculator') && (
-          <div className="flex items-center gap-0.5 shrink-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedYear(y => y - 1)}>
-              <ChevronLeft className="h-3.5 w-3.5" />
-            </Button>
-            <span className="text-xs font-bold min-w-[40px] text-center">{selectedYear}</span>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setSelectedYear(y => y + 1)}>
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
-
-        <div className="h-5 w-px bg-border shrink-0" />
-
-        {/* Filters */}
-        <Select value={filterDepartment} onValueChange={setFilterDepartment}>
-          <SelectTrigger className="w-[140px] h-7 text-[11px]"><SelectValue placeholder="All Departments" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Departments</SelectItem>
-            {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filterEmployee} onValueChange={setFilterEmployee}>
-          <SelectTrigger className="w-[150px] h-7 text-[11px]"><SelectValue placeholder="All Employees" /></SelectTrigger>
-          <SelectContent className="max-h-[300px]">
-            <SelectItem value="all">All Employees</SelectItem>
-            {employees
-              .slice()
-              .sort((a: any, b: any) => (a.full_name || '').localeCompare(b.full_name || ''))
-              .map((emp: any) => (
-                <SelectItem key={emp.id} value={emp.linked_user_id || emp.id}>{emp.full_name}</SelectItem>
-              ))}
-          </SelectContent>
-        </Select>
-
-        <div className="flex-1" />
-
-        {/* Actions */}
-        <Button variant={showUpload ? 'default' : 'outline'} size="sm" className="h-7 text-[11px] px-2.5" onClick={() => setShowUpload(!showUpload)}>
-          <Upload className="h-3 w-3 mr-1" /> Import
-        </Button>
-        <Button variant="outline" size="icon" className="h-7 w-7 shrink-0" onClick={() => refetch()}>
-          <RefreshCw className="h-3 w-3" />
-        </Button>
-      </div>
-
-      {/* Collapsible Upload Panel */}
-      {showUpload && (
-        <div className="border rounded-lg bg-muted/30 p-3 mx-1">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[140px]">
-              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Company</label>
+      {/* Upload + Controls Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* Upload Card - Compact tile style like reference */}
+        <Card className="shadow-corporate border-l-4 border-l-primary">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                <FileSpreadsheet className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold">Import Attendance</h3>
+                <p className="text-[10px] text-muted-foreground">Upload mixed-company Excel · auto-classifies</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mb-2">
               <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Auto-detect" /></SelectTrigger>
+                <SelectTrigger className="flex-1 h-9">
+                  <SelectValue placeholder="Company (auto)" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">Auto-detect all</SelectItem>
                   {companies.map(c => (
@@ -1698,31 +1545,98 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                 </SelectContent>
               </Select>
             </div>
-            <div className="min-w-[140px]">
-              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Date (ref)</label>
-              <Input type="date" value={uploadTargetDate} onChange={e => setUploadTargetDate(e.target.value)} className="h-8 text-xs" />
+            <div className="mb-2">
+              <label className="text-[10px] text-muted-foreground font-medium mb-1 block">Attendance Date (for reference)</label>
+              <Input
+                type="date"
+                value={uploadTargetDate}
+                onChange={e => setUploadTargetDate(e.target.value)}
+                className="h-9 text-xs"
+                placeholder="Select date..."
+              />
+              <p className="text-[9px] text-muted-foreground mt-0.5">
+                Uses First-In / Last-Out (ignores C/In vs C/Out labels)
+              </p>
             </div>
-            <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-medium h-8">
-              <input type="checkbox" checked={crossMidnightEnabled} onChange={e => setCrossMidnightEnabled(e.target.checked)} className="rounded border-border" />
-              Cross-midnight merge <Moon className="h-3 w-3 text-indigo-500" />
-            </label>
+            <div className="mb-2 flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={crossMidnightEnabled}
+                  onChange={e => setCrossMidnightEnabled(e.target.checked)}
+                  className="rounded border-border"
+                />
+                <span className="text-[10px] font-medium">Cross-midnight shift merge</span>
+              </label>
+              <Moon className="h-3.5 w-3.5 text-indigo-500" />
+            </div>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFileUpload} disabled={isParsing} />
             {isParsing ? (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground h-8">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>{parseProgress}</span>
+              <div className="w-full text-center space-y-1.5">
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>{parseProgress}</span>
+                </div>
               </div>
             ) : (
-              <Button size="sm" className="h-8 text-xs" onClick={() => fileInputRef.current?.click()}>
-                <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" /> Upload Excel
+              <Button size="sm" className="w-full" onClick={() => fileInputRef.current?.click()}>
+                <Upload className="h-4 w-4 mr-2" /> Upload Excel
               </Button>
             )}
-            <Button variant="ghost" size="icon" className="h-7 w-7 ml-auto" onClick={() => setShowUpload(false)}>
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
+            <p className="text-[10px] text-muted-foreground mt-1.5 text-center">
+              Auto-detects HQ Power, HQ Peat, HQ Service, Farmers
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* Controls Card */}
+        <Card className="shadow-corporate lg:col-span-2">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+              <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full">
+                <div className="relative flex-1 max-w-xs">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input placeholder="Search employee..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 h-9" />
+                </div>
+                <Select value={filterDepartment} onValueChange={setFilterDepartment}>
+                  <SelectTrigger className="w-[180px] h-9"><SelectValue placeholder="All Departments" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {departments.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {activeView === 'monthly' && (
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSelectedMonth(subMonths(selectedMonth, 1))}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-sm font-medium min-w-[110px] text-center">{format(selectedMonth, 'MMM yyyy')}</span>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setSelectedMonth(addMonths(selectedMonth, 1))}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center rounded-lg border p-0.5">
+                  <Button variant={activeView === 'monthly' ? 'default' : 'ghost'} size="sm" className="h-8 text-xs" onClick={() => setActiveView('monthly')}>
+                    <Table2 className="h-3.5 w-3.5 mr-1.5" /> Monthly
+                  </Button>
+                  <Button variant={activeView === 'annual' ? 'default' : 'ghost'} size="sm" className="h-8 text-xs" onClick={() => setActiveView('annual')}>
+                    <BarChart3 className="h-3.5 w-3.5 mr-1.5" /> Annual
+                  </Button>
+                  <Button variant={activeView === 'calculator' ? 'default' : 'ghost'} size="sm" className="h-8 text-xs" onClick={() => setActiveView('calculator')}>
+                    <CalendarIcon className="h-3.5 w-3.5 mr-1.5" /> Calculator
+                  </Button>
+                </div>
+                <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => refetch()}>
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Upload Preview */}
       {uploadPreview && (
@@ -1774,7 +1688,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                   </Button>
                   <Button size="sm" className="h-8" onClick={handleImport} disabled={isImporting || uploadPreview.filter(r => r.matched).length === 0}>
                     {isImporting ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5 mr-1" />}
-                    Import {uploadPreview.filter(r => r.matched).length} Matched
+                    {unmatchedEmployees.length > 0 && !showUnmatchedReview ? 'Review & Import' : `Import ${uploadPreview.filter(r => r.matched).length}`}
                   </Button>
                 </div>
                 <div className="flex items-center rounded-md border p-0.5">
@@ -1796,51 +1710,69 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
                 <div className="flex items-center gap-2">
                   <UserX className="h-5 w-5 text-amber-600" />
                   <h4 className="text-sm font-bold text-amber-800 dark:text-amber-300">
-                    {unmatchedEmployees.length} Employees Not in System
+                    {unmatchedEmployees.length} Employees Not Found in System
                   </h4>
                 </div>
-                <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => setShowUnmatchedReview(false)}>
-                  Dismiss
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={selectAllUnmatched}>
+                    {unmatchedToAdd.size === unmatchedEmployees.length ? 'Deselect All' : 'Select All'}
+                  </Button>
+                </div>
               </div>
               <p className="text-[11px] text-amber-700 dark:text-amber-400 mb-3">
-                These names from the Excel file don&apos;t match any employee in the system. 
-                They will be automatically skipped during import. Only matched records are imported.
+                These employees were found in the Excel file but don't exist in the Employee Hub. 
+                Select employees to add to the Hub, then re-upload to match their attendance.
+                Unselected employees will be skipped during import.
               </p>
-              <ScrollArea className="max-h-[200px]">
+              <ScrollArea className="max-h-[250px]">
                 <div className="space-y-1">
                   {unmatchedEmployees.map((emp) => {
-                    // Find nearest match info from upload preview
-                    const previewRow = uploadPreview?.find(r => r.name === emp.name && !r.matched);
+                    const isSelected = unmatchedToAdd.has(emp.name);
                     return (
-                      <div
+                      <button
                         key={emp.name}
-                        className="flex items-center gap-3 px-3 py-2 rounded-md bg-card border border-border text-sm"
+                        onClick={() => toggleUnmatchedEmployee(emp.name)}
+                        className={cn(
+                          "w-full flex items-center gap-3 px-3 py-2 rounded-md text-left transition-colors text-sm",
+                          isSelected ? "bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-300 dark:border-emerald-700" : "bg-card border border-border hover:bg-muted/60"
+                        )}
                       >
-                        <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+                        <div className={cn(
+                          "h-5 w-5 rounded border-2 flex items-center justify-center shrink-0",
+                          isSelected ? "bg-emerald-500 border-emerald-500" : "border-muted-foreground/30"
+                        )}>
+                          {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-white" />}
+                        </div>
                         <div className="flex-1 min-w-0">
                           <span className="font-medium">{emp.name}</span>
                           {emp.empNo && <span className="text-muted-foreground ml-2 text-xs">#{emp.empNo}</span>}
-                          {previewRow?.nearestName && previewRow.nearestScore > 0 && (
-                            <span className="block text-[10px] text-muted-foreground ml-0">
-                              Nearest: {previewRow.nearestName} ({previewRow.nearestScore}% match — below 60% threshold)
-                            </span>
-                          )}
-                          {(!previewRow?.nearestName || previewRow.nearestScore === 0) && (
-                            <span className="block text-[10px] text-muted-foreground ml-0">
-                              No matching employee found in the database
-                            </span>
-                          )}
                         </div>
+                        <Badge variant="outline" className="text-[10px] shrink-0">{emp.excelDept || 'No dept'}</Badge>
                         <Badge variant="secondary" className="text-[10px] shrink-0">{emp.occurrences} entries</Badge>
                         {emp.classifiedCompany !== 'Unknown' && (
                           <Badge variant="outline" className="text-[10px] shrink-0 bg-primary/5 text-primary">{emp.classifiedCompany}</Badge>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               </ScrollArea>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-amber-200 dark:border-amber-800">
+                <Button variant="outline" size="sm" onClick={() => { setShowUnmatchedReview(false); setUnmatchedReviewed(true); }} className="text-xs">
+                  Skip Unmatched & Continue Import
+                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    size="sm" 
+                    className="text-xs gap-1.5"
+                    disabled={unmatchedToAdd.size === 0 || isAddingEmployees}
+                    onClick={handleAddUnmatchedToHub}
+                  >
+                    {isAddingEmployees ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5" />}
+                    Add {unmatchedToAdd.size} to Employee Hub
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1899,9 +1831,9 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
       {/* Data Grid */}
       {activeView === 'monthly' ? (
-        <MonthlyGrid records={records} selectedMonth={selectedMonth} users={users} employees={employees} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} filterEmployee={filterEmployee} />
+        <MonthlyGrid records={records} selectedMonth={selectedMonth} users={users} employees={employees} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} />
       ) : activeView === 'annual' ? (
-        <AnnualSummary records={records} users={users} employees={employees} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} filterEmployee={filterEmployee} selectedYear={selectedYear} />
+        <AnnualSummary records={records} users={users} employees={employees} departments={departments} searchTerm={searchTerm} filterDepartment={filterDepartment} selectedYear={selectedYear} />
       ) : (
         <QuickCalculator selectedYear={selectedYear} />
       )}

@@ -43,50 +43,73 @@ export const ATTENDANCE_STATUS_COLORS: Record<AttendanceStatus, string> = {
   remote: 'bg-purple-500/20 text-purple-600',
 };
 
-export function useAttendance(departmentId?: string, date?: Date) {
+export function useAttendance(departmentId?: string, date?: Date, dateRange?: { from: string; to: string }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const dateStr = date ? format(date, 'yyyy-MM-dd') : undefined;
+  const rangeKey = dateRange ? `${dateRange.from}..${dateRange.to}` : undefined;
 
   const { data: records = [], isLoading, refetch } = useQuery({
-    queryKey: ['attendance', departmentId, dateStr || 'all'],
+    queryKey: ['attendance', departmentId, dateStr || rangeKey || 'all'],
     queryFn: async () => {
-      let query = supabase
-        .from('attendance_records')
-        .select(`
-          *,
-          department:departments(name)
-        `)
-        .order('attendance_date', { ascending: false });
+      // Supabase PostgREST caps at 1000 rows per request regardless of .limit()
+      // Paginate to fetch ALL matching records
+      const PAGE_SIZE = 1000;
+      let allData: any[] = [];
+      let from = 0;
 
-      if (dateStr) {
-        query = query.eq('attendance_date', dateStr);
+      while (true) {
+        let query = supabase
+          .from('attendance_records')
+          .select(`
+            *,
+            department:departments(name)
+          `)
+          .order('attendance_date', { ascending: false })
+          .range(from, from + PAGE_SIZE - 1);
+
+        if (dateStr) {
+          query = query.eq('attendance_date', dateStr);
+        } else if (dateRange) {
+          query = query.gte('attendance_date', dateRange.from).lte('attendance_date', dateRange.to);
+        }
+
+        if (departmentId) {
+          query = query.eq('department_id', departmentId);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        allData = allData.concat(data);
+        if (data.length < PAGE_SIZE) break; // Last page
+        from += PAGE_SIZE;
       }
-
-      if (departmentId) {
-        query = query.eq('department_id', departmentId);
-      }
-
-      const { data, error } = await query.limit(1000);
-      if (error) throw error;
       
       // Fetch user profiles separately
-      if (data && data.length > 0) {
-        const userIds = [...new Set(data.map(r => r.user_id))];
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', userIds);
+      if (allData.length > 0) {
+        const userIds = [...new Set(allData.map(r => r.user_id))];
+        // Profiles query also needs pagination for large sets
+        const allProfiles: any[] = [];
+        for (let i = 0; i < userIds.length; i += 100) {
+          const batch = userIds.slice(i, i + 100);
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', batch);
+          if (profiles) allProfiles.push(...profiles);
+        }
         
-        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+        const profileMap = new Map(allProfiles.map(p => [p.id, p]));
         
-        return data.map(record => ({
+        return allData.map(record => ({
           ...record,
           user: profileMap.get(record.user_id) || null,
         })) as unknown as AttendanceRecord[];
       }
       
-      return data as unknown as AttendanceRecord[];
+      return allData as unknown as AttendanceRecord[];
     },
     enabled: true,
   });
