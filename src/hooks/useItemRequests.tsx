@@ -47,7 +47,7 @@ export interface ItemRequest {
   requester_department_name?: string;
 }
 
-export function useItemRequests(departmentId: string | undefined) {
+export function useItemRequests(departmentId: string | undefined, dateRange?: { start: string; end: string }) {
   const [requests, setRequests] = useState<ItemRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -62,7 +62,7 @@ export function useItemRequests(departmentId: string | undefined) {
     try {
       setLoading(true);
       
-      const { data, error } = await (supabase as any)
+      let query = (supabase as any)
         .from('item_requests')
         .select(`
           *,
@@ -71,6 +71,13 @@ export function useItemRequests(departmentId: string | undefined) {
         `)
         .eq('department_id', departmentId)
         .order('created_at', { ascending: false });
+
+      // Server-side date filtering - dramatically reduces data transfer
+      if (dateRange) {
+        query = query.gte('created_at', dateRange.start).lte('created_at', dateRange.end);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         if (error.code === '42P01' || error.message?.includes('does not exist')) {
@@ -95,7 +102,7 @@ export function useItemRequests(departmentId: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [departmentId]);
+  }, [departmentId, dateRange?.start, dateRange?.end]);
 
   useEffect(() => {
     fetchRequests();
