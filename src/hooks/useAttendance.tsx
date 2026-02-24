@@ -52,66 +52,76 @@ export function useAttendance(departmentId?: string, date?: Date, dateRange?: { 
   const { data: records = [], isLoading, refetch } = useQuery({
     queryKey: ['attendance', departmentId, dateStr || rangeKey || 'all'],
     queryFn: async () => {
-      // Supabase PostgREST caps at 1000 rows per request regardless of .limit()
-      // Paginate to fetch ALL matching records
       const PAGE_SIZE = 1000;
       let allData: any[] = [];
       let from = 0;
 
-      while (true) {
+      // Build first page query
+      const buildQuery = (rangeFrom: number) => {
         let query = supabase
           .from('attendance_records')
-          .select(`
-            *,
-            department:departments(name)
-          `)
+          .select('id,user_id,department_id,attendance_date,clock_in,clock_out,status,notes,shift_type,total_hours,regular_hours,overtime_hours,created_at,updated_at,department:departments(name)')
           .order('attendance_date', { ascending: false })
-          .range(from, from + PAGE_SIZE - 1);
+          .range(rangeFrom, rangeFrom + PAGE_SIZE - 1);
 
         if (dateStr) {
           query = query.eq('attendance_date', dateStr);
         } else if (dateRange) {
           query = query.gte('attendance_date', dateRange.from).lte('attendance_date', dateRange.to);
         }
-
         if (departmentId) {
           query = query.eq('department_id', departmentId);
         }
+        return query;
+      };
 
-        const { data, error } = await query;
-        if (error) throw error;
-        if (!data || data.length === 0) break;
+      // Fetch first page
+      const { data: firstPage, error: firstErr } = await buildQuery(0);
+      if (firstErr) throw firstErr;
+      if (!firstPage || firstPage.length === 0) return [] as AttendanceRecord[];
 
-        allData = allData.concat(data);
-        if (data.length < PAGE_SIZE) break; // Last page
-        from += PAGE_SIZE;
+      allData = firstPage;
+
+      // If first page is full, fetch remaining pages in parallel
+      if (firstPage.length === PAGE_SIZE) {
+        // Estimate: fetch next 5 pages in parallel (covers up to 6000 records)
+        const parallelPages = Array.from({ length: 5 }, (_, i) => buildQuery((i + 1) * PAGE_SIZE));
+        const results = await Promise.all(parallelPages);
+        for (const res of results) {
+          if (res.error) throw res.error;
+          if (res.data && res.data.length > 0) allData = allData.concat(res.data);
+          if (!res.data || res.data.length < PAGE_SIZE) break;
+        }
       }
-      
-      // Fetch user profiles separately
+
+      // Fetch user profiles in parallel batches
       if (allData.length > 0) {
         const userIds = [...new Set(allData.map(r => r.user_id))];
-        // Profiles query also needs pagination for large sets
-        const allProfiles: any[] = [];
-        for (let i = 0; i < userIds.length; i += 100) {
-          const batch = userIds.slice(i, i + 100);
-          const { data: profiles } = await supabase
-            .from('profiles')
-            .select('id, full_name, email')
-            .in('id', batch);
-          if (profiles) allProfiles.push(...profiles);
+        const profileBatches = [];
+        for (let i = 0; i < userIds.length; i += 200) {
+          profileBatches.push(
+            supabase
+              .from('profiles')
+              .select('id, full_name, email')
+              .in('id', userIds.slice(i, i + 200))
+          );
         }
-        
+        const profileResults = await Promise.all(profileBatches);
+        const allProfiles: any[] = [];
+        for (const res of profileResults) {
+          if (res.data) allProfiles.push(...res.data);
+        }
         const profileMap = new Map(allProfiles.map(p => [p.id, p]));
-        
+
         return allData.map(record => ({
           ...record,
           user: profileMap.get(record.user_id) || null,
         })) as unknown as AttendanceRecord[];
       }
-      
+
       return allData as unknown as AttendanceRecord[];
     },
-    enabled: true,
+    staleTime: 2 * 60 * 1000, // Cache for 2 minutes to avoid re-fetching on tab switches
   });
 
   const clockIn = useMutation({
