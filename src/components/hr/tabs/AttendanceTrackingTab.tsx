@@ -674,7 +674,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [isImporting, setIsImporting] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [parseProgress, setParseProgress] = useState('');
-  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>('none');
   const [previewGroupBy, setPreviewGroupBy] = useState<'company' | 'flat'>('company');
   const [uploadTargetDate, setUploadTargetDate] = useState<string>('');
   const [crossMidnightEnabled, setCrossMidnightEnabled] = useState(true);
@@ -1313,10 +1313,12 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         toast({ title: `${parsed.length} records parsed · ${Object.keys(summaryStd.byCompany).length} companies`, description: companyNamesStd || 'No companies detected' });
       }
     } catch (err) {
+      console.error('Attendance upload parse error:', err);
       toast({ title: 'Failed to read file', description: String(err), variant: 'destructive' });
+    } finally {
+      setIsParsing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
-    setIsParsing(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
   }, [users, employees, departmentId, toast, companies, departments, classifier, policyValues, selectedCompanyId, crossMidnightEnabled]);
 
   // State for unmatched employees review
@@ -1345,10 +1347,24 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
   const handleImport = async () => {
     if (!uploadPreview) return;
-    const validRecords = uploadPreview.filter(r => r.matched && r.userId);
+    // Filter to records that have ALL required fields: matched user, userId, AND department
+    const validRecords = uploadPreview.filter(r => r.matched && r.userId && r.departmentId);
+    const missingDeptCount = uploadPreview.filter(r => r.matched && r.userId && !r.departmentId).length;
     if (validRecords.length === 0) {
-      toast({ title: 'No matched records to import', variant: 'destructive' });
+      toast({ 
+        title: 'No importable records', 
+        description: missingDeptCount > 0 
+          ? `${missingDeptCount} matched employees have no department assigned. Please assign departments in the Employee Hub first.`
+          : 'No employees could be matched from the Excel file.',
+        variant: 'destructive' 
+      });
       return;
+    }
+    if (missingDeptCount > 0) {
+      toast({ 
+        title: `${missingDeptCount} records skipped — no department`, 
+        description: 'These employees need a department assigned in the Employee Hub.',
+      });
     }
 
     // Check for unmatched employees (just inform, don't block import)
@@ -1530,8 +1546,16 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       setClassificationSummary(null);
       setShowUnmatchedReview(false);
       setUnmatchedReviewed(false);
-    } catch (err) {
-      toast({ title: 'Import failed', description: String(err), variant: 'destructive' });
+    } catch (err: any) {
+      console.error('Attendance import error:', err);
+      const message = err?.message || String(err);
+      toast({ 
+        title: 'Import failed', 
+        description: message.includes('department_id') 
+          ? 'Some employees are missing department assignments. Please assign departments in the Employee Hub first.'
+          : message,
+        variant: 'destructive' 
+      });
     } finally {
       setIsImporting(false);
     }
