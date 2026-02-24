@@ -72,39 +72,31 @@ function getExcelNotation(dayDate: Date, record?: any): { label: string; color: 
 const DAY_ABBREV = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/* ─── KPI Summary Cards (view‑aware) ─── */
-function AttendanceKPICards({ records, users, employees, selectedMonth, selectedYear, activeView }: {
-  records: any[]; users: any[]; employees: any[]; selectedMonth: Date; selectedYear: number; activeView: string;
+/* ─── KPI Summary Cards (DAILY counts — per selected date) ─── */
+function AttendanceKPICards({ records, users, employees, selectedMonth, selectedYear, activeView, selectedDate }: {
+  records: any[]; users: any[]; employees: any[]; selectedMonth: Date; selectedYear: number; activeView: string; selectedDate?: Date;
 }) {
   const stats = useMemo(() => {
-    let filtered: any[];
-    if (activeView === 'annual') {
-      filtered = records.filter(r => {
-        const d = new Date(r.date || r.attendance_date);
-        return d.getFullYear() === selectedYear;
-      });
-    } else {
-      // monthly / calculator
-      const monthStart = startOfMonth(selectedMonth);
-      const monthEnd = endOfMonth(selectedMonth);
-      filtered = records.filter(r => {
-        const d = new Date(r.date || r.attendance_date);
-        return d >= monthStart && d <= monthEnd;
-      });
-    }
+    // Use today if no selectedDate provided
+    const targetDate = selectedDate || new Date();
+    const targetStr = format(targetDate, 'yyyy-MM-dd');
 
-    const present = filtered.filter(r => r.status === 'present' || r.status === 'remote').length;
-    const late = filtered.filter(r => r.status === 'late').length;
-    const absent = filtered.filter(r => r.status === 'absent').length;
-    const onLeave = filtered.filter(r => r.status === 'on_leave').length;
-    const total = filtered.length || 1;
+    // Daily stats: only records matching the target date
+    const dailyRecords = records.filter(r => {
+      const dateStr = (r.date || r.attendance_date || '').substring(0, 10);
+      return dateStr === targetStr;
+    });
+
+    const present = dailyRecords.filter(r => r.status === 'present' || r.status === 'remote').length;
+    const late = dailyRecords.filter(r => r.status === 'late').length;
+    const absent = dailyRecords.filter(r => r.status === 'absent').length;
+    const onLeave = dailyRecords.filter(r => r.status === 'on_leave').length;
+    const total = dailyRecords.length || 1;
     const attendanceRate = Math.round(((present + late) / total) * 100);
     const totalEmployees = employees.length > 0 ? employees.length : users.length;
 
-    return { present, late, absent, onLeave, attendanceRate, totalEmployees, totalRecords: filtered.length };
-  }, [records, users, employees, selectedMonth, selectedYear, activeView]);
-
-  const periodLabel = activeView === 'annual' ? `Year ${selectedYear}` : format(selectedMonth, 'MMM yyyy');
+    return { present, late, absent, onLeave, attendanceRate, totalEmployees, dateLabel: format(targetDate, 'EEE, dd MMM yyyy') };
+  }, [records, employees, users, selectedDate]);
 
   const cards = [
     { title: 'Employees', value: stats.totalEmployees, icon: Users, color: 'bg-primary', iconColor: 'text-primary-foreground' },
@@ -116,18 +108,47 @@ function AttendanceKPICards({ records, users, employees, selectedMonth, selected
   ];
 
   return (
-    <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-      {cards.map((card) => (
-        <div key={card.title} className="flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm">
-          <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", card.color)}>
-            <card.icon className={cn("h-4 w-4", card.iconColor)} />
+    <div className="space-y-1">
+      <p className="text-[10px] text-muted-foreground px-1 font-medium">Daily Summary — {stats.dateLabel}</p>
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+        {cards.map((card) => (
+          <div key={card.title} className="flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm">
+            <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center shrink-0", card.color)}>
+              <card.icon className={cn("h-4 w-4", card.iconColor)} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-muted-foreground truncate">{card.title}</p>
+              <p className="text-sm font-bold leading-tight">{card.value}</p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-[10px] text-muted-foreground truncate">{card.title}</p>
-            <p className="text-sm font-bold leading-tight">{card.value}</p>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Performance Monitor ─── */
+function AttendancePerformanceMonitor({ loadTimeMs, recordCount, isLoading }: {
+  loadTimeMs: number | null; recordCount: number; isLoading: boolean;
+}) {
+  if (loadTimeMs === null && !isLoading) return null;
+  const speedLabel = loadTimeMs !== null
+    ? loadTimeMs < 1000 ? '🟢 Fast' : loadTimeMs < 3000 ? '🟡 Moderate' : '🔴 Slow'
+    : '';
+  return (
+    <div className="flex items-center gap-3 rounded-lg border bg-card/50 px-3 py-1.5 text-[10px] text-muted-foreground">
+      <span className="font-semibold">⚡ Performance</span>
+      {isLoading ? (
+        <span className="flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Loading...</span>
+      ) : loadTimeMs !== null ? (
+        <>
+          <span>{speedLabel} — <strong>{(loadTimeMs / 1000).toFixed(2)}s</strong></span>
+          <span className="text-muted-foreground/60">|</span>
+          <span>{recordCount.toLocaleString()} records loaded</span>
+          <span className="text-muted-foreground/60">|</span>
+          <span>{recordCount > 0 ? (loadTimeMs / recordCount).toFixed(1) : '0'}ms/record</span>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -678,6 +699,9 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [previewGroupBy, setPreviewGroupBy] = useState<'company' | 'flat'>('company');
   const [uploadTargetDate, setUploadTargetDate] = useState<string>('');
   const [crossMidnightEnabled, setCrossMidnightEnabled] = useState(true);
+  const [loadTimeMs, setLoadTimeMs] = useState<number | null>(null);
+  const loadStartRef = useRef<number | null>(null);
+  const [selectedKpiDate, setSelectedKpiDate] = useState<Date>(new Date());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -701,11 +725,22 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     return { from: firstDay, to: lastDay };
   }, [activeView, selectedYear, selectedMonth]);
 
+  // Track load start time when query params change
+  useMemo(() => { loadStartRef.current = performance.now(); }, [dateRange, filterDepartment]);
+
   const { records, isLoading, refetch, bulkImportAttendance } = useAttendance(
     filterDepartment === 'all' ? undefined : filterDepartment,
     undefined,
     dateRange
   );
+
+  // Measure load time when loading completes
+  useMemo(() => {
+    if (!isLoading && loadStartRef.current !== null) {
+      setLoadTimeMs(Math.round(performance.now() - loadStartRef.current));
+      loadStartRef.current = null;
+    }
+  }, [isLoading]);
 
   // Build the multi-company classifier
   const classifier = useMemo(() => buildClassifier(companies, departments), [companies, departments]);
@@ -1628,8 +1663,11 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
   return (
     <div className="space-y-2">
-      {/* KPI Cards */}
-      <AttendanceKPICards records={records} users={users} employees={employees} selectedMonth={selectedMonth} selectedYear={selectedYear} activeView={activeView} />
+      {/* KPI Cards — Daily */}
+      <AttendanceKPICards records={records} users={users} employees={employees} selectedMonth={selectedMonth} selectedYear={selectedYear} activeView={activeView} selectedDate={selectedKpiDate} />
+
+      {/* Performance Monitor */}
+      <AttendancePerformanceMonitor loadTimeMs={loadTimeMs} recordCount={records.length} isLoading={isLoading} />
 
       {/* Compact Toolbar */}
       <div className="flex flex-wrap items-center gap-2 px-1">
@@ -1671,6 +1709,17 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             </Button>
           </div>
         )}
+
+        {/* KPI Date Picker */}
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="text-[10px] text-muted-foreground">KPI Date:</span>
+          <Input
+            type="date"
+            value={format(selectedKpiDate, 'yyyy-MM-dd')}
+            onChange={(e) => e.target.value && setSelectedKpiDate(new Date(e.target.value + 'T00:00:00'))}
+            className="h-7 w-[130px] text-[11px]"
+          />
+        </div>
 
         <div className="h-5 w-px bg-border shrink-0" />
 
