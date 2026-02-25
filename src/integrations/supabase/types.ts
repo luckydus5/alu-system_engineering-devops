@@ -53,6 +53,57 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_file_uploads: {
+        Row: {
+          company_names: string | null
+          date_range_from: string | null
+          date_range_to: string | null
+          file_name: string
+          file_path: string
+          file_size: number
+          id: string
+          import_summary: Json | null
+          notes: string | null
+          records_imported: number
+          records_skipped: number
+          records_unmatched: number
+          uploaded_at: string
+          uploaded_by: string
+        }
+        Insert: {
+          company_names?: string | null
+          date_range_from?: string | null
+          date_range_to?: string | null
+          file_name: string
+          file_path: string
+          file_size?: number
+          id?: string
+          import_summary?: Json | null
+          notes?: string | null
+          records_imported?: number
+          records_skipped?: number
+          records_unmatched?: number
+          uploaded_at?: string
+          uploaded_by: string
+        }
+        Update: {
+          company_names?: string | null
+          date_range_from?: string | null
+          date_range_to?: string | null
+          file_name?: string
+          file_path?: string
+          file_size?: number
+          id?: string
+          import_summary?: Json | null
+          notes?: string | null
+          records_imported?: number
+          records_skipped?: number
+          records_unmatched?: number
+          uploaded_at?: string
+          uploaded_by?: string
+        }
+        Relationships: []
+      }
       attendance_records: {
         Row: {
           attendance_date: string
