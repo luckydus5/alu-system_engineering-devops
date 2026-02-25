@@ -54,8 +54,11 @@ function getExcelNotation(dayDate: Date, record?: any): { label: string; color: 
     return { label: '—', color: 'text-gray-700 dark:text-gray-300', bg: 'bg-gray-300 dark:bg-gray-600' };
   }
   if (isSaturday(dayDate)) {
-    // Saturday always shows ½ in yellow (matching Excel)
-    return { label: '½', color: 'text-gray-800 dark:text-gray-900 font-bold', bg: 'bg-yellow-300 dark:bg-yellow-500' };
+    // Saturday: ½ only if the employee actually worked, otherwise OFF
+    if (record && (record.status === 'present' || record.status === 'late' || record.status === 'remote')) {
+      return { label: '½', color: 'text-gray-800 dark:text-gray-900 font-bold', bg: 'bg-yellow-300 dark:bg-yellow-500' };
+    }
+    return { label: 'OFF', color: 'text-white font-bold', bg: 'bg-red-600 dark:bg-red-600' };
   }
   if (!record || record.status === 'absent') {
     return { label: 'OFF', color: 'text-white font-bold', bg: 'bg-red-600 dark:bg-red-600' };
