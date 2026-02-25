@@ -691,6 +691,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
   const [filterEmployee, setFilterEmployee] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadPreview, setUploadPreview] = useState<any[] | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [classificationSummary, setClassificationSummary] = useState<ClassificationSummary | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
@@ -765,6 +766,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setUploadedFile(file);
     setIsParsing(true);
     setParseProgress('Reading file...');
 
@@ -1572,12 +1574,65 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       if (mergedCount > 0) parts.push(`${mergedCount} rows consolidated`);
       if (fingerprintUpdates.length > 0) parts.push(`${fingerprintUpdates.length} fingerprint IDs saved`);
 
+      // ── Archive the original file to Supabase Storage ──
+      if (uploadedFile) {
+        try {
+          const { data: userData } = await supabase.auth.getUser();
+          const userId = userData?.user?.id || 'unknown';
+          const timestamp = format(new Date(), 'yyyyMMdd_HHmmss');
+          const safeName = uploadedFile.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+          const storagePath = `${timestamp}_${safeName}`;
+
+          const { error: storageErr } = await supabase.storage
+            .from('attendance-files')
+            .upload(storagePath, uploadedFile, { contentType: uploadedFile.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+          if (storageErr) {
+            console.warn('Failed to archive attendance file:', storageErr);
+          } else {
+            // Compute date range from imported records
+            const importedDates = finalData.map(r => r.attendance_date).sort();
+            const dateFrom = importedDates[0] || null;
+            const dateTo = importedDates[importedDates.length - 1] || null;
+            const companyNames = classificationSummary 
+              ? Object.values(classificationSummary.byCompany).map(c => c.companyName).join(', ') 
+              : '';
+
+            await supabase.from('attendance_file_uploads').insert({
+              file_name: uploadedFile.name,
+              file_path: storagePath,
+              file_size: uploadedFile.size,
+              uploaded_by: userId,
+              records_imported: finalData.length,
+              records_skipped: skippedDuplicates,
+              records_unmatched: unmatchedEmployees.length,
+              company_names: companyNames || null,
+              date_range_from: dateFrom,
+              date_range_to: dateTo,
+              import_summary: {
+                totalParsed: uploadPreview?.length || 0,
+                matched: uploadPreview?.filter(r => r.matched).length || 0,
+                unmatched: unmatchedEmployees.length,
+                imported: finalData.length,
+                skippedDuplicates,
+                mergedRows: mergedCount,
+                fingerprintsSaved: fingerprintUpdates.length,
+              },
+            });
+            parts.push('File archived ✓');
+          }
+        } catch (archiveErr) {
+          console.warn('File archive error:', archiveErr);
+        }
+      }
+
       toast({ 
         title: `${finalData.length} records imported successfully`,
         description: parts.join(', ') || 'All records imported'
       });
       
       setUploadPreview(null);
+      setUploadedFile(null);
       setClassificationSummary(null);
       setShowUnmatchedReview(false);
       setUnmatchedReviewed(false);
@@ -1842,7 +1897,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               </div>
               <div className="flex flex-col gap-2 items-end">
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setUploadPreview(null); setClassificationSummary(null); setShowUnmatchedReview(false); }}>
+                  <Button variant="outline" size="sm" className="h-8" onClick={() => { setUploadPreview(null); setUploadedFile(null); setClassificationSummary(null); setShowUnmatchedReview(false); }}>
                     <X className="h-3.5 w-3.5 mr-1" /> Cancel
                   </Button>
                   <Button size="sm" className="h-8" onClick={handleImport} disabled={isImporting || uploadPreview.filter(r => r.matched).length === 0}>
