@@ -16,7 +16,7 @@ import {
 import { 
   format, startOfMonth, endOfMonth, isSameDay, 
   getDay, getDaysInMonth, addMonths, subMonths, getYear, getMonth,
-  isSaturday, isSunday, isFriday, parse
+  isSaturday, isSunday, isFriday, parse, parseISO
 } from 'date-fns';
 import { useAttendance, useMyAttendance, ATTENDANCE_STATUS_LABELS, AttendanceStatus } from '@/hooks/useAttendance';
 import { useDepartments } from '@/hooks/useDepartments';
@@ -67,13 +67,36 @@ function getExcelNotation(dayDate: Date, record?: any): { label: string; color: 
     return { label: 'OFF', color: 'text-white font-bold', bg: 'bg-red-600 dark:bg-red-600' };
   }
   if (record.status === 'half_day') {
-    return { label: '½', color: 'text-gray-800 dark:text-gray-900 font-bold', bg: 'bg-yellow-300 dark:bg-yellow-500' };
+    if (isSaturday(dayDate)) {
+      return { label: '½', color: 'text-gray-800 dark:text-gray-900 font-bold', bg: 'bg-yellow-300 dark:bg-yellow-500' };
+    }
+    return { label: 'ON', color: 'text-white font-bold', bg: 'bg-green-500 dark:bg-green-600' };
   }
   return { label: 'ON', color: 'text-white font-bold', bg: 'bg-green-500 dark:bg-green-600' };
 }
 
 const DAY_ABBREV = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function parseCalendarDate(value?: string | null): Date | null {
+  if (!value) return null;
+  const trimmed = String(value).trim();
+  const ymd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+  }
+
+  const parsed = parseISO(trimmed);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function normalizeImportedStatus(status: AttendanceStatus, attendanceDate: string, totalHours: number): AttendanceStatus {
+  if (status !== 'half_day') return status;
+  const localDate = parseCalendarDate(attendanceDate);
+  if (!localDate) return status;
+  if (isSaturday(localDate)) return 'half_day';
+  return totalHours > 0 ? 'present' : 'absent';
+}
 
 /* ─── KPI Summary Cards (DAILY counts — per selected date) ─── */
 function AttendanceKPICards({ records, users, employees, selectedMonth, selectedYear, activeView, selectedDate }: {
@@ -222,8 +245,8 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
     // Try both the employee id and attendanceKey
     const recs = userRecords.get(userId) || [];
     return recs.find(r => {
-      const recDate = new Date(r.date || r.attendance_date);
-      return isSameDay(recDate, day);
+      const recDate = parseCalendarDate(r.date || r.attendance_date);
+      return recDate ? isSameDay(recDate, day) : false;
     });
   };
 
@@ -374,8 +397,8 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
   const userMonthData = useMemo(() => {
     const map = new Map<string, Record<number, { present: number; absent: number; satDays: number; sunOT: number; total: number; wkndFri: number; holidaysWorked: number }>>();
     records.forEach(r => {
-      const date = new Date(r.date || r.attendance_date);
-      if (date.getFullYear() !== selectedYear) return;
+      const date = parseCalendarDate(r.date || r.attendance_date);
+      if (!date || date.getFullYear() !== selectedYear) return;
       const month = date.getMonth();
       const userId = r.user_id;
       if (!map.has(userId)) map.set(userId, {});
@@ -821,7 +844,20 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
       const parseDate = (val: any): Date | null => {
         if (!val) return null;
         if (val instanceof Date && !isNaN(val.getTime())) return val;
-        if (typeof val === 'number') return new Date((val - 25569) * 86400 * 1000);
+        if (typeof val === 'number') {
+          const excelEpochUtc = Date.UTC(1899, 11, 30);
+          const utcMs = excelEpochUtc + Math.round(val * 86400 * 1000);
+          const utcDate = new Date(utcMs);
+          return new Date(
+            utcDate.getUTCFullYear(),
+            utcDate.getUTCMonth(),
+            utcDate.getUTCDate(),
+            utcDate.getUTCHours(),
+            utcDate.getUTCMinutes(),
+            utcDate.getUTCSeconds(),
+            utcDate.getUTCMilliseconds()
+          );
+        }
         const str = String(val).trim();
         for (const fmt of ['dd-MMM-yy HH:mm:ss', 'dd-MMM-yyyy HH:mm:ss', 'yyyy-MM-dd HH:mm:ss', 'dd/MM/yyyy HH:mm:ss', 'MM/dd/yyyy HH:mm:ss', 'yyyy-MM-dd', 'dd/MM/yyyy', 'dd-MM-yyyy', 'dd-MMM-yyyy', 'dd-MMM-yy']) {
           try {
@@ -829,6 +865,10 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             if (!isNaN(d.getTime()) && d.getFullYear() > 1970) return d;
           } catch { /* skip */ }
         }
+
+        const isoParsed = parseISO(str);
+        if (!isNaN(isoParsed.getTime())) return isoParsed;
+
         const fallback = new Date(str);
         return isNaN(fallback.getTime()) ? null : fallback;
       };
@@ -1172,7 +1212,10 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               // Verify consecutive dates
               const currentDateStr = currentKey.split('|||')[1];
               const nextDateStr = nextKey.split('|||')[1];
-              const dayDiff = (new Date(nextDateStr).getTime() - new Date(currentDateStr).getTime()) / (1000 * 60 * 60 * 24);
+              const currentDate = parseCalendarDate(currentDateStr);
+              const nextDate = parseCalendarDate(nextDateStr);
+              if (!currentDate || !nextDate) continue;
+              const dayDiff = (nextDate.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24);
               if (dayDiff !== 1) continue;
 
               // Sort events for analysis
@@ -1182,11 +1225,9 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               // Pattern detection for night shifts:
               // A complete DAY shift has events spanning morning-to-afternoon (e.g. 07:55 in, 16:52 out)
               // A night shift START has all events in the afternoon/evening with NO morning event
-              // Next day's morning-only events are the night shift END
+              // Next day's morning events are the night shift END
               const firstCurrentHour = currentSorted[0].getHours();
               const lastCurrentHour = currentSorted[currentSorted.length - 1].getHours();
-              const firstNextHour = nextSorted[0].getHours();
-              const lastNextHour = nextSorted[nextSorted.length - 1].getHours();
 
               // Current day is a complete day shift if it has an event before 12:00 AND an event after 14:00
               // (e.g., check-in 07:55 + check-out 16:52) — never merge these
@@ -1197,15 +1238,20 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
               // Current looks like night shift start: all events are afternoon/evening (no morning event)
               const currentIsNightStart = !currentIsCompleteDayShift && lastCurrentHour >= 14;
 
-              // Next day looks like night shift end: all events are morning-only (before noon)
-              const nextIsMorningOnly = lastNextHour < 12;
+              // Merge only morning events from next day, keep afternoon events for that day
+              const nextMorningEvents = nextSorted.filter(event => event.getHours() < 12);
+              const nextAfternoonEvents = nextSorted.filter(event => event.getHours() >= 12);
 
-              if (currentIsNightStart && nextIsMorningOnly) {
-                // Merge next day's events into current day
-                currentGroup.events.push(...nextGroup.events);
-                grouped.delete(nextKey);
-                personKeys.splice(ki + 1, 1);
-                ki--; // Re-check
+              if (currentIsNightStart && nextMorningEvents.length > 0) {
+                currentGroup.events.push(...nextMorningEvents);
+
+                if (nextAfternoonEvents.length === 0) {
+                  grouped.delete(nextKey);
+                  personKeys.splice(ki + 1, 1);
+                  ki--; // Re-check
+                } else {
+                  nextGroup.events = nextAfternoonEvents;
+                }
               }
             }
           }
@@ -1218,7 +1264,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         grouped.forEach((group, key) => {
           const [name, dateStr] = key.split('|||');
           // If user specified an upload target date, use it for context (but actual date comes from Excel)
-          const parsedDate = new Date(dateStr);
+          const parsedDate = parseCalendarDate(dateStr) ?? new Date();
           // First-In / Last-Out: sort all events chronologically, use first as clock-in, last as clock-out
           const sortedEvents = [...group.events].sort((a, b) => a.getTime() - b.getTime());
           const earliestIn = sortedEvents.length > 0 ? sortedEvents[0] : null;
@@ -1229,6 +1275,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
 
           // Apply business rules from policy engine
           const processed = processAttendanceRecord(earliestIn, latestOut, policyValues);
+          const normalizedStatus = normalizeImportedStatus(processed.status, dateStr, processed.totalHours);
 
           // Determine department: matched user's department > classification > leave unresolved (do NOT default to HR)
           let resolvedDeptId = matchedUser?.department_id || classification.departmentId || null;
@@ -1239,7 +1286,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             clockOut: latestOut ? format(latestOut, 'HH:mm') : '—',
             clockInRaw: earliestIn?.toISOString() || null,
             clockOutRaw: latestOut?.toISOString() || null,
-            status: processed.status,
+            status: normalizedStatus,
             shiftType: processed.shiftType,
             totalHours: processed.totalHours,
             regularHours: processed.regularHours,
@@ -1314,16 +1361,18 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           const clockInDate = clockInISO ? new Date(clockInISO) : null;
           const clockOutDate = clockOutISO ? new Date(clockOutISO) : null;
           const processed = processAttendanceRecord(clockInDate, clockOutDate, policyValues);
+          const attendanceDate = format(parsedDate, 'yyyy-MM-dd');
+          const normalizedStatus = normalizeImportedStatus(processed.status, attendanceDate, processed.totalHours);
 
           // Determine department: matched user's department > classification > leave unresolved (do NOT default to HR)
           let resolvedDeptId = matchedUser?.department_id || classification.departmentId || null;
 
           parsed.push({
-            name, date: format(parsedDate, 'yyyy-MM-dd'), dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
+            name, date: attendanceDate, dateDisplay: format(parsedDate, 'dd-MMM-yyyy'),
             clockIn: clockInISO ? format(new Date(clockInISO), 'HH:mm') : '—',
             clockOut: clockOutISO ? format(new Date(clockOutISO), 'HH:mm') : '—',
             clockInRaw: clockInISO, clockOutRaw: clockOutISO,
-            status: processed.status,
+            status: normalizedStatus,
             shiftType: processed.shiftType,
             totalHours: processed.totalHours,
             regularHours: processed.regularHours,
@@ -1492,7 +1541,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
           attendance_date: r.date,
           clock_in: mergedClockIn,
           clock_out: mergedClockOut,
-          status: reprocessed.status,
+          status: normalizeImportedStatus(reprocessed.status, r.date, reprocessed.totalHours),
           shift_type: reprocessed.shiftType || 'day',
           total_hours: reprocessed.totalHours || 0,
           regular_hours: reprocessed.regularHours || 0,
@@ -1525,7 +1574,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
             ...rec,
             clock_in: mergedIn,
             clock_out: mergedOut,
-            status: reproc.status,
+            status: normalizeImportedStatus(reproc.status, rec.attendance_date, reproc.totalHours),
             shift_type: reproc.shiftType || 'day',
             total_hours: reproc.totalHours || 0,
             regular_hours: reproc.regularHours || 0,
