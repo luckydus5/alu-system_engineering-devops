@@ -119,10 +119,10 @@ function AttendanceKPICards({ records, users, employees, selectedMonth, selected
     const onLeave = dailyRecords.filter(r => r.status === 'on_leave').length;
     const total = dailyRecords.length || 1;
     const attendanceRate = Math.round(((present + late) / total) * 100);
-    const totalEmployees = employees.length > 0 ? employees.length : users.length;
+    const totalEmployees = employees.length;
 
     return { present, late, absent, onLeave, attendanceRate, totalEmployees, dateLabel: format(targetDate, 'EEE, dd MMM yyyy') };
-  }, [records, employees, users, selectedDate]);
+  }, [records, employees, selectedDate]);
 
   const cards = [
     { title: 'Employees', value: stats.totalEmployees, icon: Users, color: 'bg-primary', iconColor: 'text-primary-foreground' },
@@ -213,16 +213,8 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
       }
     });
     
-    // Add auth users who aren't already represented by an employee record
-    users.forEach((u: any) => {
-      if (!seen.has(u.id)) {
-        seen.add(u.id);
-        result.push({ id: u.id, attendanceKey: u.id, full_name: u.full_name || u.email, department_id: u.department_id });
-      }
-    });
-    
     return result;
-  }, [employees, users]);
+  }, [employees]);
 
   const employeeList = useMemo(() => {
     let filtered = mergedUsers.filter(u => {
@@ -424,7 +416,7 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
     return map;
   }, [records, selectedYear]);
 
-  // Merge employees and auth users
+  // Only use employees (not auth users) for attendance display
   const mergedUsers = useMemo(() => {
     const seen = new Set<string>();
     const result: { id: string; attendanceKey: string; full_name: string; department_id: string | null }[] = [];
@@ -432,11 +424,8 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
       const key = e.linked_user_id || e.id;
       if (!seen.has(key)) { seen.add(key); result.push({ id: e.id, attendanceKey: key, full_name: e.full_name, department_id: e.department_id }); }
     });
-    users.forEach((u: any) => {
-      if (!seen.has(u.id)) { seen.add(u.id); result.push({ id: u.id, attendanceKey: u.id, full_name: u.full_name || u.email, department_id: u.department_id }); }
-    });
     return result;
-  }, [employees, users]);
+  }, [employees]);
 
   const grouped = useMemo(() => {
     const filtered = mergedUsers.filter(u => {
