@@ -684,7 +684,7 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
 
 export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   const [activeView, setActiveView] = useState<'requests' | 'calendar' | 'balances' | 'calculator' | 'entitlements'>('requests');
-  const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(new Date());
