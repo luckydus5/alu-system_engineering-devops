@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,8 @@ import {
   CheckCircle2, XCircle, AlertCircle, Filter, RefreshCw,
   ChevronLeft, ChevronRight, Plus, Eye, MoreHorizontal,
   CalendarDays, LayoutGrid, List, Download, ArrowUpRight,
-  Wallet, Timer, Calculator, Table2, Edit, Loader2, Settings2
+  Wallet, Timer, Calculator, Table2, Edit, Loader2, Settings2,
+  UserCheck
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveType, LeaveStatus } from '@/hooks/useLeaveRequests';
 import { useAllLeaveBalances } from '@/hooks/useAllLeaveBalances';
@@ -30,6 +31,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths, differenceInDays, eachDayOfInterval as eachDay, isSaturday, isSunday, addDays } from 'date-fns';
+import { useQuery } from '@tanstack/react-query';
 
 interface LeaveManagementTabProps {
   departmentId: string;
@@ -201,16 +203,18 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                   </tr>
                 ) : (
                   requests.map((request, idx) => {
-                    const startDate = parseISO(request.start_date);
-                    const endDate = parseISO(request.end_date);
-                    const isActive = request.status === 'approved' && isWithinInterval(today, { start: startDate, end: endDate });
-                    const isUpcoming = request.status === 'approved' && startDate > today;
-                    const isPast = endDate < today;
+                    const isSynthetic = (request as any)._isSyntheticOnLeave;
+                    const hasValidDates = request.start_date && request.end_date;
+                    const startDate = hasValidDates ? parseISO(request.start_date) : null;
+                    const endDate = hasValidDates ? parseISO(request.end_date) : null;
+                    const isActive = !isSynthetic && startDate && endDate && request.status === 'approved' && isWithinInterval(today, { start: startDate, end: endDate });
+                    const isUpcoming = !isSynthetic && startDate && request.status === 'approved' && startDate > today;
+                    const isPast = !isSynthetic && endDate && endDate < today;
 
                     // Days elapsed (only for active/past approved leaves)
                     let daysElapsed = 0;
                     let daysLeft = 0;
-                    if (request.status === 'approved') {
+                    if (request.status === 'approved' && startDate && endDate && !isSynthetic) {
                       if (isActive) {
                         daysElapsed = Math.max(0, differenceInDays(today, startDate) + 1);
                         daysLeft = Math.max(0, differenceInDays(endDate, today));
@@ -230,7 +234,7 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
 
                     const statusConfig = STATUS_CONFIG[request.status as LeaveStatus];
                     const StatusIcon = statusConfig.icon;
-                    const canAct = request.status === 'pending' || request.status === 'manager_approved' || request.status === 'gm_pending';
+                    const canAct = !isSynthetic && (request.status === 'pending' || request.status === 'manager_approved' || request.status === 'gm_pending');
 
                     return (
                       <tr 
@@ -238,8 +242,9 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                         className={cn(
                           "border-b hover:bg-muted/30 transition-colors cursor-pointer",
                           isActive && "bg-amber-50/40 dark:bg-amber-900/10",
+                          isSynthetic && "bg-purple-50/40 dark:bg-purple-900/10",
                         )}
-                        onClick={() => onView(request.id)}
+                        onClick={() => !isSynthetic && onView(request.id)}
                       >
                         <td className="sticky left-0 z-10 bg-background px-3 py-2 text-muted-foreground">{idx + 1}</td>
                         <td className="sticky left-8 z-10 bg-background px-3 py-2">
@@ -247,19 +252,32 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                           <div className="text-[10px] text-muted-foreground">{request.department?.name || ''}</div>
                         </td>
                         <td className="px-3 py-2">
-                          <div className="flex items-center gap-1.5">
-                            <div className={cn("h-2 w-2 rounded-full shrink-0", LEAVE_TYPE_COLORS[request.leave_type as LeaveType])} />
-                            <span className="truncate">{LEAVE_TYPE_LABELS[request.leave_type as LeaveType]}</span>
-                          </div>
+                          {isSynthetic ? (
+                            <Badge className="bg-purple-500/10 text-purple-600 text-[10px]">
+                              <UserCheck className="h-3 w-3 mr-0.5" />
+                              Employee Status
+                            </Badge>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <div className={cn("h-2 w-2 rounded-full shrink-0", LEAVE_TYPE_COLORS[request.leave_type as LeaveType])} />
+                              <span className="truncate">{LEAVE_TYPE_LABELS[request.leave_type as LeaveType]}</span>
+                            </div>
+                          )}
                         </td>
-                        <td className="px-3 py-2 text-center whitespace-nowrap">{format(startDate, 'dd-MMM-yy')}</td>
-                        <td className="px-3 py-2 text-center whitespace-nowrap">{format(endDate, 'dd-MMM-yy')}</td>
-                        <td className="px-3 py-2 text-center font-bold bg-blue-50/30 dark:bg-blue-900/5">{request.total_days}</td>
+                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                          {isSynthetic ? <span className="text-muted-foreground italic text-[10px]">N/A</span> : startDate ? format(startDate, 'dd-MMM-yy') : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-center whitespace-nowrap">
+                          {isSynthetic ? <span className="text-muted-foreground italic text-[10px]">N/A</span> : endDate ? format(endDate, 'dd-MMM-yy') : '—'}
+                        </td>
+                        <td className="px-3 py-2 text-center font-bold bg-blue-50/30 dark:bg-blue-900/5">
+                          {isSynthetic ? '—' : request.total_days}
+                        </td>
                         <td className={cn(
                           "px-3 py-2 text-center font-medium bg-amber-50/30 dark:bg-amber-900/5",
                           isActive && "text-amber-700 font-bold"
                         )}>
-                          {request.status === 'approved' ? (
+                          {!isSynthetic && request.status === 'approved' ? (
                             <span>{daysElapsed}{isActive && <span className="text-[10px] ml-0.5">▶</span>}</span>
                           ) : '—'}
                         </td>
@@ -267,7 +285,7 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                           "px-3 py-2 text-center font-medium bg-orange-50/30 dark:bg-orange-900/5",
                           isActive && daysLeft <= 2 && "text-red-600 font-bold"
                         )}>
-                          {request.status === 'approved' ? daysLeft : '—'}
+                          {!isSynthetic && request.status === 'approved' ? daysLeft : '—'}
                         </td>
                         <td className={cn(
                           "px-3 py-2 text-center font-bold bg-emerald-50/30 dark:bg-emerald-900/5",
@@ -277,10 +295,17 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                           {balanceRemaining}
                         </td>
                         <td className="px-3 py-2 text-center">
-                          <Badge className={cn("text-[10px] px-2", statusConfig.bgColor, statusConfig.color)}>
-                            <StatusIcon className="h-3 w-3 mr-0.5" />
-                            {LEAVE_STATUS_LABELS[request.status as LeaveStatus]}
-                          </Badge>
+                          {isSynthetic ? (
+                            <Badge className="bg-amber-500/10 text-amber-600 text-[10px]">
+                              <Timer className="h-3 w-3 mr-0.5" />
+                              On Leave
+                            </Badge>
+                          ) : (
+                            <Badge className={cn("text-[10px] px-2", statusConfig.bgColor, statusConfig.color)}>
+                              <StatusIcon className="h-3 w-3 mr-0.5" />
+                              {LEAVE_STATUS_LABELS[request.status as LeaveStatus]}
+                            </Badge>
+                          )}
                         </td>
                         <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
@@ -294,9 +319,11 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                                 </Button>
                               </>
                             )}
-                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onView(request.id)}>
-                              <Eye className="h-3.5 w-3.5" />
-                            </Button>
+                            {!isSynthetic && (
+                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => onView(request.id)}>
+                                <Eye className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -700,6 +727,19 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   const isInHRDept = roles.some(r => r.department_id === departmentId);
   const isHROrAdmin = hasRole('admin') || hasRole('super_admin') || isInHRDept;
 
+  // Fetch employees with employment_status = 'on_leave' that don't have matching leave_requests
+  const { data: onLeaveEmployees = [] } = useQuery({
+    queryKey: ['on-leave-employees'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('id, full_name, department_id, company_id, departments(name)')
+        .eq('employment_status', 'on_leave');
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
   // Fetch leave policy values
   const { getPolicyValue } = useCompanyPolicies();
   const policyValues = useMemo(() => ({
@@ -709,8 +749,50 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   }), [getPolicyValue]);
   const canEditBalances = isHROrAdmin || userCanEditBalances;
 
+  // Merge on_leave employees (without leave_requests) as synthetic entries
+  const syntheticOnLeaveEntries = useMemo(() => {
+    // Get all requester_ids and employee_ids from existing leave requests that are approved/active
+    const existingEmployeeIds = new Set(
+      leaveRequests
+        .filter(r => r.status === 'approved' || r.status === 'pending' || r.status === 'hr_approved' || r.status === 'manager_approved' || r.status === 'gm_pending')
+        .flatMap(r => [r.requester_id, (r as any).employee_id].filter(Boolean))
+    );
+
+    return onLeaveEmployees
+      .filter(emp => !existingEmployeeIds.has(emp.id))
+      .map(emp => ({
+        id: `emp-on-leave-${emp.id}`,
+        requester_id: emp.id,
+        department_id: emp.department_id,
+        leave_type: 'annual' as LeaveType,
+        start_date: '', // Unknown
+        end_date: '',
+        total_days: 0,
+        reason: null,
+        status: 'approved' as LeaveStatus,
+        manager_id: null,
+        manager_action_at: null,
+        manager_comment: null,
+        hr_reviewer_id: null,
+        hr_action_at: null,
+        hr_comment: null,
+        gm_reviewer_id: null,
+        gm_action_at: null,
+        gm_comment: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        requester: { full_name: emp.full_name, email: '' },
+        department: emp.departments as any,
+        _isSyntheticOnLeave: true,
+      }));
+  }, [onLeaveEmployees, leaveRequests]);
+
+  const allRequests = useMemo(() => {
+    return [...leaveRequests, ...syntheticOnLeaveEntries];
+  }, [leaveRequests, syntheticOnLeaveEntries]);
+
   const filteredRequests = useMemo(() => {
-    return leaveRequests.filter(request => {
+    return allRequests.filter(request => {
       const matchesSearch = 
         request.requester?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         request.requester?.email?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -720,16 +802,16 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
       
       return matchesSearch && matchesStatus && matchesType;
     });
-  }, [leaveRequests, searchTerm, statusFilter, typeFilter]);
+  }, [allRequests, searchTerm, statusFilter, typeFilter]);
 
   const stats = useMemo(() => ({
-    pending: leaveRequests.filter(r => r.status === 'pending').length,
-    hrApproved: leaveRequests.filter(r => r.status === 'hr_approved').length,
-    managerApproved: leaveRequests.filter(r => r.status === 'manager_approved').length,
-    gmPending: leaveRequests.filter(r => r.status === 'gm_pending').length,
-    approved: leaveRequests.filter(r => r.status === 'approved').length,
-    rejected: leaveRequests.filter(r => r.status === 'rejected').length,
-  }), [leaveRequests]);
+    pending: allRequests.filter(r => r.status === 'pending').length,
+    hrApproved: allRequests.filter(r => r.status === 'hr_approved').length,
+    managerApproved: allRequests.filter(r => r.status === 'manager_approved').length,
+    gmPending: allRequests.filter(r => r.status === 'gm_pending').length,
+    approved: allRequests.filter(r => r.status === 'approved').length,
+    rejected: allRequests.filter(r => r.status === 'rejected').length,
+  }), [allRequests]);
 
   // New workflow: pending (HR) → hr_approved (Manager) → manager_approved (GM/OM) → approved
   const handleApprove = async (id: string, currentStatus: LeaveStatus) => {
