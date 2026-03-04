@@ -397,12 +397,40 @@ async function main() {
       totalRows++;
 
       const dateTime = parseDateTime(dateTimeVal);
-      if (!dateTime) continue;
 
-      // ── FILTER: January 2026 only ──
+      // Build raw scan record — EVERY row saved, nothing skipped
+      const rawScan = {
+        source_file: file.label,
+        row_number: i,
+        department_text: dept,
+        employee_name: name,
+        fingerprint_number: fp || null,
+        scan_datetime: dateTime ? dateTime.toISOString() : null,
+        scan_status: statusVal,
+        scan_date: dateTime ? formatDate(dateTime) : null,
+        is_matched: false,
+        was_imported: false,
+        skip_reason: null,
+        matched_employee_id: null,
+        matched_employee_name: null,
+        match_score: null,
+        match_method: null,
+      };
+
+      if (!dateTime) {
+        rawScan.skip_reason = 'parse_error';
+        rawScan.scan_datetime = new Date().toISOString();
+        rawScan.scan_date = formatDate(new Date());
+        rawScans.push(rawScan);
+        continue;
+      }
+
+      // Keep ALL records — tag non-target months but don't discard
       if (dateTime.getFullYear() !== 2026 || dateTime.getMonth() !== 0) {
         skippedNonJan++;
         fileSkipped++;
+        rawScan.skip_reason = 'wrong_month';
+        rawScans.push(rawScan);
         continue;
       }
 
@@ -423,12 +451,22 @@ async function main() {
           unmatchedNames.set(key, { bioName: name, fp, dept, count: 0, company: file.label });
         }
         unmatchedNames.get(key).count++;
+        rawScan.skip_reason = 'unmatched';
+        rawScans.push(rawScan);
         continue;
       }
 
       matchedRows++;
       fileMatchedRows++;
       const employee = result.employee;
+
+      // Tag raw scan with match results
+      rawScan.is_matched = true;
+      rawScan.matched_employee_id = employee.id;
+      rawScan.matched_employee_name = employee.full_name;
+      rawScan.match_score = result.score;
+      rawScan.match_method = result.method;
+      rawScans.push(rawScan);
 
       const logKey = `${name}→${employee.full_name}`;
       if (!matchLog.some(l => l.key === logKey)) {
