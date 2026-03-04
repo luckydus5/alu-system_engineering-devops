@@ -47,7 +47,6 @@ function determineStatus(clockIn: Date, dateStr: string): string {
   const dayOfWeek = new Date(dateStr + "T12:00:00").getDay();
   if (dayOfWeek === 6) return "half_day";
   const inHour = clockIn.getHours();
-  // Night shift workers (clock-in 14:00+) are not late
   if (inHour >= 14 || inHour < 4) return "present";
   const totalMin = inHour * 60 + clockIn.getMinutes();
   if (totalMin > 8 * 60 + 15) return "late";
@@ -62,6 +61,12 @@ interface Employee {
   company_name: string;
 }
 
+interface MatchResult {
+  employee: Employee;
+  score: number;
+  method: string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -74,21 +79,24 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { markdownText, source, monthFilter } = body as { 
+    const { markdownText, source, monthFilter, fileUploadId } = body as { 
       markdownText: string; 
       source: string;
-      monthFilter?: number; // 0=Jan, 1=Feb, etc.
+      monthFilter?: number;
+      fileUploadId?: string;
     };
     
-    const targetMonth = monthFilter ?? 0; // Default January
+    const targetMonth = monthFilter ?? 0;
     
     console.log(`Processing import from ${source}, filtering month=${targetMonth}`);
 
     // Parse markdown table rows
     const lines = markdownText.split("\n");
-    const rows: { department: string; name: string; fingerprint: string; dateTime: string; status: string }[] = [];
+    const rows: { department: string; name: string; fingerprint: string; dateTime: string; status: string; rowNum: number }[] = [];
     
+    let rowNum = 0;
     for (const line of lines) {
+      rowNum++;
       if (!line.startsWith("|") || line.includes("Department") || line.includes("|-")) continue;
       const parts = line.split("|").filter(p => p.trim() !== "");
       if (parts.length >= 5) {
@@ -98,6 +106,7 @@ Deno.serve(async (req) => {
           fingerprint: parts[2].trim(),
           dateTime: parts[3].trim(),
           status: parts[4].trim(),
+          rowNum,
         });
       }
     }
@@ -128,29 +137,36 @@ Deno.serve(async (req) => {
       if (e.fingerprint_number) empByFingerprint.set(e.fingerprint_number.trim(), e);
     });
 
-    function matchEmployee(name: string, fp: string): Employee | null {
+    function matchEmployee(name: string, fp: string): MatchResult | null {
       if (fp) {
         const empFP = empByFingerprint.get(fp);
-        if (empFP && namesMatch(name, empFP.full_name)) return empFP;
+        if (empFP && namesMatch(name, empFP.full_name)) {
+          return { employee: empFP, score: 90, method: "fingerprint+name" };
+        }
       }
       const norm = normalizeName(name);
       for (const e of empList) {
-        if (normalizeName(e.full_name) === norm) return e;
+        if (normalizeName(e.full_name) === norm) {
+          return { employee: e, score: 100, method: "exact" };
+        }
       }
       const companyHint = source.includes("Peat") ? "HQ Peat" : source.includes("Power") ? "HQ Power" : "";
       let bestMatch: Employee | null = null;
       for (const e of empList) {
         if (namesMatch(name, e.full_name)) {
-          if (companyHint && e.company_name === companyHint) return e;
+          if (companyHint && e.company_name === companyHint) {
+            return { employee: e, score: 80, method: "fuzzy+company" };
+          }
           if (!bestMatch) bestMatch = e;
         }
       }
-      return bestMatch;
+      if (bestMatch) return { employee: bestMatch, score: 70, method: "fuzzy" };
+      return null;
     }
 
-    // Process rows
+    // ═══ Process ALL rows — save every single one as a raw scan ═══
+    const rawScans: any[] = [];
     const grouped = new Map<string, { events: Date[]; employee: Employee; name: string }>();
-    const unmatchedNames = new Map<string, number>(); // name -> count
     let matchedCount = 0;
     let skippedOtherMonth = 0;
     let parseErrors = 0;
@@ -158,34 +174,79 @@ Deno.serve(async (req) => {
     for (const row of rows) {
       if (!row.name || !row.dateTime) continue;
       const dt = parseDateTime(row.dateTime);
-      if (!dt) { parseErrors++; continue; }
+
+      // Build raw scan record — EVERY row gets saved
+      const rawScan: any = {
+        file_upload_id: fileUploadId || null,
+        source_file: source,
+        row_number: row.rowNum,
+        department_text: row.department,
+        employee_name: row.name,
+        fingerprint_number: row.fingerprint || null,
+        scan_datetime: dt ? dt.toISOString() : new Date().toISOString(),
+        scan_status: row.status,
+        scan_date: dt ? formatDate(dt) : formatDate(new Date()),
+        is_matched: false,
+        was_imported: false,
+        skip_reason: null,
+      };
+
+      if (!dt) {
+        parseErrors++;
+        rawScan.skip_reason = "parse_error";
+        rawScans.push(rawScan);
+        continue;
+      }
+
       if (dt.getMonth() !== targetMonth || dt.getFullYear() !== 2026) {
         skippedOtherMonth++;
+        rawScan.skip_reason = "wrong_month";
+        rawScans.push(rawScan);
         continue;
       }
 
-      const employee = matchEmployee(row.name, row.fingerprint);
-      if (!employee) {
-        unmatchedNames.set(row.name, (unmatchedNames.get(row.name) || 0) + 1);
+      const result = matchEmployee(row.name, row.fingerprint);
+      if (!result) {
+        rawScan.skip_reason = "unmatched";
+        rawScans.push(rawScan);
         continue;
       }
+
       matchedCount++;
+      rawScan.is_matched = true;
+      rawScan.matched_employee_id = result.employee.id;
+      rawScan.matched_employee_name = result.employee.full_name;
+      rawScan.match_score = result.score;
+      rawScan.match_method = result.method;
+      rawScans.push(rawScan);
 
       const dateKey = formatDate(dt);
-      const groupKey = `${employee.id}|${dateKey}`;
+      const groupKey = `${result.employee.id}|${dateKey}`;
       if (!grouped.has(groupKey)) {
-        grouped.set(groupKey, { events: [], employee, name: row.name });
+        grouped.set(groupKey, { events: [], employee: result.employee, name: row.name });
       }
       grouped.get(groupKey)!.events.push(dt);
     }
 
-    console.log(`Matched: ${matchedCount}, Unmatched: ${unmatchedNames.size}, SkippedOtherMonth: ${skippedOtherMonth}, ParseErrors: ${parseErrors}, Groups: ${grouped.size}`);
+    console.log(`Raw scans to save: ${rawScans.length}, Matched: ${matchedCount}, SkippedOtherMonth: ${skippedOtherMonth}, ParseErrors: ${parseErrors}`);
 
-    // Cross-midnight night shift consolidation
-    // Workers clocking in at 14:00+ and checking out next morning need merging
-    const groupKeys = [...grouped.keys()];
+    // ═══ Save ALL raw scans to attendance_raw_scans ═══
+    let rawSaved = 0;
+    for (let i = 0; i < rawScans.length; i += 100) {
+      const batch = rawScans.slice(i, i + 100);
+      const { error } = await supabase.from("attendance_raw_scans").insert(batch);
+      if (error) {
+        console.error(`Raw scan batch ${i} error: ${error.message}`);
+      } else {
+        rawSaved += batch.length;
+      }
+    }
+    console.log(`Raw scans saved: ${rawSaved}/${rawScans.length}`);
+
+    // ═══ Cross-midnight night shift consolidation ═══
+    const groupKeysList = [...grouped.keys()];
     let nightMerged = 0;
-    for (const key of groupKeys) {
+    for (const key of groupKeysList) {
       const group = grouped.get(key);
       if (!group) continue;
       const [employeeId, dateStr] = key.split("|");
@@ -215,7 +276,7 @@ Deno.serve(async (req) => {
     }
     console.log(`Night shifts merged: ${nightMerged}`);
 
-    // Build attendance records
+    // ═══ Build attendance records ═══
     const records: any[] = [];
     grouped.forEach((group, key) => {
       const [employeeId, dateStr] = key.split("|");
@@ -262,7 +323,7 @@ Deno.serve(async (req) => {
 
     console.log(`Prepared ${records.length} records for upsert`);
 
-    // Upsert
+    // Upsert attendance records
     let imported = 0, errors = 0;
     for (let i = 0; i < records.length; i += 50) {
       const batch = records.slice(i, i + 50);
@@ -277,21 +338,36 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build unmatched list with counts
-    const unmatchedList = [...unmatchedNames.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .map(([name, count]) => ({ name, scanCount: count }));
+    // Update raw scans with was_imported = true for matched records
+    if (fileUploadId) {
+      await supabase
+        .from("attendance_raw_scans")
+        .update({ was_imported: true })
+        .eq("file_upload_id", fileUploadId)
+        .eq("is_matched", true);
+    }
+
+    const unmatchedList = rawScans
+      .filter(s => s.skip_reason === "unmatched")
+      .reduce((acc: any[], s) => {
+        const existing = acc.find(a => a.name === s.employee_name);
+        if (existing) { existing.scanCount++; }
+        else { acc.push({ name: s.employee_name, scanCount: 1, fingerprint: s.fingerprint_number }); }
+        return acc;
+      }, [])
+      .sort((a: any, b: any) => b.scanCount - a.scanCount);
 
     const result = {
       source,
       totalParsedRows: rows.length,
-      januaryRowsProcessed: matchedCount + [...unmatchedNames.values()].reduce((a, b) => a + b, 0),
+      totalRawScansSaved: rawSaved,
       skippedOtherMonths: skippedOtherMonth,
       parseErrors,
       employeesMatched: matchedCount,
       recordsImported: imported,
       recordErrors: errors,
       attendanceDays: grouped.size,
+      nightShiftsMerged: nightMerged,
       unmatchedEmployees: unmatchedList,
     };
 
