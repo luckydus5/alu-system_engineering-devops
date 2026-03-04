@@ -658,7 +658,31 @@ async function main() {
     }
   }
 
-  // 7. Auto-save fingerprint numbers for employees that don't have one yet
+  // 7. Save ALL raw scans to attendance_raw_scans table
+  console.log(`\n📋 Saving ${rawScans.length} raw scan records (ALL rows, nothing skipped)...`);
+  let rawSaved = 0;
+  for (let i = 0; i < rawScans.length; i += 100) {
+    const batch = rawScans.slice(i, i + 100);
+    try {
+      await supabaseRequest('POST', 'attendance_raw_scans', batch);
+      rawSaved += batch.length;
+      process.stdout.write(`\r  Raw scans: ${rawSaved}/${rawScans.length}`);
+    } catch (err) {
+      console.error(`\n  ❌ Raw scan batch error at ${i}: ${err.message.substring(0, 200)}`);
+      // Try individual records
+      for (const rec of batch) {
+        try {
+          await supabaseRequest('POST', 'attendance_raw_scans', [rec]);
+          rawSaved++;
+        } catch (e2) {
+          // skip
+        }
+      }
+    }
+  }
+  console.log(`\n  ✅ Raw scans saved: ${rawSaved}/${rawScans.length}`);
+
+  // 8. Auto-save fingerprint numbers for employees that don't have one yet
   let fpSaved = 0;
   for (const match of matchLog) {
     if (match.fp && match.fp !== '') {
@@ -678,7 +702,8 @@ async function main() {
   console.log(`\n\n╔══════════════════════════════════════════════════════════╗`);
   console.log(`║  JANUARY 2026 IMPORT COMPLETE                           ║`);
   console.log(`╠══════════════════════════════════════════════════════════╣`);
-  console.log(`║  ✅ Imported:      ${String(imported).padStart(5)} records                     ║`);
+  console.log(`║  ✅ Imported:      ${String(imported).padStart(5)} attendance records           ║`);
+  console.log(`║  📋 Raw saved:     ${String(rawSaved).padStart(5)} raw scan records             ║`);
   console.log(`║  ❌ Errors:        ${String(errors).padStart(5)} records                     ║`);
   console.log(`║  🔗 Matched:       ${String(matchLog.length).padStart(5)} unique employees             ║`);
   console.log(`║  ❓ Unmatched:     ${String(unmatchedNames.size).padStart(5)} unique employees             ║`);
