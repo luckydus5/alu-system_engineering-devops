@@ -30,6 +30,7 @@ import { isPublicHoliday, getMonthExpectedHours, getRwandanHolidays, countWorkin
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
+import { RawScansReviewDialog } from '@/components/hr/RawScansReviewDialog';
 
 
 interface AttendanceTrackingTabProps {
