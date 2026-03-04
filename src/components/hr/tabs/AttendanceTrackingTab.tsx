@@ -55,7 +55,7 @@ function getExcelNotation(dayDate: Date, record?: any): { label: string; color: 
   }
   if (isSaturday(dayDate)) {
     // Saturday: ½ only if the employee actually worked, otherwise OFF
-    if (record && (record.status === 'present' || record.status === 'late' || record.status === 'remote')) {
+    if (record && (record.status === 'present' || record.status === 'late' || record.status === 'remote' || record.status === 'half_day')) {
       return { label: '½', color: 'text-gray-800 dark:text-gray-900 font-bold', bg: 'bg-yellow-300 dark:bg-yellow-500' };
     }
     return { label: 'OFF', color: 'text-white font-bold', bg: 'bg-red-600 dark:bg-red-600' };
@@ -252,7 +252,7 @@ function MonthlyGrid({ records, selectedMonth, users, employees, departments, se
         if (rec && (rec.status === 'present' || rec.status === 'late' || rec.status === 'remote')) ot++;
       } else if (isSaturday(day)) {
         // Saturday: half day. Count separately
-        if (rec && (rec.status === 'present' || rec.status === 'late' || rec.status === 'remote')) {
+        if (rec && (rec.status === 'present' || rec.status === 'late' || rec.status === 'remote' || rec.status === 'half_day')) {
           satDays++;
         }
       } else if (isFriday(day)) {
@@ -402,7 +402,7 @@ function AnnualSummary({ records, users, employees, departments, searchTerm, fil
       if (isSunday(date)) {
         if (r.status === 'present' || r.status === 'late' || r.status === 'remote') mdata.sunOT++;
       } else if (isSaturday(date)) {
-        if (r.status === 'present' || r.status === 'late' || r.status === 'remote') mdata.satDays++;
+        if (r.status === 'present' || r.status === 'late' || r.status === 'remote' || r.status === 'half_day') mdata.satDays++;
       } else {
         if (r.status !== 'absent' && r.status !== 'on_leave') {
           mdata.present++;
