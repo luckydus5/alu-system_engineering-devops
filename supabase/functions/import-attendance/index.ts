@@ -46,7 +46,10 @@ function formatDate(d: Date): string {
 function determineStatus(clockIn: Date, dateStr: string): string {
   const dayOfWeek = new Date(dateStr + "T12:00:00").getDay();
   if (dayOfWeek === 6) return "half_day";
-  const totalMin = clockIn.getHours() * 60 + clockIn.getMinutes();
+  const inHour = clockIn.getHours();
+  // Night shift workers (clock-in 14:00+) are not late
+  if (inHour >= 14 || inHour < 4) return "present";
+  const totalMin = inHour * 60 + clockIn.getMinutes();
   if (totalMin > 8 * 60 + 15) return "late";
   return "present";
 }
@@ -178,6 +181,40 @@ Deno.serve(async (req) => {
 
     console.log(`Matched: ${matchedCount}, Unmatched: ${unmatchedNames.size}, SkippedOtherMonth: ${skippedOtherMonth}, ParseErrors: ${parseErrors}, Groups: ${grouped.size}`);
 
+    // Cross-midnight night shift consolidation
+    // Workers clocking in at 14:00+ and checking out next morning need merging
+    const groupKeys = [...grouped.keys()];
+    let nightMerged = 0;
+    for (const key of groupKeys) {
+      const group = grouped.get(key);
+      if (!group) continue;
+      const [employeeId, dateStr] = key.split("|");
+      const sorted = group.events.sort((a, b) => a.getTime() - b.getTime());
+      const firstHour = sorted[0].getHours();
+
+      if (firstHour >= 14) {
+        const d = new Date(dateStr + "T12:00:00");
+        d.setDate(d.getDate() + 1);
+        const nextDateStr = formatDate(d);
+        const nextKey = `${employeeId}|${nextDateStr}`;
+        const nextGroup = grouped.get(nextKey);
+        if (nextGroup) {
+          const morningEvents = nextGroup.events.filter((e: Date) => e.getHours() < 8);
+          const remainingEvents = nextGroup.events.filter((e: Date) => e.getHours() >= 8);
+          if (morningEvents.length > 0) {
+            group.events.push(...morningEvents);
+            nightMerged++;
+            if (remainingEvents.length > 0) {
+              nextGroup.events = remainingEvents;
+            } else {
+              grouped.delete(nextKey);
+            }
+          }
+        }
+      }
+    }
+    console.log(`Night shifts merged: ${nightMerged}`);
+
     // Build attendance records
     const records: any[] = [];
     grouped.forEach((group, key) => {
@@ -189,12 +226,14 @@ Deno.serve(async (req) => {
       const hasMeaningfulClockOut = clockOut && Math.abs(clockOut.getTime() - clockIn.getTime()) >= 60000;
       const status = determineStatus(clockIn, dateStr);
       const inHour = clockIn.getHours();
-      const shiftType = inHour >= 18 || inHour < 4 ? "night" : "day";
+      const shiftType = inHour >= 14 || inHour < 4 ? "night" : "day";
 
       let totalHours = 0, regularHours = 0, overtimeHours = 0;
 
       if (hasMeaningfulClockOut) {
-        totalHours = Math.round(Math.max(0, (clockOut!.getTime() - clockIn.getTime()) / 3600000) * 100) / 100;
+        let diffMs = clockOut!.getTime() - clockIn.getTime();
+        if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000;
+        totalHours = Math.round(Math.max(0, diffMs / 3600000) * 100) / 100;
         if (status === "half_day") {
           regularHours = Math.min(totalHours, 4);
         } else {
