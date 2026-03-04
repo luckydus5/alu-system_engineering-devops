@@ -300,8 +300,8 @@ function determineStatus(clockIn, isSaturday) {
   if (isSaturday) return 'half_day';
   const totalMin = clockIn.getHours() * 60 + clockIn.getMinutes();
   const inHour = clockIn.getHours();
-  // Night shift detection
-  if (inHour >= 18 || inHour < 4) return 'present';
+  // Night shift detection: workers clocking in at 14:00+ are night shift
+  if (inHour >= 14 || inHour < 4) return 'present';
   if (totalMin > 8 * 60 + 15) return 'late';
   return 'present';
 }
@@ -309,14 +309,15 @@ function determineStatus(clockIn, isSaturday) {
 function calculateHours(clockIn, clockOut) {
   if (!clockIn || !clockOut) return { total: 0, regular: 0, overtime: 0, shiftType: 'day' };
   let diffMs = clockOut.getTime() - clockIn.getTime();
-  // Cross-midnight
+  // Cross-midnight: if checkout is before checkin, add 24h
   if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000;
   const totalHours = Math.max(0, diffMs / (1000 * 60 * 60));
   const inHour = clockIn.getHours();
-  const shiftType = inHour >= 18 || inHour < 4 ? 'night' : 'day';
-  const regularCap = shiftType === 'day' ? 9 : 9;
+  // Night shift: clock-in at 14:00+ or before 04:00
+  const shiftType = inHour >= 14 || inHour < 4 ? 'night' : 'day';
+  const regularCap = 9;
   const regularHours = Math.min(totalHours, regularCap);
-  const otMin = shiftType === 'day' ? 30 : 30;
+  const otMin = 30;
   const otMax = shiftType === 'day' ? 1.5 : 3;
   let overtimeHours = Math.max(0, totalHours - regularCap);
   if (overtimeHours * 60 < otMin) overtimeHours = 0;
@@ -489,7 +490,54 @@ async function main() {
     console.log('');
   }
 
-  // 5. Build attendance records using First-In / Last-Out logic
+  // 5. Cross-midnight night shift consolidation
+  // Workers clocking in at 14:00-23:59 and checking out next morning (00:00-08:00)
+  // need their next-day morning events merged into the previous day's record
+  console.log('\n🌙 Consolidating cross-midnight night shifts...');
+  let nightShiftsMerged = 0;
+
+  const groupKeys = [...grouped.keys()];
+  for (const key of groupKeys) {
+    const group = grouped.get(key);
+    if (!group) continue;
+    const [employeeId, dateStr] = key.split('|');
+    const sortedEvents = group.events.sort((a, b) => a.time.getTime() - b.time.getTime());
+    const lastEvent = sortedEvents[sortedEvents.length - 1];
+    const lastHour = lastEvent.time.getHours();
+
+    // If last event is in the afternoon/evening (>=14:00), check if next day has early morning events
+    if (lastHour >= 14 || (sortedEvents[0] && sortedEvents[0].time.getHours() >= 14)) {
+      const d = new Date(dateStr);
+      d.setDate(d.getDate() + 1);
+      const nextDateStr = formatDate(d);
+      const nextKey = `${employeeId}|${nextDateStr}`;
+      const nextGroup = grouped.get(nextKey);
+
+      if (nextGroup) {
+        const nextEvents = nextGroup.events.sort((a, b) => a.time.getTime() - b.time.getTime());
+        // Find morning events (before 08:00) on the next day
+        const morningEvents = nextEvents.filter(e => e.time.getHours() < 8);
+        const remainingEvents = nextEvents.filter(e => e.time.getHours() >= 8);
+
+        if (morningEvents.length > 0) {
+          // Merge morning events into current day's record (adjust date to next day for proper timestamp)
+          group.events.push(...morningEvents);
+          nightShiftsMerged++;
+
+          if (remainingEvents.length > 0) {
+            // Keep remaining events as a separate day record
+            nextGroup.events = remainingEvents;
+          } else {
+            // Remove next day's record entirely
+            grouped.delete(nextKey);
+          }
+        }
+      }
+    }
+  }
+  console.log(`   Merged ${nightShiftsMerged} cross-midnight night shifts\n`);
+
+  // 6. Build attendance records using First-In / Last-Out logic
   const records = [];
   grouped.forEach((group, key) => {
     const [employeeId, dateStr] = key.split('|');
