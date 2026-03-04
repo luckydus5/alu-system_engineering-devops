@@ -367,6 +367,7 @@ async function main() {
   };
 
   const grouped = new Map(); // "employeeId|date" → { events: [], employee, name, deptId, fp }
+  const rawScans = []; // ALL raw scans — nothing is skipped
   let totalRows = 0;
   let janRows = 0;
   let skippedNonJan = 0;
