@@ -104,6 +104,94 @@ export type Database = {
         }
         Relationships: []
       }
+      attendance_raw_scans: {
+        Row: {
+          attendance_record_id: string | null
+          created_at: string
+          department_text: string | null
+          employee_name: string
+          file_upload_id: string | null
+          fingerprint_number: string | null
+          id: string
+          is_matched: boolean
+          match_method: string | null
+          match_score: number | null
+          matched_employee_id: string | null
+          matched_employee_name: string | null
+          row_number: number | null
+          scan_date: string
+          scan_datetime: string
+          scan_status: string | null
+          skip_reason: string | null
+          source_file: string
+          was_imported: boolean
+        }
+        Insert: {
+          attendance_record_id?: string | null
+          created_at?: string
+          department_text?: string | null
+          employee_name: string
+          file_upload_id?: string | null
+          fingerprint_number?: string | null
+          id?: string
+          is_matched?: boolean
+          match_method?: string | null
+          match_score?: number | null
+          matched_employee_id?: string | null
+          matched_employee_name?: string | null
+          row_number?: number | null
+          scan_date: string
+          scan_datetime: string
+          scan_status?: string | null
+          skip_reason?: string | null
+          source_file: string
+          was_imported?: boolean
+        }
+        Update: {
+          attendance_record_id?: string | null
+          created_at?: string
+          department_text?: string | null
+          employee_name?: string
+          file_upload_id?: string | null
+          fingerprint_number?: string | null
+          id?: string
+          is_matched?: boolean
+          match_method?: string | null
+          match_score?: number | null
+          matched_employee_id?: string | null
+          matched_employee_name?: string | null
+          row_number?: number | null
+          scan_date?: string
+          scan_datetime?: string
+          scan_status?: string | null
+          skip_reason?: string | null
+          source_file?: string
+          was_imported?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attendance_raw_scans_attendance_record_id_fkey"
+            columns: ["attendance_record_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_raw_scans_file_upload_id_fkey"
+            columns: ["file_upload_id"]
+            isOneToOne: false
+            referencedRelation: "attendance_file_uploads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attendance_raw_scans_matched_employee_id_fkey"
+            columns: ["matched_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attendance_records: {
         Row: {
           attendance_date: string

@@ -367,6 +367,7 @@ async function main() {
   };
 
   const grouped = new Map(); // "employeeId|date" → { events: [], employee, name, deptId, fp }
+  const rawScans = []; // ALL raw scans — nothing is skipped
   let totalRows = 0;
   let janRows = 0;
   let skippedNonJan = 0;
@@ -396,12 +397,40 @@ async function main() {
       totalRows++;
 
       const dateTime = parseDateTime(dateTimeVal);
-      if (!dateTime) continue;
 
-      // ── FILTER: January 2026 only ──
+      // Build raw scan record — EVERY row saved, nothing skipped
+      const rawScan = {
+        source_file: file.label,
+        row_number: i,
+        department_text: dept,
+        employee_name: name,
+        fingerprint_number: fp || null,
+        scan_datetime: dateTime ? dateTime.toISOString() : null,
+        scan_status: statusVal,
+        scan_date: dateTime ? formatDate(dateTime) : null,
+        is_matched: false,
+        was_imported: false,
+        skip_reason: null,
+        matched_employee_id: null,
+        matched_employee_name: null,
+        match_score: null,
+        match_method: null,
+      };
+
+      if (!dateTime) {
+        rawScan.skip_reason = 'parse_error';
+        rawScan.scan_datetime = new Date().toISOString();
+        rawScan.scan_date = formatDate(new Date());
+        rawScans.push(rawScan);
+        continue;
+      }
+
+      // Keep ALL records — tag non-target months but don't discard
       if (dateTime.getFullYear() !== 2026 || dateTime.getMonth() !== 0) {
         skippedNonJan++;
         fileSkipped++;
+        rawScan.skip_reason = 'wrong_month';
+        rawScans.push(rawScan);
         continue;
       }
 
@@ -422,12 +451,22 @@ async function main() {
           unmatchedNames.set(key, { bioName: name, fp, dept, count: 0, company: file.label });
         }
         unmatchedNames.get(key).count++;
+        rawScan.skip_reason = 'unmatched';
+        rawScans.push(rawScan);
         continue;
       }
 
       matchedRows++;
       fileMatchedRows++;
       const employee = result.employee;
+
+      // Tag raw scan with match results
+      rawScan.is_matched = true;
+      rawScan.matched_employee_id = employee.id;
+      rawScan.matched_employee_name = employee.full_name;
+      rawScan.match_score = result.score;
+      rawScan.match_method = result.method;
+      rawScans.push(rawScan);
 
       const logKey = `${name}→${employee.full_name}`;
       if (!matchLog.some(l => l.key === logKey)) {
@@ -619,7 +658,31 @@ async function main() {
     }
   }
 
-  // 7. Auto-save fingerprint numbers for employees that don't have one yet
+  // 7. Save ALL raw scans to attendance_raw_scans table
+  console.log(`\n📋 Saving ${rawScans.length} raw scan records (ALL rows, nothing skipped)...`);
+  let rawSaved = 0;
+  for (let i = 0; i < rawScans.length; i += 100) {
+    const batch = rawScans.slice(i, i + 100);
+    try {
+      await supabaseRequest('POST', 'attendance_raw_scans', batch);
+      rawSaved += batch.length;
+      process.stdout.write(`\r  Raw scans: ${rawSaved}/${rawScans.length}`);
+    } catch (err) {
+      console.error(`\n  ❌ Raw scan batch error at ${i}: ${err.message.substring(0, 200)}`);
+      // Try individual records
+      for (const rec of batch) {
+        try {
+          await supabaseRequest('POST', 'attendance_raw_scans', [rec]);
+          rawSaved++;
+        } catch (e2) {
+          // skip
+        }
+      }
+    }
+  }
+  console.log(`\n  ✅ Raw scans saved: ${rawSaved}/${rawScans.length}`);
+
+  // 8. Auto-save fingerprint numbers for employees that don't have one yet
   let fpSaved = 0;
   for (const match of matchLog) {
     if (match.fp && match.fp !== '') {
@@ -639,7 +702,8 @@ async function main() {
   console.log(`\n\n╔══════════════════════════════════════════════════════════╗`);
   console.log(`║  JANUARY 2026 IMPORT COMPLETE                           ║`);
   console.log(`╠══════════════════════════════════════════════════════════╣`);
-  console.log(`║  ✅ Imported:      ${String(imported).padStart(5)} records                     ║`);
+  console.log(`║  ✅ Imported:      ${String(imported).padStart(5)} attendance records           ║`);
+  console.log(`║  📋 Raw saved:     ${String(rawSaved).padStart(5)} raw scan records             ║`);
   console.log(`║  ❌ Errors:        ${String(errors).padStart(5)} records                     ║`);
   console.log(`║  🔗 Matched:       ${String(matchLog.length).padStart(5)} unique employees             ║`);
   console.log(`║  ❓ Unmatched:     ${String(unmatchedNames.size).padStart(5)} unique employees             ║`);

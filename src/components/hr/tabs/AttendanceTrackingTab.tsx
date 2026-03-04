@@ -30,6 +30,7 @@ import { isPublicHoliday, getMonthExpectedHours, getRwandanHolidays, countWorkin
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
+import { RawScansReviewDialog } from '@/components/hr/RawScansReviewDialog';
 
 
 interface AttendanceTrackingTabProps {
@@ -1843,6 +1844,7 @@ export function AttendanceTrackingTab({ departmentId }: AttendanceTrackingTabPro
         <div className="flex-1" />
 
         {/* Actions */}
+        <RawScansReviewDialog />
         <Button variant={showUpload ? 'default' : 'outline'} size="sm" className="h-7 text-[11px] px-2.5" onClick={() => setShowUpload(!showUpload)}>
           <Upload className="h-3 w-3 mr-1" /> Import
         </Button>
