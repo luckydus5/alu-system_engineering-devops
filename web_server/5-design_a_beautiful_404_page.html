@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0c0c1d 0%, #1a1a3e 50%, #0c0c1d 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #ffffff;
+            overflow: hidden;
+        }
+
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 3s infinite alternate;
+        }
+
+        @keyframes twinkle {
+            0% { opacity: 0.2; }
+            100% { opacity: 1; }
+        }
+
+        .container {
+            text-align: center;
+            z-index: 1;
+            padding: 2rem;
+        }
+
+        .error-code {
+            font-size: 10rem;
+            font-weight: 900;
+            background: linear-gradient(to right, #ff6b6b, #feca57, #48dbfb, #ff9ff3);
+            background-size: 300% 300%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradient-shift 4s ease infinite;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            text-shadow: none;
+        }
+
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .astronaut {
+            font-size: 5rem;
+            animation: float 4s ease-in-out infinite;
+            display: inline-block;
+            margin-bottom: 1.5rem;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0) rotate(0deg); }
+            25% { transform: translateY(-15px) rotate(5deg); }
+            75% { transform: translateY(10px) rotate(-3deg); }
+        }
+
+        .message {
+            font-size: 1.8rem;
+            margin-bottom: 0.8rem;
+            color: #a29bfe;
+            font-weight: 600;
+        }
+
+        .submessage {
+            font-size: 1.1rem;
+            color: #74b9ff;
+            margin-bottom: 2.5rem;
+            font-style: italic;
+        }
+
+        .home-btn {
+            display: inline-block;
+            padding: 14px 40px;
+            background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+            color: white;
+            text-decoration: none;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            letter-spacing: 1px;
+        }
+
+        .home-btn:hover {
+            background: transparent;
+            border-color: #a29bfe;
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(108, 92, 231, 0.4);
+        }
+
+        .planet {
+            position: fixed;
+            border-radius: 50%;
+            opacity: 0.15;
+        }
+
+        .planet-1 {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #c0392b);
+            top: -100px;
+            right: -80px;
+        }
+
+        .planet-2 {
+            width: 150px;
+            height: 150px;
+            background: radial-gradient(circle at 30% 30%, #feca57, #f39c12);
+            bottom: 50px;
+            left: -40px;
+        }
+
+        /* Ceci n'est pas une page */
+    </style>
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+    <div class="planet planet-1"></div>
+    <div class="planet planet-2"></div>
+
+    <div class="container">
+        <div class="astronaut">&#128125;</div>
+        <div class="error-code">404</div>
+        <p class="message">Ceci n'est pas une page</p>
+        <p class="submessage">You've drifted into the void... this page doesn't exist in our universe.</p>
+        <a href="/" class="home-btn">&#127757; Return to Earth</a>
+    </div>
+
+    <script>
+        // Generate random stars
+        const starsContainer = document.getElementById('stars');
+        for (let i = 0; i < 120; i++) {
+            const star = document.createElement('div');
+            star.className = 'star';
+            star.style.left = Math.random() * 100 + '%';
+            star.style.top = Math.random() * 100 + '%';
+            star.style.width = Math.random() * 3 + 'px';
+            star.style.height = star.style.width;
+            star.style.animationDelay = Math.random() * 3 + 's';
+            star.style.animationDuration = (Math.random() * 3 + 2) + 's';
+            starsContainer.appendChild(star);
+        }
+    </script>
+</body>
+</html>
