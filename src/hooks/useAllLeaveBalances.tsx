@@ -33,31 +33,56 @@ export function useAllLeaveBalances() {
       const userIds = [...new Set(balances?.map(b => b.user_id) || [])];
       if (userIds.length === 0) return [];
 
-      // Fetch profiles
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, department_id')
-        .in('id', userIds);
+      // Fetch employees from Employee Hub (source of truth) matching by linked_user_id
+      const { data: employees } = await supabase
+        .from('employees')
+        .select('id, full_name, email, linked_user_id, department_id, departments(name)')
+        .in('linked_user_id', userIds);
 
-      // Fetch departments
-      const { data: departments } = await supabase
-        .from('departments')
-        .select('id, name');
+      // Build lookup by linked_user_id
+      const employeeMap = new Map(
+        (employees || []).map(e => [e.linked_user_id!, { 
+          full_name: e.full_name, 
+          email: e.email, 
+          department_id: e.department_id,
+          department_name: (e.departments as any)?.name || null 
+        }])
+      );
 
-      const deptMap = new Map(departments?.map(d => [d.id, d.name]) || []);
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+      // Fallback: fetch profiles for users not found in employees table
+      const unmatchedIds = userIds.filter(id => !employeeMap.has(id));
+      if (unmatchedIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, department_id')
+          .in('id', unmatchedIds);
+        
+        const { data: departments } = await supabase
+          .from('departments')
+          .select('id, name');
+        const deptMap = new Map(departments?.map(d => [d.id, d.name]) || []);
+        
+        (profiles || []).forEach(p => {
+          employeeMap.set(p.id, {
+            full_name: p.full_name,
+            email: p.email,
+            department_id: p.department_id,
+            department_name: p.department_id ? deptMap.get(p.department_id) || null : null,
+          });
+        });
+      }
 
       // Group balances by user
       const grouped = new Map<string, EmployeeLeaveBalance>();
 
       for (const bal of balances || []) {
         if (!grouped.has(bal.user_id)) {
-          const profile = profileMap.get(bal.user_id);
+          const empInfo = employeeMap.get(bal.user_id);
           grouped.set(bal.user_id, {
             user_id: bal.user_id,
-            full_name: profile?.full_name || null,
-            email: profile?.email || 'Unknown',
-            department_name: profile?.department_id ? deptMap.get(profile.department_id) || null : null,
+            full_name: empInfo?.full_name || null,
+            email: empInfo?.email || 'Unknown',
+            department_name: empInfo?.department_name || null,
             balances: [],
           });
         }
