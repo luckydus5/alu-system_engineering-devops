@@ -86,20 +86,37 @@ export function useLeaveRequests(departmentId?: string, isHR = false) {
       const { data, error } = await query;
       if (error) throw error;
       
-      // Fetch requester profiles separately
+      // Fetch requester info from employees table (Employee Hub is source of truth)
       if (data && data.length > 0) {
         const requesterIds = [...new Set(data.map(r => r.requester_id))];
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', requesterIds);
+        const employeeIds = [...new Set(data.map(r => (r as any).employee_id).filter(Boolean))];
+        const allIds = [...new Set([...requesterIds, ...employeeIds])];
         
-        const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
+        // Fetch employees matching by linked_user_id OR by employee id
+        const { data: employees } = await supabase
+          .from('employees')
+          .select('id, full_name, email, linked_user_id, department_id, departments(name)')
+          .or(`linked_user_id.in.(${requesterIds.join(',')}),id.in.(${allIds.join(',')})`);
         
-        return data.map(request => ({
-          ...request,
-          requester: profileMap.get(request.requester_id) || null,
-        })) as unknown as LeaveRequest[];
+        // Build lookup maps: by linked_user_id and by employee id
+        const byUserId = new Map<string, any>();
+        const byEmpId = new Map<string, any>();
+        (employees || []).forEach(emp => {
+          if (emp.linked_user_id) byUserId.set(emp.linked_user_id, emp);
+          byEmpId.set(emp.id, emp);
+        });
+        
+        return data.map(request => {
+          // Try employee_id first, then linked_user_id match, then requester_id direct match
+          const emp = ((request as any).employee_id && byEmpId.get((request as any).employee_id)) 
+            || byUserId.get(request.requester_id) 
+            || byEmpId.get(request.requester_id)
+            || null;
+          return {
+            ...request,
+            requester: emp ? { full_name: emp.full_name, email: emp.email || '' } : null,
+          };
+        }) as unknown as LeaveRequest[];
       }
       
       return data as unknown as LeaveRequest[];

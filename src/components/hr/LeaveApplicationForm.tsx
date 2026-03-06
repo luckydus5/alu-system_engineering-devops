@@ -166,11 +166,11 @@ export function LeaveApplicationForm({
     }
   }, [open, canFileOnBehalf]);
 
-  // Load current user info or selected employee info
+  // Load current user info or selected employee info — always from Employee Hub
   useEffect(() => {
     async function loadUserInfo() {
       if (filingForOther && selectedEmployee) {
-        // Load from Employee Hub record
+        // Load from Employee Hub record (already fetched)
         const emp = employees.find(e => e.id === selectedEmployee);
         if (emp) {
           const nameParts = emp.full_name.split(' ');
@@ -183,37 +183,41 @@ export function LeaveApplicationForm({
           });
         }
       } else {
-        // Load current user's own info from profile
+        // Load current user's own info from Employee Hub (linked_user_id)
         if (!user?.id) return;
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name, email, phone')
-          .eq('id', user.id)
+        const { data: empRecord } = await supabase
+          .from('employees')
+          .select('full_name, email, phone, department_id, position_id, departments(name), positions(name)')
+          .eq('linked_user_id', user.id)
           .single();
         
-        if (profile) {
-          const nameParts = (profile.full_name || '').split(' ');
+        if (empRecord) {
+          const nameParts = (empRecord.full_name || '').split(' ');
           setEmployeeInfo({
             firstName: nameParts[0] || '',
             surname: nameParts.slice(1).join(' ') || '',
-            position: '',
-            contactPhone: profile.phone || '',
-            department: '',
+            position: (empRecord.positions as any)?.name || '',
+            contactPhone: empRecord.phone || '',
+            department: (empRecord.departments as any)?.name || '',
           });
-        }
-
-        const { data: userRole } = await supabase
-          .from('user_roles')
-          .select('role, department:departments(name)')
-          .eq('user_id', user.id)
-          .single();
-        
-        if (userRole) {
-          setEmployeeInfo(prev => ({
-            ...prev,
-            department: (userRole.department as { name: string } | null)?.name || '',
-            position: userRole.role || '',
-          }));
+        } else {
+          // Fallback to profile if no employee record linked
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name, email, phone')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile) {
+            const nameParts = (profile.full_name || '').split(' ');
+            setEmployeeInfo({
+              firstName: nameParts[0] || '',
+              surname: nameParts.slice(1).join(' ') || '',
+              position: '',
+              contactPhone: profile.phone || '',
+              department: '',
+            });
+          }
         }
       }
     }
