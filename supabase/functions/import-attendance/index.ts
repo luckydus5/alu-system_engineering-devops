@@ -67,6 +67,16 @@ interface MatchResult {
   method: string;
 }
 
+interface ParsedScan {
+  department: string;
+  name: string;
+  fingerprint: string;
+  dateTime: Date;
+  status: string;
+  rowNum: number;
+  originalDateTimeStr: string;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -92,7 +102,7 @@ Deno.serve(async (req) => {
 
     // Parse markdown table rows
     const lines = markdownText.split("\n");
-    const rows: { department: string; name: string; fingerprint: string; dateTime: string; status: string; rowNum: number }[] = [];
+    const parsedRows: { department: string; name: string; fingerprint: string; dateTime: string; status: string; rowNum: number }[] = [];
     
     let rowNum = 0;
     for (const line of lines) {
@@ -100,7 +110,7 @@ Deno.serve(async (req) => {
       if (!line.startsWith("|") || line.includes("Department") || line.includes("|-")) continue;
       const parts = line.split("|").filter(p => p.trim() !== "");
       if (parts.length >= 5) {
-        rows.push({
+        parsedRows.push({
           department: parts[0].trim(),
           name: parts[1].trim(),
           fingerprint: parts[2].trim(),
@@ -111,7 +121,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Parsed ${rows.length} rows from markdown`);
+    console.log(`Parsed ${parsedRows.length} rows from markdown`);
 
     // Fetch all employees
     const { data: employees, error: empErr } = await supabase
@@ -164,18 +174,24 @@ Deno.serve(async (req) => {
       return null;
     }
 
-    // ═══ Process ALL rows — save every single one as a raw scan ═══
+    // ═══ STEP 1: Parse all scans, match employees, save raw scans ═══
+    // We do NOT filter by month yet — we need next-morning checkouts for night shifts
     const rawScans: any[] = [];
-    const grouped = new Map<string, { events: Date[]; employee: Employee; name: string }>();
+    const allMatchedScans: { 
+      employeeId: string; 
+      employee: Employee; 
+      name: string; 
+      dt: Date; 
+      status: string;
+      scanDate: string;
+    }[] = [];
     let matchedCount = 0;
-    let skippedOtherMonth = 0;
     let parseErrors = 0;
 
-    for (const row of rows) {
+    for (const row of parsedRows) {
       if (!row.name || !row.dateTime) continue;
       const dt = parseDateTime(row.dateTime);
 
-      // Build raw scan record — EVERY row gets saved
       const rawScan: any = {
         file_upload_id: fileUploadId || null,
         source_file: source,
@@ -198,13 +214,6 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      if (dt.getMonth() !== targetMonth || dt.getFullYear() !== 2026) {
-        skippedOtherMonth++;
-        rawScan.skip_reason = "wrong_month";
-        rawScans.push(rawScan);
-        continue;
-      }
-
       const result = matchEmployee(row.name, row.fingerprint);
       if (!result) {
         rawScan.skip_reason = "unmatched";
@@ -220,17 +229,20 @@ Deno.serve(async (req) => {
       rawScan.match_method = result.method;
       rawScans.push(rawScan);
 
-      const dateKey = formatDate(dt);
-      const groupKey = `${result.employee.id}|${dateKey}`;
-      if (!grouped.has(groupKey)) {
-        grouped.set(groupKey, { events: [], employee: result.employee, name: row.name });
-      }
-      grouped.get(groupKey)!.events.push(dt);
+      // Keep ALL matched scans regardless of month — we'll filter after consolidation
+      allMatchedScans.push({
+        employeeId: result.employee.id,
+        employee: result.employee,
+        name: row.name,
+        dt,
+        status: row.status,
+        scanDate: formatDate(dt),
+      });
     }
 
-    console.log(`Raw scans to save: ${rawScans.length}, Matched: ${matchedCount}, SkippedOtherMonth: ${skippedOtherMonth}, ParseErrors: ${parseErrors}`);
+    console.log(`Raw scans: ${rawScans.length}, Matched: ${matchedCount}, ParseErrors: ${parseErrors}`);
 
-    // ═══ Save ALL raw scans to attendance_raw_scans ═══
+    // ═══ STEP 2: Save ALL raw scans ═══
     let rawSaved = 0;
     for (let i = 0; i < rawScans.length; i += 100) {
       const batch = rawScans.slice(i, i + 100);
@@ -243,56 +255,190 @@ Deno.serve(async (req) => {
     }
     console.log(`Raw scans saved: ${rawSaved}/${rawScans.length}`);
 
-    // ═══ Cross-midnight night shift consolidation ═══
-    const groupKeysList = [...grouped.keys()];
-    let nightMerged = 0;
-    for (const key of groupKeysList) {
-      const group = grouped.get(key);
-      if (!group) continue;
-      const [employeeId, dateStr] = key.split("|");
-      const sorted = group.events.sort((a, b) => a.getTime() - b.getTime());
-      const firstHour = sorted[0].getHours();
+    // ═══ STEP 3: Sort all scans by employee then datetime ═══
+    allMatchedScans.sort((a, b) => {
+      if (a.employeeId !== b.employeeId) return a.employeeId.localeCompare(b.employeeId);
+      return a.dt.getTime() - b.dt.getTime();
+    });
 
-      if (firstHour >= 14) {
-        const d = new Date(dateStr + "T12:00:00");
-        d.setDate(d.getDate() + 1);
-        const nextDateStr = formatDate(d);
-        const nextKey = `${employeeId}|${nextDateStr}`;
-        const nextGroup = grouped.get(nextKey);
-        if (nextGroup) {
-          const morningEvents = nextGroup.events.filter((e: Date) => e.getHours() < 8);
-          const remainingEvents = nextGroup.events.filter((e: Date) => e.getHours() >= 8);
-          if (morningEvents.length > 0) {
-            group.events.push(...morningEvents);
-            nightMerged++;
-            if (remainingEvents.length > 0) {
-              nextGroup.events = remainingEvents;
-            } else {
-              grouped.delete(nextKey);
-            }
+    // ═══ STEP 4: Pair C/In with C/Out using scan status + cross-date detection ═══
+    // Group consecutive scans per employee into shifts
+    interface ShiftRecord {
+      employeeId: string;
+      employee: Employee;
+      name: string;
+      clockIn: Date;
+      clockOut: Date | null;
+      attendanceDate: string; // The date this shift belongs to (clock-in date)
+      events: Date[];
+    }
+
+    const shifts: ShiftRecord[] = [];
+    
+    // Group scans by employee
+    const scansByEmployee = new Map<string, typeof allMatchedScans>();
+    for (const scan of allMatchedScans) {
+      if (!scansByEmployee.has(scan.employeeId)) {
+        scansByEmployee.set(scan.employeeId, []);
+      }
+      scansByEmployee.get(scan.employeeId)!.push(scan);
+    }
+
+    for (const [employeeId, scans] of scansByEmployee) {
+      // Strategy: Walk through scans chronologically and pair them into shifts
+      // A night shift is detected when:
+      //   1. C/In is in the evening (hour >= 14) and C/Out is next morning (hour < 12)
+      //   2. Explicit C/In status followed by C/Out status on next calendar day
+      //   3. Two scans on different dates within 16 hours of each other
+      
+      let i = 0;
+      while (i < scans.length) {
+        const current = scans[i];
+        const currentHour = current.dt.getHours();
+        const isEveningEntry = currentHour >= 14;
+        const isCIn = current.status?.toUpperCase().includes("C/IN") || 
+                      current.status?.toUpperCase().includes("IN") ||
+                      current.status?.toUpperCase() === "C/IN";
+        const isCOut = current.status?.toUpperCase().includes("C/OUT") || 
+                       current.status?.toUpperCase().includes("OUT") ||
+                       current.status?.toUpperCase() === "C/OUT";
+
+        // Look ahead for a matching checkout
+        let pairedIdx = -1;
+        
+        for (let j = i + 1; j < scans.length; j++) {
+          const next = scans[j];
+          const timeDiffHours = (next.dt.getTime() - current.dt.getTime()) / 3600000;
+          
+          // Don't pair scans more than 18 hours apart
+          if (timeDiffHours > 18) break;
+          
+          const nextIsCOut = next.status?.toUpperCase().includes("C/OUT") || 
+                             next.status?.toUpperCase().includes("OUT") ||
+                             next.status?.toUpperCase() === "C/OUT";
+          const nextHour = next.dt.getHours();
+          
+          // Case 1: Same day, different times — normal shift or multiple scans
+          if (next.scanDate === current.scanDate) {
+            pairedIdx = j; // Keep looking, take the last scan on same day
+            continue;
           }
+          
+          // Case 2: Cross-date night shift — evening C/In + next morning C/Out
+          if (next.scanDate !== current.scanDate && isEveningEntry && nextHour < 12) {
+            // This is a night shift! Pair the evening entry with morning exit
+            pairedIdx = j;
+            break; // Found the cross-date pair
+          }
+          
+          // Case 3: Explicit C/In + C/Out across dates within reasonable time
+          if (next.scanDate !== current.scanDate && isCIn && nextIsCOut && timeDiffHours <= 16) {
+            pairedIdx = j;
+            break;
+          }
+          
+          // If we hit a different date without matching, stop
+          if (next.scanDate !== current.scanDate) break;
         }
+
+        const shift: ShiftRecord = {
+          employeeId,
+          employee: current.employee,
+          name: current.name,
+          clockIn: current.dt,
+          clockOut: null,
+          attendanceDate: current.scanDate,
+          events: [current.dt],
+        };
+
+        if (pairedIdx >= 0) {
+          // Collect all events between i and pairedIdx
+          for (let k = i + 1; k <= pairedIdx; k++) {
+            shift.events.push(scans[k].dt);
+          }
+          // Sort events — first = clock in, last = clock out
+          shift.events.sort((a, b) => a.getTime() - b.getTime());
+          shift.clockIn = shift.events[0];
+          shift.clockOut = shift.events[shift.events.length - 1];
+          // Attendance date is always the clock-in date
+          shift.attendanceDate = formatDate(shift.clockIn);
+          i = pairedIdx + 1;
+        } else {
+          // Lone scan — no pair found
+          // If it's a C/Out in the early morning, it might be an orphan checkout
+          // from a night shift whose C/In was in the previous month
+          if (isCOut && currentHour < 12) {
+            // Try to find if there's a previous evening entry we missed
+            // Otherwise record it as a standalone scan on its date
+            // We'll attach it to the previous day as a night shift
+            const prevDay = new Date(current.dt);
+            prevDay.setDate(prevDay.getDate() - 1);
+            shift.attendanceDate = formatDate(prevDay);
+            shift.clockOut = current.dt;
+            // Mark clock in as estimated from previous evening
+            const estimatedIn = new Date(prevDay);
+            estimatedIn.setHours(18, 0, 0, 0);
+            shift.clockIn = estimatedIn;
+          }
+          i++;
+        }
+
+        shifts.push(shift);
       }
     }
-    console.log(`Night shifts merged: ${nightMerged}`);
 
-    // ═══ Build attendance records ═══
+    console.log(`Total shifts detected: ${shifts.length}`);
+
+    // ═══ STEP 5: Filter shifts — keep only those whose attendance_date is in target month ═══
+    const targetYear = 2026;
+    const filteredShifts = shifts.filter(s => {
+      const d = new Date(s.attendanceDate + "T12:00:00");
+      return d.getMonth() === targetMonth && d.getFullYear() === targetYear;
+    });
+
+    let skippedOtherMonth = shifts.length - filteredShifts.length;
+    console.log(`Shifts in target month: ${filteredShifts.length}, skipped other months: ${skippedOtherMonth}`);
+
+    // ═══ STEP 6: Deduplicate — if multiple shifts on same employee+date, merge them ═══
+    const shiftMap = new Map<string, ShiftRecord>();
+    let nightShiftCount = 0;
+
+    for (const shift of filteredShifts) {
+      const key = `${shift.employeeId}|${shift.attendanceDate}`;
+      const existing = shiftMap.get(key);
+      
+      if (!existing) {
+        shiftMap.set(key, shift);
+      } else {
+        // Merge: use earliest clock-in and latest clock-out
+        const allEvents = [...existing.events, ...shift.events].sort((a, b) => a.getTime() - b.getTime());
+        existing.events = allEvents;
+        existing.clockIn = allEvents[0];
+        existing.clockOut = allEvents[allEvents.length - 1];
+      }
+    }
+
+    // ═══ STEP 7: Build attendance records ═══
     const records: any[] = [];
-    grouped.forEach((group, key) => {
+    shiftMap.forEach((shift, key) => {
       const [employeeId, dateStr] = key.split("|");
-      const sorted = group.events.sort((a, b) => a.getTime() - b.getTime());
-      const clockIn = sorted[0];
-      const clockOut = sorted.length > 1 ? sorted[sorted.length - 1] : null;
-
+      const clockIn = shift.clockIn;
+      const clockOut = shift.clockOut;
+      
       const hasMeaningfulClockOut = clockOut && Math.abs(clockOut.getTime() - clockIn.getTime()) >= 60000;
-      const status = determineStatus(clockIn, dateStr);
       const inHour = clockIn.getHours();
-      const shiftType = inHour >= 14 || inHour < 4 ? "night" : "day";
+      const isNightShift = inHour >= 14 || inHour < 4;
+      const shiftType = isNightShift ? "night" : "day";
+      
+      if (isNightShift) nightShiftCount++;
+      
+      const status = determineStatus(clockIn, dateStr);
 
       let totalHours = 0, regularHours = 0, overtimeHours = 0;
 
       if (hasMeaningfulClockOut) {
         let diffMs = clockOut!.getTime() - clockIn.getTime();
+        // Cross-midnight: if checkout is before checkin time-of-day, add 24h
         if (diffMs < 0) diffMs += 24 * 60 * 60 * 1000;
         totalHours = Math.round(Math.max(0, diffMs / 3600000) * 100) / 100;
         if (status === "half_day") {
@@ -308,7 +454,7 @@ Deno.serve(async (req) => {
 
       records.push({
         user_id: employeeId,
-        department_id: group.employee.department_id,
+        department_id: shift.employee.department_id,
         attendance_date: dateStr,
         clock_in: clockIn.toISOString(),
         clock_out: hasMeaningfulClockOut ? clockOut!.toISOString() : null,
@@ -317,11 +463,11 @@ Deno.serve(async (req) => {
         total_hours: totalHours,
         regular_hours: regularHours,
         overtime_hours: overtimeHours,
-        notes: `Imported from ${source} | ${group.name} | Events: ${sorted.length}`,
+        notes: `Imported from ${source} | ${shift.name} | Events: ${shift.events.length} | Shift: ${shiftType}`,
       });
     });
 
-    console.log(`Prepared ${records.length} records for upsert`);
+    console.log(`Prepared ${records.length} records (${nightShiftCount} night shifts)`);
 
     // Upsert attendance records
     let imported = 0, errors = 0;
@@ -359,15 +505,15 @@ Deno.serve(async (req) => {
 
     const result = {
       source,
-      totalParsedRows: rows.length,
+      totalParsedRows: parsedRows.length,
       totalRawScansSaved: rawSaved,
       skippedOtherMonths: skippedOtherMonth,
       parseErrors,
       employeesMatched: matchedCount,
       recordsImported: imported,
       recordErrors: errors,
-      attendanceDays: grouped.size,
-      nightShiftsMerged: nightMerged,
+      attendanceDays: shiftMap.size,
+      nightShiftsDetected: nightShiftCount,
       unmatchedEmployees: unmatchedList,
     };
 
