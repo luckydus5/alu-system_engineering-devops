@@ -4,12 +4,11 @@
 # shellcheck disable=SC2154
 
 apt-get update
-apt-get install -y nginx
+apt-get -y install nginx
 
-# Remove any previous X-Served-By header config (idempotent)
-sed -i '/add_header X-Served-By/d' /etc/nginx/sites-available/default
+HOST_NAME=$(hostname)
 
-# Add custom header with the server hostname using Nginx $hostname variable
-sed -i '/server_name _;/a \    add_header X-Served-By $hostname;' /etc/nginx/sites-available/default
+# Add custom header with the server hostname
+sed -i "/server_name _;/a \\\tadd_header X-Served-By $HOST_NAME;" /etc/nginx/sites-available/default
 
 service nginx restart
