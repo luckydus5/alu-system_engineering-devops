@@ -6,9 +6,8 @@
 apt-get update
 apt-get -y install nginx
 
-HOST_NAME=$(hostname)
-
-# Add custom header with the server hostname
-sed -i "/server_name _;/a \\\tadd_header X-Served-By $HOST_NAME;" /etc/nginx/sites-available/default
+# Add custom header with the server hostname to the Nginx default site config
+HEADER="\\\tadd_header X-Served-By \$HOSTNAME;"
+sed -i "s/server_name _;/server_name _;\n$HEADER/" /etc/nginx/sites-available/default
 
 service nginx restart
