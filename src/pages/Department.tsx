@@ -1,0 +1,133 @@
+import { useNavigate, useParams } from 'react-router-dom';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useDepartments } from '@/hooks/useDepartments';
+import { useUserRole } from '@/hooks/useUserRole';
+import { FleetMaintenanceDashboard } from '@/components/fleet/FleetMaintenanceDashboard';
+import { WarehouseLayout } from '@/components/warehouse/WarehouseLayout';
+import { OperationsDashboard } from '@/components/operations/OperationsDashboard';
+import { OfficeDashboard } from '@/components/office/OfficeDashboard';
+import { ITDashboard } from '@/components/it/ITDashboard';
+import { HRCommandCenter } from '@/components/hr/HRCommandCenter';
+import { EmployeeLeaveDashboard } from '@/components/hr/EmployeeLeaveDashboard';
+import { ShieldAlert } from 'lucide-react';
+
+export default function Department() {
+  const navigate = useNavigate();
+  const { code } = useParams<{ code: string }>();
+  const { departments, loading: deptLoading } = useDepartments();
+  const { hasRole, isInDepartment, loading: roleLoading } = useUserRole();
+
+  const department = departments.find(d => d.code.toLowerCase() === code?.toLowerCase());
+
+  // Check department types
+  const deptCode = department?.code?.toUpperCase();
+
+  // Check access: only super_admin/director can bypass department membership
+  const isPrivileged = hasRole('super_admin') || hasRole('director');
+  const isHRMember = department && isInDepartment(department.id) && (deptCode === 'HR' || deptCode === 'HUMAN RESOURCES');
+  // HR department members get full management access regardless of role level
+  const canManage = hasRole('super_admin') || hasRole('admin') || hasRole('director') || hasRole('supervisor') || hasRole('manager') || !!isHRMember;
+  const hasAccess = isPrivileged || (department && isInDepartment(department.id));
+  const isFleetDepartment = deptCode === 'FLEET';
+  const isWarehouseDepartment = deptCode === 'WAREHOUSE' || deptCode === 'WH';
+  const isOperationsDepartment = deptCode === 'OPS' || deptCode === 'PEAT' || deptCode === 'OPERATIONS';
+  const isITDepartment = deptCode === 'IT';
+  const isHRDepartment = deptCode === 'HR' || deptCode === 'HUMAN RESOURCES';
+
+  if (deptLoading || roleLoading) {
+    return (
+      <DashboardLayout title="Loading...">
+        <div className="space-y-6">
+          <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
+            ))}
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (!department) {
+    return (
+      <DashboardLayout title="Department Not Found">
+        <Card className="shadow-corporate">
+          <CardContent className="py-12 text-center">
+            <h3 className="text-lg font-semibold text-foreground mb-2">Department not found</h3>
+            <p className="text-muted-foreground">The requested department does not exist.</p>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    );
+  }
+
+  // Access denied
+  if (!hasAccess) {
+    return (
+      <DashboardLayout title="Access Denied">
+        <Card className="shadow-corporate border-destructive/20">
+          <CardContent className="py-12 text-center">
+            <ShieldAlert className="h-12 w-12 mx-auto text-destructive mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">Access Denied</h3>
+            <p className="text-muted-foreground mb-6">
+              You are not assigned to the <strong>{department.name}</strong> department.
+              <br />
+              Please contact your System Admin or IT to request access.
+            </p>
+            <Button variant="outline" onClick={() => navigate('/')}>Return to Dashboard</Button>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    );
+  }
+
+  // Render Fleet Maintenance Dashboard for Fleet Management department
+  if (isFleetDepartment) {
+    return (
+      <DashboardLayout title={department.name}>
+        <FleetMaintenanceDashboard department={department} canManage={canManage} />
+      </DashboardLayout>
+    );
+  }
+
+  // Render Warehouse Dashboard for Warehouse department
+  if (isWarehouseDepartment) {
+    return <WarehouseLayout department={department} canManage={canManage} />;
+  }
+
+  // Render Operations Dashboard for field operations (OPS, PEAT) - with photo uploads from field
+  if (isOperationsDepartment) {
+    return (
+      <DashboardLayout title={department.name}>
+        <OperationsDashboard department={department} canManage={canManage} />
+      </DashboardLayout>
+    );
+  }
+
+  // Render IT Dashboard for IT department - with tickets, equipment, and projects
+  if (isITDepartment) {
+    return (
+      <DashboardLayout title={department.name}>
+        <ITDashboard department={department} canManage={canManage} />
+      </DashboardLayout>
+    );
+  }
+
+  // Render HR Command Center for HR department - enterprise-grade HR system (full page)
+  if (isHRDepartment) {
+    return <HRCommandCenter departmentId={department.id} departmentName={department.name} canManage={canManage} />;
+  }
+
+  // Default: Office Dashboard for office-based departments (FIN, SAF, ENG, etc.)
+  return (
+    <DashboardLayout title={department.name}>
+      <OfficeDashboard department={department} canManage={canManage} />
+      <div className="mt-6">
+        <EmployeeLeaveDashboard departmentId={department.id} />
+      </div>
+    </DashboardLayout>
+  );
+}

@@ -1,0 +1,45 @@
+import { ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
+import { TopNavbar } from './TopNavbar';
+import { BackButton } from './BackButton';
+import { MobileBottomNav } from './MobileBottomNav';
+import { BackgroundSlideshow } from './BackgroundSlideshow';
+
+interface DashboardLayoutProps {
+  children: ReactNode;
+  title?: string;
+  showBackButton?: boolean;
+  noBackground?: boolean;
+}
+
+export function DashboardLayout({ children, title, showBackButton = true, noBackground = false }: DashboardLayoutProps) {
+  const location = useLocation();
+  const isHomePage = location.pathname === '/';
+
+  return (
+    <div className={`min-h-screen w-full relative ${noBackground ? 'bg-background' : ''}`}>
+      {/* Sliding Background */}
+      {!noBackground && <BackgroundSlideshow />}
+      
+      <TopNavbar />
+      
+      {/* Main Content - Add padding bottom for mobile nav */}
+      <main className="flex-1 p-4 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+        {/* Back Navigation */}
+        {showBackButton && !isHomePage && (
+          <div className="mb-4">
+            <BackButton />
+          </div>
+        )}
+        
+        {title && (
+          <h1 className="text-2xl font-bold text-foreground mb-6">{title}</h1>
+        )}
+        {children}
+      </main>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav />
+    </div>
+  );
+}

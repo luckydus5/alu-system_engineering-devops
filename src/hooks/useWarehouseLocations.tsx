@@ -1,0 +1,340 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { cacheLocations, getCachedLocations } from '@/lib/offlineDb';
+
+export interface WarehouseLocation {
+  id: string;
+  classification_id: string;
+  department_id: string;
+  parent_id: string | null;
+  name: string;
+  description: string | null;
+  min_items: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  // Computed fields
+  item_count?: number;
+  total_quantity?: number;
+  low_stock_count?: number;
+  sub_folder_count?: number;
+}
+
+export function useWarehouseLocations(
+  classificationId: string | undefined, 
+  departmentId?: string,
+  parentId?: string | null
+) {
+  const [locations, setLocations] = useState<WarehouseLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOfflineData, setIsOfflineData] = useState(false);
+  const { toast } = useToast();
+
+  // Load from cache and filter by classification/parent
+  const loadFromCache = useCallback(async () => {
+    if (!classificationId && !departmentId) return false;
+    
+    try {
+      const deptId = departmentId || '';
+      if (!deptId) return false;
+      
+      const allCached = await getCachedLocations(deptId);
+      
+      // Filter by classification and parent
+      let filtered = allCached;
+      
+      if (classificationId) {
+        filtered = filtered.filter(l => l.classification_id === classificationId);
+      }
+      
+      // Filter by parent_id
+      if (parentId === undefined || parentId === null) {
+        filtered = filtered.filter(l => l.parent_id === null);
+      } else {
+        filtered = filtered.filter(l => l.parent_id === parentId);
+      }
+      
+      if (filtered.length > 0 || allCached.length > 0) {
+        setLocations(filtered.map(l => ({
+          ...l,
+          min_items: l.min_items || 0,
+          sort_order: l.sort_order || 0,
+          item_count: 0,
+          total_quantity: 0,
+          low_stock_count: 0,
+          sub_folder_count: 0,
+        })) as WarehouseLocation[]);
+        setLoading(false);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error loading locations from cache:', error);
+    }
+    return false;
+  }, [classificationId, departmentId, parentId]);
+
+  const fetchLocations = useCallback(async () => {
+    if (!classificationId && !departmentId) {
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
+
+    // Check if we're online
+    const isOnline = navigator.onLine;
+    
+    if (!isOnline) {
+      const hasCached = await loadFromCache();
+      if (hasCached) {
+        setIsOfflineData(true);
+      }
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      let query = (supabase as any)
+        .from('warehouse_locations')
+        .select('*')
+        .order('sort_order', { ascending: true });
+
+      if (classificationId) {
+        query = query.eq('classification_id', classificationId);
+      } else if (departmentId) {
+        query = query.eq('department_id', departmentId);
+      }
+
+      // Filter by parent_id (null for root level, specific id for sub-folders)
+      if (parentId === undefined) {
+        // Default: get root level locations (no parent)
+        query = query.is('parent_id', null);
+      } else if (parentId === null) {
+        // Explicitly requesting root level
+        query = query.is('parent_id', null);
+      } else {
+        // Get children of specific parent
+        query = query.eq('parent_id', parentId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        if (error.code === '42P01' || error.message?.includes('does not exist')) {
+          console.log('warehouse_locations table not found, returning empty');
+          setLocations([]);
+          setLoading(false);
+          return;
+        }
+        throw error;
+      }
+
+      // If no locations, return early
+      if (!data || data.length === 0) {
+        setLocations([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch stats using count queries to avoid the 1000 row limit
+      const locationIds = data.map((l: WarehouseLocation) => l.id);
+
+      const statsPromises = locationIds.map(async (locId: string) => {
+        const [itemCount, subFolderCount, itemsForSum] = await Promise.all([
+          // Item count
+          supabase
+            .from('inventory_items')
+            .select('*', { count: 'exact', head: true })
+            .eq('location_id', locId),
+          // Sub-folder count
+          supabase
+            .from('warehouse_locations')
+            .select('*', { count: 'exact', head: true })
+            .eq('parent_id', locId),
+          // Items for quantity sum and low stock calculation
+          supabase
+            .from('inventory_items')
+            .select('quantity, min_quantity')
+            .eq('location_id', locId)
+        ]);
+
+        const items = itemsForSum.data || [];
+        const totalQty = items.reduce((sum: number, item: any) => sum + (item.quantity || 0), 0);
+        const lowStockCount = items.filter(
+          (item: any) => item.quantity <= (item.min_quantity || 0)
+        ).length;
+
+        return {
+          locId,
+          itemCount: itemCount.count || 0,
+          totalQuantity: totalQty,
+          lowStockCount,
+          subFolderCount: subFolderCount.count || 0,
+        };
+      });
+
+      const allStats = await Promise.all(statsPromises);
+
+      // Build maps for O(1) lookups
+      const statsMap = new Map(allStats.map(s => [s.locId, s]));
+
+      // Build final array
+      const locationsWithStats = data.map((location: WarehouseLocation) => {
+        const stats = statsMap.get(location.id);
+        return {
+          ...location,
+          item_count: stats?.itemCount || 0,
+          total_quantity: stats?.totalQuantity || 0,
+          low_stock_count: stats?.lowStockCount || 0,
+          sub_folder_count: stats?.subFolderCount || 0,
+        };
+      });
+
+      // Cache for offline use
+      try {
+        await cacheLocations(data);
+      } catch (cacheError) {
+        console.error('Error caching locations:', cacheError);
+      }
+
+      setIsOfflineData(false);
+      setLocations(locationsWithStats);
+    } catch (error: any) {
+      console.error('Error fetching locations:', error);
+      
+      // Try loading from cache on error
+      const hasCached = await loadFromCache();
+      if (hasCached) {
+        setIsOfflineData(true);
+      } else {
+        toast({
+          title: 'Error',
+          description: 'Failed to load locations',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [classificationId, departmentId, parentId, toast, loadFromCache]);
+
+  useEffect(() => {
+    // Load from cache first, then fetch
+    loadFromCache().then(() => {
+      fetchLocations();
+    });
+  }, [fetchLocations, loadFromCache]);
+
+  const createLocation = async (data: {
+    classification_id: string;
+    department_id: string;
+    name: string;
+    description?: string;
+    min_items?: number;
+    parent_id?: string | null;
+  }) => {
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      
+      // Get max sort order
+      const maxOrder = locations.reduce((max, l) => Math.max(max, l.sort_order), 0);
+
+      const { error } = await (supabase as any)
+        .from('warehouse_locations')
+        .insert({
+          classification_id: data.classification_id,
+          department_id: data.department_id,
+          name: data.name,
+          description: data.description || null,
+          min_items: data.min_items || 0,
+          parent_id: data.parent_id || null,
+          sort_order: maxOrder + 1,
+          created_by: userData.user?.id,
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Location created successfully',
+      });
+
+      await fetchLocations();
+      return true;
+    } catch (error: any) {
+      console.error('Error creating location:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to create location',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
+  const updateLocation = async (id: string, data: Partial<WarehouseLocation>) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('warehouse_locations')
+        .update(data)
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Location updated successfully',
+      });
+
+      await fetchLocations();
+      return true;
+    } catch (error: any) {
+      console.error('Error updating location:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to update location',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
+  const deleteLocation = async (id: string) => {
+    try {
+      const { error } = await (supabase as any)
+        .from('warehouse_locations')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Success',
+        description: 'Location deleted successfully',
+      });
+
+      await fetchLocations();
+      return true;
+    } catch (error: any) {
+      console.error('Error deleting location:', error);
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete location',
+        variant: 'destructive',
+      });
+      return false;
+    }
+  };
+
+  return {
+    locations,
+    loading,
+    isOfflineData,
+    refetch: fetchLocations,
+    createLocation,
+    updateLocation,
+    deleteLocation,
+  };
+}
