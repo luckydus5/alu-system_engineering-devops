@@ -15,7 +15,7 @@ import {
   ChevronLeft, ChevronRight, Plus, Eye, MoreHorizontal,
   CalendarDays, LayoutGrid, List, Download, ArrowUpRight,
   Wallet, Timer, Calculator, Table2, Edit, Loader2, Settings2,
-  UserCheck
+  UserCheck, CalendarPlus
 } from 'lucide-react';
 import { useLeaveRequests, LEAVE_TYPE_LABELS, LEAVE_STATUS_LABELS, LeaveType, LeaveStatus } from '@/hooks/useLeaveRequests';
 import { useAllLeaveBalances } from '@/hooks/useAllLeaveBalances';
@@ -31,7 +31,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, isWithinInterval, addMonths, subMonths, differenceInDays, eachDayOfInterval as eachDay, isSaturday, isSunday, addDays } from 'date-fns';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { countWorkingDays, isPublicHoliday, getRwandanHolidays } from '@/lib/rwandanHolidays';
 
 interface LeaveManagementTabProps {
   departmentId: string;
