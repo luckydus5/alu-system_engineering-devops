@@ -164,12 +164,13 @@ function LeaveCalendarView({ leaveRequests, selectedMonth, onMonthChange }: {
   );
 }
 
-function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBalances }: {
+function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBalances, onConfigureSynthetic }: {
   requests: any[];
   onView: (id: string) => void;
   onApprove: (id: string, status: LeaveStatus) => void;
   onReject: (id: string) => void;
   employeeBalances: any[];
+  onConfigureSynthetic?: (request: any) => void;
 }) {
   const today = new Date();
 
@@ -245,7 +246,7 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                           isActive && "bg-amber-50/40 dark:bg-amber-900/10",
                           isSynthetic && "bg-purple-50/40 dark:bg-purple-900/10",
                         )}
-                        onClick={() => !isSynthetic && onView(request.id)}
+                        onClick={() => isSynthetic ? onConfigureSynthetic?.(request) : onView(request.id)}
                       >
                         <td className="sticky left-0 z-10 bg-background px-3 py-2 text-muted-foreground">{idx + 1}</td>
                         <td className="sticky left-8 z-10 bg-background px-3 py-2">
@@ -310,6 +311,12 @@ function LeaveRequestsTable({ requests, onView, onApprove, onReject, employeeBal
                         </td>
                         <td className="px-3 py-2 text-center" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1">
+                            {isSynthetic && onConfigureSynthetic && (
+                              <Button size="sm" variant="ghost" className="h-6 px-2 text-primary hover:bg-primary/10 text-[10px]" onClick={() => onConfigureSynthetic(request)}>
+                                <CalendarPlus className="h-3.5 w-3.5 mr-0.5" />
+                                Set Dates
+                              </Button>
+                            )}
                             {canAct && (
                               <>
                                 <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-emerald-600 hover:bg-emerald-50" onClick={() => onApprove(request.id, request.status)}>
