@@ -1223,6 +1223,7 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
           onApprove={handleApprove}
           onReject={handleReject}
           employeeBalances={employeeBalances}
+          onConfigureSynthetic={(request) => setConfiguringEmployee(request)}
         />
       ) : activeView === 'calendar' ? (
         <LeaveCalendarView
@@ -1260,6 +1261,19 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
           open={!!selectedRequest}
           onOpenChange={(open) => !open && setSelectedRequest(null)}
           isHR
+        />
+      )}
+
+      {configuringEmployee && (
+        <ConfigureLeaveDatesDialog
+          employee={configuringEmployee}
+          open={!!configuringEmployee}
+          onOpenChange={(open) => !open && setConfiguringEmployee(null)}
+          departmentId={departmentId}
+          onSuccess={() => {
+            refetch();
+            queryClient.invalidateQueries({ queryKey: ['on-leave-employees'] });
+          }}
         />
       )}
     </div>
