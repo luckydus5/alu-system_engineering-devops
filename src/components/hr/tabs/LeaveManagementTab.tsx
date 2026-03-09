@@ -717,6 +717,221 @@ function LeaveAllowanceTracker({ employeeBalances, leaveRequests, balanceSearch,
   );
 }
 
+// Configure Leave Dates Dialog for synthetic "On Leave" employees
+function ConfigureLeaveDatesDialog({ employee, open, onOpenChange, departmentId, onSuccess }: {
+  employee: any;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  departmentId: string;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [leaveType, setLeaveType] = useState<LeaveType>('annual');
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [excludeHolidays, setExcludeHolidays] = useState(true);
+
+  const calculation = useMemo(() => {
+    if (!startDate || !endDate) return null;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (end < start) return null;
+
+    if (excludeHolidays) {
+      return countWorkingDays(start, end);
+    } else {
+      // Count without holiday exclusion, just weekends
+      const days = eachDayOfInterval({ start, end });
+      let workingDays = 0, weekends = 0;
+      days.forEach(d => {
+        if (isSunday(d)) weekends++;
+        else if (isSaturday(d)) weekends++;
+        else workingDays++;
+      });
+      // Using Rwanda formula: weekdays full + sat 0.5
+      const sats = days.filter(d => isSaturday(d)).length;
+      const totalLeaveDays = workingDays + sats * 0.5;
+      return { totalDays: days.length, workingDays: totalLeaveDays, weekends, holidays: 0, holidayList: [] };
+    }
+  }, [startDate, endDate, excludeHolidays]);
+
+  // Show holidays in the selected range
+  const holidaysInRange = useMemo(() => {
+    if (!startDate || !endDate) return [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (end < start) return [];
+    const days = eachDayOfInterval({ start, end });
+    return days
+      .map(d => ({ date: d, holiday: isPublicHoliday(d) }))
+      .filter(d => d.holiday !== null)
+      .map(d => ({ date: d.date, name: d.holiday!.name }));
+  }, [startDate, endDate]);
+
+  const handleSave = async () => {
+    if (!startDate || !endDate || !calculation) return;
+    setSaving(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) throw new Error('Not authenticated');
+
+      const totalDays = excludeHolidays ? calculation.workingDays : calculation.workingDays;
+
+      const { error } = await supabase
+        .from('leave_requests')
+        .insert({
+          requester_id: employee.requester_id,
+          employee_id: employee.requester_id,
+          department_id: employee.department_id || departmentId,
+          leave_type: leaveType,
+          start_date: startDate,
+          end_date: endDate,
+          total_days: totalDays,
+          reason: reason || null,
+          status: 'approved' as any,
+          submitted_by_id: userData.user.id,
+          hr_reviewer_id: userData.user.id,
+          hr_action_at: new Date().toISOString(),
+          hr_comment: 'Configured from Employee Status',
+        } as any);
+
+      if (error) throw error;
+      toast({ title: `Leave dates configured for ${employee.requester?.full_name}`, description: `${totalDays} working days from ${format(new Date(startDate), 'dd-MMM-yyyy')} to ${format(new Date(endDate), 'dd-MMM-yyyy')}` });
+      onSuccess();
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: 'Failed to save', description: err.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <CalendarPlus className="h-5 w-5 text-primary" />
+            Configure Leave Dates
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {/* Employee Info */}
+          <div className="p-3 rounded-lg bg-muted/50 border">
+            <p className="font-semibold text-sm">{employee?.requester?.full_name || 'Unknown'}</p>
+            <p className="text-xs text-muted-foreground">{employee?.department?.name || 'No Department'}</p>
+            <Badge className="mt-1 bg-amber-500/10 text-amber-600 text-[10px]">
+              <Timer className="h-3 w-3 mr-0.5" /> Currently On Leave (Employee Status)
+            </Badge>
+          </div>
+
+          {/* Leave Type */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Leave Type</Label>
+            <Select value={leaveType} onValueChange={v => setLeaveType(v as LeaveType)}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(LEAVE_TYPE_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Date Range */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Leave Start Date</Label>
+              <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Leave End Date</Label>
+              <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-9" />
+            </div>
+          </div>
+
+          {/* Holiday Toggle */}
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="excludeHolidays"
+              checked={excludeHolidays}
+              onChange={e => setExcludeHolidays(e.target.checked)}
+              className="rounded border-border"
+            />
+            <Label htmlFor="excludeHolidays" className="text-xs cursor-pointer">
+              Exclude public holidays from leave days count
+            </Label>
+          </div>
+
+          {/* Holidays in Range */}
+          {holidaysInRange.length > 0 && (
+            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">
+                🎉 Public Holidays in this period ({holidaysInRange.length}):
+              </p>
+              {holidaysInRange.map((h, i) => (
+                <p key={i} className="text-xs text-amber-600 dark:text-amber-300">
+                  • {format(h.date, 'dd-MMM-yyyy')} — {h.name}
+                  {excludeHolidays && <span className="text-[10px] ml-1 text-amber-500">(excluded)</span>}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/* Calculation Result */}
+          {calculation && (
+            <Card className="bg-primary/5 border-primary/20">
+              <CardContent className="p-3 space-y-1">
+                <h4 className="font-semibold text-xs text-primary">📊 Auto-Calculated Summary</h4>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <span className="text-muted-foreground">Calendar Days:</span>
+                  <span className="font-medium">{calculation.totalDays}</span>
+                  <span className="text-muted-foreground">Weekends:</span>
+                  <span className="font-medium">{calculation.weekends}</span>
+                  {excludeHolidays && (
+                    <>
+                      <span className="text-muted-foreground">Public Holidays:</span>
+                      <span className="font-medium">{calculation.holidays}</span>
+                    </>
+                  )}
+                </div>
+                <div className="pt-1.5 border-t mt-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm">TOTAL LEAVE DAYS:</span>
+                    <span className="font-bold text-xl text-primary">{calculation.workingDays}</span>
+                  </div>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Formula: Weekdays = 1 day{excludeHolidays ? ' (holidays excluded)' : ''} | Saturdays = 0.5 day | Sundays = 0
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Reason */}
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium">Reason / Notes (optional)</Label>
+            <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Annual leave trip" className="h-9" />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button size="sm" onClick={handleSave} disabled={saving || !startDate || !endDate || !calculation}>
+            {saving && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            Save & Create Request
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   const [activeView, setActiveView] = useState<'requests' | 'calendar' | 'balances' | 'calculator' | 'entitlements'>('requests');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -726,6 +941,8 @@ export function LeaveManagementTab({ departmentId }: LeaveManagementTabProps) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<string | null>(null);
   const [balanceSearch, setBalanceSearch] = useState('');
+  const [configuringEmployee, setConfiguringEmployee] = useState<any>(null);
+  const queryClient = useQueryClient();
 
   const { leaveRequests, isLoading, refetch, updateRequestStatus } = useLeaveRequests(undefined, true);
   const { employeeBalances, isLoading: balancesLoading, initializeBalances } = useAllLeaveBalances();
