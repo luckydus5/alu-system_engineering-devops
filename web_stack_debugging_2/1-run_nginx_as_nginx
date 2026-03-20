@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # Fix the container to run nginx as the nginx user on port 8080
-sed -i 's/user www-data;/user nginx;/g' /etc/nginx/nginx.conf
-sed -i 's/80/8080/g' /etc/nginx/sites-enabled/default
+id -u nginx >/dev/null 2>&1 || useradd -r -s /usr/sbin/nologin nginx
+sed -i 's/^user .*/user nginx;/' /etc/nginx/nginx.conf
+sed -i 's/listen 80 default_server;/listen 8080 default_server;/' /etc/nginx/sites-enabled/default
+sed -i 's/listen \[::\]:80 default_server;/listen [::]:8080 default_server;/' /etc/nginx/sites-enabled/default
+sed -i 's/listen \[::\]:80 default_server ipv6only=on;/listen [::]:8080 default_server ipv6only=on;/' /etc/nginx/sites-enabled/default
 service nginx restart
