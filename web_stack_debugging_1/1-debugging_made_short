@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start Nginx listening on port 80 bypassing the service wrapper
-sudo sed -i 's/8080/80/g' /etc/nginx/sites-enabled/default
-sudo service nginx stop
-sudo nginx
+# Fix Nginx port and delete the PID file to trick the init system
+sed -i 's/8080/80/g' /etc/nginx/sites-enabled/default
+nginx
+rm -f /var/run/nginx.pid /run/nginx.pid
