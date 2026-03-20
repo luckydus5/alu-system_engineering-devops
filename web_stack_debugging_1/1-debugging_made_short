@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Start Nginx in background silently
+sudo nginx

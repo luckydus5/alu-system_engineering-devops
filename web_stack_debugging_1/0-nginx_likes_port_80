@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Fix Nginx to listen on port 80 by running it properly
+sudo service nginx start
