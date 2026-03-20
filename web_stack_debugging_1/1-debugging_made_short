@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fix Nginx port and delete the PID file to trick the init system
+# Short script to bind nginx
 sed -i 's/8080/80/g' /etc/nginx/sites-enabled/default
-nginx
-rm -f /var/run/nginx.pid /run/nginx.pid
+service nginx start
+rm -f /var/run/nginx.pid
