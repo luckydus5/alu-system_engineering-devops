@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Fix the Apache server by starting it and adding a Hello Holberton index page
+sudo service apache2 start
+echo "Hello Holberton" | sudo tee /var/www/html/index.html
