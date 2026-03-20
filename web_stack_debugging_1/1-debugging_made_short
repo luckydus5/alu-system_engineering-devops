@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Short script to bind nginx
+# Short
 sed -i 's/8080/80/g' /etc/nginx/sites-enabled/default
-service nginx start
-rm -f /var/run/nginx.pid
+service nginx stop
+nginx
