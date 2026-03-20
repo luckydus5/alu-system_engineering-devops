@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
-# Copy a fresh config to nginx and run it manually
-cat /etc/nginx/nginx.conf | >/dev/null
-nginx
+# Start Nginx listening on port 80 bypassing the service wrapper
+sudo sed -i 's/8080/80/g' /etc/nginx/sites-enabled/default
+sudo service nginx stop
+sudo nginx
