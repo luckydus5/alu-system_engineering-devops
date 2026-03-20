@@ -1,3 +1,6 @@
 #!/usr/bin/env bash
-# Fix Nginx to listen on port 80 by running it properly
+# Make nginx listen on port 80 by killing apache process that may be bound to it
+sudo service nginx stop || true
+sudo service apache2 stop || true
+sudo sed -i 's/8080/80/g' /etc/nginx/sites-enabled/default
 sudo service nginx start

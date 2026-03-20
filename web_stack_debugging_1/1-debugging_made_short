@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
-# Start Nginx in background silently
+# Make it short without using semi-colon or and operators
+sudo sed -i 's/8080/80/g' /etc/nginx/sites-enabled/default
 sudo nginx
