@@ -38,3 +38,9 @@ Using ApacheBench to benchmark, we find that Nginx is failing under load with 94
 - You can use whatever Puppet resource type you want for your fix
 
 **File:** `0-the_sky_is_the_limit_not.pp`
+
+### 1. User limit (Advanced)
+
+Change the OS configuration so that it is possible to login with the `holberton` user and open a file without any error message. The issue is caused by too-low file descriptor limits for the user in `/etc/security/limits.conf`.
+
+**File:** `1-user_limit.pp`
